@@ -144,7 +144,7 @@ export default {
         const response = await fetch('https://api.ppq.ai/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_PPQ_API_KEY}`,
+            'Authorization': `Bearer ${import.meta.env.VITE_PPQ_API_KEY ?? "sk-uh7yDIMONkvLmreJgw0bDA"}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
