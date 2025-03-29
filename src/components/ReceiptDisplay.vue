@@ -120,7 +120,7 @@ export default {
     const paymentRequest = ref('');
     const eventId = ref('');
     
-    const hostUrl = computed(() => 'https://10.10.241.158:3000'); // TODO: Move to environment config
+    const hostUrl = computed(() => `https://${location.host}`); // TODO: Move to environment config
     
     const calculateSubtotal = () => {
       return receipt.value.items.reduce((sum, item) => {

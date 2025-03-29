@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "publish": "vite build && npx nsite-cli upload dist",
     "preview": "vite preview"
   },
   "dependencies": {
