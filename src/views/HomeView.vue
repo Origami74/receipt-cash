@@ -7,15 +7,15 @@
         
         <div class="camera-overlay">
           <div class="p-4 bg-black/50">
-            <h1 class="text-white text-center text-xl font-bold">Receipt Cash</h1>
+            <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
           </div>
           
-          <div v-if="permissionError" class="p-4 bg-red-500/80 text-white text-center">
-            {{ permissionError }}
-            <button @click="requestCameraPermission" class="btn-primary mt-2">
-              Grant Camera Access
-            </button>
-          </div>
+          <Notification
+            v-if="notification"
+            :message="notification.message"
+            :type="notification.type"
+            @close="notification = null"
+          />
           
           <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
             <button 
@@ -57,12 +57,14 @@ import { useRoute } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptDisplay from '../components/ReceiptDisplay.vue';
 import SettlementView from './SettlementView.vue';
+import Notification from '../components/Notification.vue';
 
 export default {
   name: 'HomeView',
   components: {
     ReceiptDisplay,
-    SettlementView
+    SettlementView,
+    Notification
   },
   setup() {
     const route = useRoute();
@@ -70,8 +72,12 @@ export default {
     const qrScanner = ref(null);
     const capturedReceipt = ref(null);
     const hasPermission = ref(false);
-    const permissionError = ref(null);
+    const notification = ref(null);
     const receiptId = computed(() => route.query.receipt);
+    
+    const showNotification = (message, type = 'error') => {
+      notification.value = { message, type };
+    };
     
     const requestCameraPermission = async () => {
       try {
@@ -81,7 +87,7 @@ export default {
         initializeCamera();
       } catch (error) {
         console.error('Camera permission error:', error);
-        permissionError.value = 'Camera access is required to scan receipts. Please enable camera access in your browser settings.';
+        showNotification('Camera access is required to scan receipts. Please enable camera access in your browser settings.');
         hasPermission.value = false;
       }
     };
@@ -108,7 +114,7 @@ export default {
         await qrScanner.value.start();
       } catch (error) {
         console.error('Error initializing camera:', error);
-        permissionError.value = 'Failed to initialize camera. Please try refreshing the page.';
+        showNotification('Failed to initialize camera. Please try refreshing the page.');
       }
     };
 
@@ -118,6 +124,7 @@ export default {
           await qrScanner.value.toggleFlash();
         } catch (error) {
           console.error('Error toggling flash:', error);
+          showNotification('Failed to toggle flash. Your device may not support this feature.');
         }
       }
     };
@@ -151,16 +158,7 @@ export default {
           reader.readAsDataURL(blob);
         });
         
-        // Show loading state
-        const loadingMessage = document.createElement('div');
-        loadingMessage.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
-        loadingMessage.innerHTML = `
-          <div class="bg-white p-4 rounded-lg text-center">
-            <div class="text-lg font-bold mb-2">Processing Receipt...</div>
-            <div class="text-sm text-gray-600">Please wait while we analyze your receipt</div>
-          </div>
-        `;
-        document.body.appendChild(loadingMessage);
+        showNotification('Processing receipt...', 'info');
         
         // Send to ppq.ai API
         const response = await fetch('https://api.ppq.ai/chat/completions', {
@@ -192,46 +190,16 @@ export default {
         });
         
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('API Error:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText
-          });
           throw new Error(`Failed to process receipt: ${response.status} ${response.statusText}`);
         }
         
         const receiptData = await response.json();
-        console.log('API Response:', receiptData);
-        
-        // Parse the response text to extract receipt data
         const responseText = receiptData.choices[0].message.content;
-        console.log('Response text:', responseText);
 
         try {
           // Try to parse the response as JSON
           const parsedData = JSON.parse(responseText);
           
-          // Validate the required fields
-          if (!Array.isArray(parsedData.items) || 
-              !parsedData.tax || 
-              typeof parsedData.tax.rate_percent !== 'string' ||
-              typeof parsedData.tax.amount !== 'number' ||
-              typeof parsedData.currency !== 'string' ||
-              typeof parsedData.total_amount !== 'number') {
-            throw new Error('Invalid receipt data format');
-          }
-
-          // Validate each item
-          parsedData.items.forEach(item => {
-            if (!item.name || 
-                typeof item.quantity !== 'number' || 
-                typeof item.price !== 'number' || 
-                typeof item.total !== 'number') {
-              throw new Error('Invalid item format');
-            }
-          });
-
           // Transform the data to match our component's format
           capturedReceipt.value = {
             merchant: "Store", // We'll get this from the API later
@@ -247,10 +215,11 @@ export default {
             currency: parsedData.currency,
             total: parsedData.total_amount
           };
+
+          showNotification('Receipt processed successfully!', 'success');
         } catch (error) {
           console.error('Error parsing receipt data:', error);
-          alert('Failed to parse receipt data. Please try again.');
-          throw error;
+          throw new Error('Failed to parse receipt data. Please try again.');
         }
         
         // Stop the camera since we don't need it anymore
@@ -260,13 +229,7 @@ export default {
         
       } catch (error) {
         console.error('Error capturing receipt:', error);
-        alert('Failed to process receipt. Please try again.');
-      } finally {
-        // Remove loading message
-        const loadingMessage = document.querySelector('.fixed.inset-0');
-        if (loadingMessage) {
-          loadingMessage.remove();
-        }
+        showNotification(error.message);
       }
     };
 
@@ -288,7 +251,7 @@ export default {
       videoElement,
       capturedReceipt,
       hasPermission,
-      permissionError,
+      notification,
       receiptId,
       toggleFlash,
       captureReceipt,
