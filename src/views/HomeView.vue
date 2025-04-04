@@ -48,6 +48,8 @@
         @back="resetCapture"
       />
     </template>
+    
+    <Spinner v-if="isProcessing" message="Processing receipt..." />
   </div>
 </template>
 
@@ -58,13 +60,15 @@ import QrScanner from 'qr-scanner';
 import ReceiptDisplay from '../components/ReceiptDisplay.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
+import Spinner from '../components/Spinner.vue';
 
 export default {
   name: 'HomeView',
   components: {
     ReceiptDisplay,
     SettlementView,
-    Notification
+    Notification,
+    Spinner
   },
   setup() {
     const route = useRoute();
@@ -74,6 +78,7 @@ export default {
     const hasPermission = ref(false);
     const notification = ref(null);
     const receiptId = computed(() => route.query.receipt);
+    const isProcessing = ref(false);
     
     const showNotification = (message, type = 'error') => {
       notification.value = { message, type };
@@ -136,6 +141,7 @@ export default {
       }
 
       try {
+        isProcessing.value = true;
         // Create a canvas element
         const canvas = document.createElement('canvas');
         const video = videoElement.value;
@@ -196,8 +202,8 @@ export default {
 Here are some things to keep in mind:
 - The receipt can be in any language
 - The receipt can be blurry or have a low resolution
-- Some receipts show tax percentages on each line, some don't
-
+- Some receipts show tax percentages on each line, some don't, don't mix up quantity and tax percentages
+- Some receipts don't show the price per item, only the total price for that line item
 `
                   },
                   {
@@ -243,7 +249,7 @@ Here are some things to keep in mind:
         } catch (error) {
           console.log("Response:", responseText);
           console.error('Error parsing receipt data:', error);
-          throw new Error('Failed to parse receipt data. Please try again.');
+          throw new Error('Failed to read receipt data. Please try again, make sure the receipt is in focus and not blurry.');
         }
         
         // Stop the camera since we don't need it anymore
@@ -254,6 +260,8 @@ Here are some things to keep in mind:
       } catch (error) {
         console.error('Error capturing receipt:', error);
         showNotification(error.message);
+      } finally {
+        isProcessing.value = false;
       }
     };
 
@@ -277,6 +285,7 @@ Here are some things to keep in mind:
       hasPermission,
       notification,
       receiptId,
+      isProcessing,
       toggleFlash,
       captureReceipt,
       resetCapture

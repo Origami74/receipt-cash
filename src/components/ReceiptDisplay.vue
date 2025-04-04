@@ -17,10 +17,10 @@
           <div>
             <div>{{ item.name }}</div>
             <div class="text-sm text-gray-500">
-              {{ item.quantity }} × ${{ item.price.toFixed(2) }}
+              {{ item.quantity }} × {{ formatPrice(item.price) }}
             </div>
           </div>
-          <div class="font-medium">${{ (item.price * item.quantity).toFixed(2) }}</div>
+          <div class="font-medium">{{ formatPrice(item.price * item.quantity) }}</div>
         </div>
       </div>
       
@@ -30,15 +30,15 @@
         </div>
         <div class="p-3 flex justify-between items-center">
           <div>Subtotal</div>
-          <div>${{ calculateSubtotal().toFixed(2) }}</div>
+          <div>{{ formatPrice(calculateSubtotal()) }}</div>
         </div>
         <div class="p-3 flex justify-between items-center border-b border-gray-200">
           <div>Tax</div>
-          <div>${{ receipt.tax.toFixed(2) }}</div>
+          <div>{{ formatPrice(receipt.tax) }}</div>
         </div>
         <div class="p-3 flex justify-between items-center font-bold">
           <div>Total</div>
-          <div>${{ receipt.total.toFixed(2) }}</div>
+          <div>{{ formatPrice(receipt.total) }}</div>
         </div>
       </div>
       
@@ -100,6 +100,7 @@
 import { ref, computed } from 'vue';
 import nostrService from '../services/nostr';
 import QRCodeVue from 'qrcode.vue';
+import { formatCurrency } from '../utils/currency';
 
 export default {
   name: 'ReceiptDisplay',
@@ -114,11 +115,15 @@ export default {
   },
   setup(props) {
     const receipt = computed(() => props.receiptData);
-    const step = ref('payment-request'); // Changed initial value to 'payment-request'
+    const step = ref('payment-request');
     const paymentRequest = ref('');
     const eventId = ref('');
     
-    const hostUrl = computed(() => `https://${location.host}`); // TODO: Move to environment config
+    const hostUrl = computed(() => `https://${location.host}`);
+    
+    const formatPrice = (amount) => {
+      return formatCurrency(amount, receipt.value.currency);
+    };
     
     const calculateSubtotal = () => {
       return receipt.value.items.reduce((sum, item) => {
@@ -192,6 +197,7 @@ export default {
       eventId,
       hostUrl,
       calculateSubtotal,
+      formatPrice,
       nextStep,
       createRequest,
       copyLink,
