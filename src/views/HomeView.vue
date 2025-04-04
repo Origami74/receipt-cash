@@ -17,13 +17,21 @@
             </button>
           </div>
           
-          <div v-else class="p-4 bg-black/50 flex justify-between">
-            <button @click="toggleFlash" class="btn-secondary">
-              <span class="material-icons">flash_on</span>
+          <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
+            <button 
+              @click="toggleFlash" 
+              class="w-12 h-12 rounded-full bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="currentColor" 
+                class="w-6 h-6 text-white"
+              >
+                <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
             </button>
-          </div>
-          
-          <div class="absolute bottom-8 left-1/2 -translate-x-1/2">
+            
             <button 
               @click="captureReceipt" 
               class="w-20 h-20 rounded-full bg-red-500 border-4 border-white flex items-center justify-center hover:bg-red-600 active:bg-red-700 transition-colors"
