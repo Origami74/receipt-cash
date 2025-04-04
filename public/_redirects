@@ -1,5 +1,1 @@
-/*.js           /$0          200
-/*.html         /$0          200
-/*.webmanifest  /$0          200
-/assets/*       /$0          200
-!/index.html    /index.html  200
+/receipt/*      /index.html  200

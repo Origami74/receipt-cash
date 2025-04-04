@@ -7,7 +7,7 @@ const routes = [
     component: () => import('../views/HomeView.vue')
   },
   {
-    path: '/:eventId',
+    path: '/receipt/:eventId',
     name: 'Settlement',
     component: () => import('../views/SettlementView.vue')
   }
