@@ -1,1 +1,1 @@
-/receipt/*      /index.html  200
+/receipt/*      /index.html/receipt/:splat  200
