@@ -93,14 +93,33 @@
         Done
       </button>
     </div>
+    
+    <!-- Save Payment Request Dialog -->
+    <div v-if="showSaveDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-medium mb-4">Save Payment Request?</h3>
+        <p class="text-gray-600 mb-6">
+          Would you like to save this payment request for future use? It will be automatically filled in next time.
+        </p>
+        <div class="flex gap-4">
+          <button @click="skipSaving" class="btn-secondary flex-1">
+            Skip
+          </button>
+          <button @click="saveAndProceed" class="btn-primary flex-1">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import nostrService from '../services/nostr';
 import QRCodeVue from 'qrcode.vue';
 import { formatCurrency } from '../utils/currency';
+import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
 
 export default {
   name: 'ReceiptDisplay',
@@ -118,8 +137,18 @@ export default {
     const step = ref('payment-request');
     const paymentRequest = ref('');
     const eventId = ref('');
+    const showSaveDialog = ref(false);
+    const newPaymentRequest = ref('');
     
     const hostUrl = computed(() => `https://${location.host}`);
+    
+    onMounted(() => {
+      // Try to load the last used payment request
+      const lastRequest = getLastPaymentRequest();
+      if (lastRequest) {
+        paymentRequest.value = lastRequest;
+      }
+    });
     
     const formatPrice = (amount) => {
       return formatCurrency(amount, receipt.value.currency);
@@ -144,6 +173,27 @@ export default {
       }
       
       try {
+        // Check if this is a new payment request
+        const lastRequest = getLastPaymentRequest();
+        if (lastRequest !== paymentRequest.value) {
+          newPaymentRequest.value = paymentRequest.value;
+          showSaveDialog.value = true;
+          return;
+        }
+        
+        await proceedWithRequest();
+      } catch (error) {
+        console.error('Error creating payment request:', {
+          error,
+          receipt: receipt.value,
+          paymentRequest: paymentRequest.value
+        });
+        alert(`Failed to create payment request: ${error.message}`);
+      }
+    };
+    
+    const proceedWithRequest = async () => {
+      try {
         // Publish receipt event to Nostr
         const id = await nostrService.publishReceiptEvent(
           receipt.value,
@@ -153,13 +203,21 @@ export default {
         eventId.value = id;
         step.value = 'qr-display';
       } catch (error) {
-        console.error('Error creating payment request:', {
-          error,
-          receipt: receipt.value,
-          paymentRequest: paymentRequest.value
-        });
+        console.error('Error creating payment request:', error);
         alert(`Failed to create payment request: ${error.message}`);
       }
+    };
+    
+    const saveAndProceed = () => {
+      savePaymentRequest(newPaymentRequest.value);
+      paymentRequest.value = newPaymentRequest.value;
+      showSaveDialog.value = false;
+      proceedWithRequest();
+    };
+    
+    const skipSaving = () => {
+      showSaveDialog.value = false;
+      proceedWithRequest();
     };
     
     const copyLink = () => {
@@ -196,13 +254,17 @@ export default {
       paymentRequest,
       eventId,
       hostUrl,
+      showSaveDialog,
+      newPaymentRequest,
       calculateSubtotal,
       formatPrice,
       nextStep,
       createRequest,
       copyLink,
       resetProcess,
-      pasteFromClipboard
+      pasteFromClipboard,
+      saveAndProceed,
+      skipSaving
     };
   }
 };

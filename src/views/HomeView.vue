@@ -129,7 +129,7 @@ export default {
           await qrScanner.value.toggleFlash();
         } catch (error) {
           console.error('Error toggling flash:', error);
-          showNotification('Failed to toggle flash. Your device may not support this feature.');
+          showNotification('Failed to toggle flash. Your device may not support this feature.', "warning");
         }
       }
     };
