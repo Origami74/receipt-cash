@@ -7,7 +7,7 @@
         
         <div class="camera-overlay">
           <div class="p-4 bg-black/50">
-            <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+            <h1 class="text-white text-center text-xl font-bold">Sugardad.Cash</h1>
           </div>
           
           <Notification

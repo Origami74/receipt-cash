@@ -11,23 +11,18 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png', '_redirects'],
       manifest: {
-        name: 'Receipt Cash',
-        short_name: 'ReceiptCash',
+        name: 'Sugardad.Cash',
+        short_name: 'Sugardad.Cash',
         description: 'A mobile-first receipt settlement PWA using Nostr and Cashu',
-        theme_color: '#ffffff',
+        theme_color: '#FFB54C',
         icons: [
           {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
+            src: 'https://m.primal.net/PxBU.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'https://m.primal.net/PxBU.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

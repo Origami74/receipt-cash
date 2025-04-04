@@ -1,10 +1,10 @@
-# Receipt Cash
+#Sugardad.Cash
 
 A mobile-first receipt settlement PWA using Nostr and Cashu.
 
 ## Overview
 
-Receipt Cash is a Progressive Web App (PWA) that allows users to split and settle bills by capturing receipts and sharing them with others using the Nostr protocol and Cashu payments.
+Sugardad.Cash is a Progressive Web App (PWA) that allows users to split and settle bills by capturing receipts and sharing them with others using the Nostr protocol and Cashu payments.
 
 ## Features
 

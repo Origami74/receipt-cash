@@ -73,13 +73,14 @@
               class="mx-auto"
             />
           </div>
-          <div class="text-sm mb-2">or share this link:</div>
-          <div class="bg-gray-100 p-2 rounded text-xs break-all mb-4">
-            {{ hostUrl }}?receipt={{ eventId }}
+          <div class="flex flex-col gap-2">
+            <button @click="copyLink" class="btn-secondary w-full">
+              Copy Link
+            </button>
+            <button @click="shareToSocial" class="btn-primary w-full">
+              Share
+            </button>
           </div>
-          <button @click="copyLink" class="btn-secondary w-full">
-            Copy Link
-          </button>
         </div>
       </div>
     </div>
@@ -248,6 +249,29 @@ export default {
       }
     };
     
+    const shareToSocial = async () => {
+      try {
+        const shareData = {
+          title: 'Be my sugardad? 🥺',
+          text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here:`,
+          url: `${hostUrl.value}?receipt=${eventId.value}`
+        };
+
+        if (navigator.share) {
+          await navigator.share(shareData);
+        } else {
+          // Fallback for browsers that don't support Web Share API
+          await navigator.clipboard.writeText(`${shareData.text}\n\n${shareData.url}`);
+          showNotification('Link copied to clipboard', 'success');
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Error sharing:', error);
+          showNotification('Failed to share', 'error');
+        }
+      }
+    };
+    
     return {
       receipt,
       step,
@@ -264,7 +288,8 @@ export default {
       resetProcess,
       pasteFromClipboard,
       saveAndProceed,
-      skipSaving
+      skipSaving,
+      shareToSocial
     };
   }
 };
