@@ -201,7 +201,7 @@ export default {
 Here are some things to keep in mind:
 - The receipt can be in any language
 - The receipt can be blurry or have a low resolution
-- Some receipts show tax percentages on each line, some don't, don't mix up quantity and tax percentages
+- NEVER use a column indicating tax (tx) as the quantity of an item!
 - Some receipts don't show the price per item, only the total price for that line item
 `
                   },
