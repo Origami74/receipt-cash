@@ -10,8 +10,15 @@
     
     <div class="flex-1 overflow-y-auto p-4">
       <div class="bg-white rounded-lg shadow mb-4">
-        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
-          Items
+        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
+          <div>Items</div>
+          <button 
+            v-if="step === 'qr-display'"
+            @click="selectAllItems" 
+            class="text-sm text-blue-500 hover:text-blue-600"
+          >
+            Select All
+          </button>
         </div>
         <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
           <div>
@@ -272,6 +279,11 @@ export default {
       }
     };
     
+    const selectAllItems = () => {
+      // This will be handled by the parent component
+      emit('select-all');
+    };
+    
     return {
       receipt,
       step,
@@ -289,7 +301,8 @@ export default {
       pasteFromClipboard,
       saveAndProceed,
       skipSaving,
-      shareToSocial
+      shareToSocial,
+      selectAllItems
     };
   }
 };

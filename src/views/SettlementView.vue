@@ -26,8 +26,14 @@
       
       <div class="flex-1 overflow-y-auto p-4">
         <div class="bg-white rounded-lg shadow mb-4">
-          <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
-            Items
+          <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
+            <div>Items</div>
+            <button 
+              @click="selectAllItems" 
+              class="text-sm text-blue-500 hover:text-blue-600"
+            >
+              Select All
+            </button>
           </div>
           <div v-for="(item, index) in items" :key="index" class="receipt-item">
             <div class="flex items-center">
@@ -52,12 +58,12 @@
                   </span>
                 </div>
                 <div class="text-sm text-gray-500">
-                  {{ item.quantity }} × ${{ item.price.toFixed(2) }}
+                  {{ item.quantity }} × {{ formatPrice(item.price) }}
                 </div>
               </div>
             </div>
             <div :class="{ 'font-medium': !item.settled, 'text-gray-400': item.settled }">
-              ${{ (item.price * item.selectedQuantity).toFixed(2) }}
+              {{ formatPrice(item.price * item.selectedQuantity) }}
             </div>
           </div>
         </div>
@@ -202,6 +208,10 @@ export default {
       }
     };
     
+    const formatPrice = (amount) => {
+      return `$${amount.toFixed(2)}`;
+    };
+    
     const fetchReceiptData = async () => {
       if (!props.eventId) {
         error.value = 'Invalid event ID';
@@ -225,7 +235,8 @@ export default {
         total.value = receiptData.total;
         items.value = receiptData.items.map(item => ({ 
           ...item, 
-          selectedQuantity: 0 
+          selectedQuantity: 0,
+          settled: false
         }));
         paymentRequest.value = pr;
         
@@ -314,6 +325,16 @@ export default {
       }
     };
     
+    const selectAllItems = () => {
+      const allUnsettled = items.value.filter(item => !item.settled);
+      if (allUnsettled.length === 0) return;
+      
+      const allMaxed = allUnsettled.every(item => item.selectedQuantity === item.quantity);
+      allUnsettled.forEach(item => {
+        item.selectedQuantity = allMaxed ? 0 : item.quantity;
+      });
+    };
+    
     onMounted(() => {
       fetchReceiptData();
     });
@@ -341,7 +362,9 @@ export default {
       decrementQuantity,
       payFromWallet,
       copyPaymentRequest,
-      toSats
+      toSats,
+      selectAllItems,
+      formatPrice
     };
   }
 };
