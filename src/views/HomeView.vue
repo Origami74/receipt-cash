@@ -168,14 +168,37 @@ export default {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: "gpt-4o-mini",
+            model: "gpt-4o",
             messages: [
               {
                 role: "user",
                 content: [
                   {
                     type: "text",
-                    text: "Please analyze this receipt and extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format: {  \"items\": [    {      \"name\": \"Item1\",      \"quantity\": 3,      \"price\": 0.90,      \"total\": 2.70    }  ],  \"tax\": {    \"rate_percent\": \"22.00\",    \"amount\": 0.85  },  \"currency\": \"EUR\"  \"total_amount\": 4.70}"
+                    text: `Please analyze this receipt and extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
+{
+  "items": [
+    {
+      "name": "Item1",
+      "quantity": 3,
+      "price": 0.90,
+      "total": 2.70
+    }
+  ],
+  "tax": {
+    "rate_percent": "22.00",
+    "amount": 0.85
+  },
+  "currency": "EUR",
+  "total_amount": 4.70
+}
+
+Here are some things to keep in mind:
+- The receipt can be in any language
+- The receipt can be blurry or have a low resolution
+- Some receipts show tax percentages on each line, some don't
+
+`
                   },
                   {
                     type: "image_url",
@@ -218,6 +241,7 @@ export default {
 
           showNotification('Receipt processed successfully!', 'success');
         } catch (error) {
+          console.log("Response:", responseText);
           console.error('Error parsing receipt data:', error);
           throw new Error('Failed to parse receipt data. Please try again.');
         }
