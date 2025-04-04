@@ -174,7 +174,7 @@ export default {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: "gpt-4o",
+            model: "gpt-4o-mini",
             messages: [
               {
                 role: "user",
@@ -192,7 +192,6 @@ export default {
     }
   ],
   "tax": {
-    "rate_percent": "22.00",
     "amount": 0.85
   },
   "currency": "EUR",
@@ -240,7 +239,6 @@ Here are some things to keep in mind:
               total: item.total
             })),
             tax: parsedData.tax.amount,
-            taxRate: parsedData.tax.rate_percent,
             currency: parsedData.currency,
             total: parsedData.total_amount
           };
@@ -267,6 +265,10 @@ Here are some things to keep in mind:
 
     const resetCapture = () => {
       capturedReceipt.value = null;
+      // Restart the camera if we have permission
+      if (hasPermission.value && qrScanner.value) {
+        qrScanner.value.start();
+      }
     };
 
     onMounted(() => {
