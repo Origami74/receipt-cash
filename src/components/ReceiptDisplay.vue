@@ -45,11 +45,16 @@
       <div v-if="step === 'payment-request'" class="mt-4">
         <div class="bg-white rounded-lg shadow p-4">
           <div class="font-medium mb-2">Create Payment Request</div>
-          <input 
-            v-model="paymentRequest" 
-            placeholder="Enter NUT-18 Cashu payment request"
-            class="w-full p-2 border rounded mb-4"
-          />
+          <div class="flex gap-2 mb-4">
+            <input 
+              v-model="paymentRequest" 
+              placeholder="Enter NUT-18 Cashu payment request"
+              class="flex-1 p-2 border rounded"
+            />
+            <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
+              Paste
+            </button>
+          </div>
           <button @click="createRequest" class="btn-primary w-full">
             Create Request
           </button>
@@ -81,13 +86,6 @@
     
     <div class="p-4 bg-white shadow-inner border-t border-gray-200">
       <button 
-        v-if="step === 'receipt-display'"
-        @click="nextStep" 
-        class="w-full btn-primary"
-      >
-        Create Payment Request
-      </button>
-      <button 
         v-if="step === 'qr-display'"
         @click="resetProcess" 
         class="w-full btn-secondary"
@@ -116,7 +114,7 @@ export default {
   },
   setup(props) {
     const receipt = computed(() => props.receiptData);
-    const step = ref('receipt-display'); // receipt-display, payment-request, qr-display
+    const step = ref('payment-request'); // Changed initial value to 'payment-request'
     const paymentRequest = ref('');
     const eventId = ref('');
     
@@ -176,6 +174,16 @@ export default {
       paymentRequest.value = '';
       eventId.value = '';
     };
+
+    const pasteFromClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        paymentRequest.value = text;
+      } catch (err) {
+        console.error('Failed to paste from clipboard:', err);
+        alert('Failed to paste from clipboard. Please check your browser permissions.');
+      }
+    };
     
     return {
       receipt,
@@ -187,7 +195,8 @@ export default {
       nextStep,
       createRequest,
       copyLink,
-      resetProcess
+      resetProcess,
+      pasteFromClipboard
     };
   }
 };

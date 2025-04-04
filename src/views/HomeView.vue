@@ -21,8 +21,14 @@
             <button @click="toggleFlash" class="btn-secondary">
               <span class="material-icons">flash_on</span>
             </button>
-            <button @click="captureReceipt" class="btn-primary">
-              Capture Receipt
+          </div>
+          
+          <div class="absolute bottom-8 left-1/2 -translate-x-1/2">
+            <button 
+              @click="captureReceipt" 
+              class="w-20 h-20 rounded-full bg-red-500 border-4 border-white flex items-center justify-center hover:bg-red-600 active:bg-red-700 transition-colors"
+            >
+              <div class="w-16 h-16 rounded-full bg-red-500"></div>
             </button>
           </div>
         </div>
@@ -86,8 +92,8 @@ export default {
             // Handle QR code result
           },
           {
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
+            highlightScanRegion: false,
+            highlightCodeOutline: false,
             returnDetailedScanResult: true
           }
         );
