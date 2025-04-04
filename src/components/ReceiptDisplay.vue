@@ -61,7 +61,7 @@
           <div class="font-medium mb-2">Share this QR code</div>
           <div class="qr-container mb-4">
             <QRCodeVue 
-              :value="`${hostUrl}/receipt/${eventId}`"
+              :value="`${hostUrl}?receipt=${eventId}`"
               :size="256"
               level="H"
               render-as="svg"
@@ -70,7 +70,7 @@
           </div>
           <div class="text-sm mb-2">or share this link:</div>
           <div class="bg-gray-100 p-2 rounded text-xs break-all mb-4">
-            {{ hostUrl }}/receipt/{{ eventId }}
+            {{ hostUrl }}?receipt={{ eventId }}
           </div>
           <button @click="copyLink" class="btn-secondary w-full">
             Copy Link
@@ -160,7 +160,7 @@ export default {
     };
     
     const copyLink = () => {
-      const link = `${hostUrl.value}/receipt/${eventId.value}`;
+      const link = `${hostUrl.value}?receipt=${eventId.value}`;
       navigator.clipboard.writeText(link)
         .then(() => {
           console.log('Link copied to clipboard');

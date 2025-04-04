@@ -1,55 +1,63 @@
 <template>
   <div class="h-full">
-    <div v-if="!capturedReceipt" class="camera-container">
-      <video ref="videoElement" class="h-full w-full object-cover"></video>
-      
-      <div class="camera-overlay">
-        <div class="p-4 bg-black/50">
-          <h1 class="text-white text-center text-xl font-bold">Receipt Cash</h1>
-        </div>
+    <settlement-view v-if="receiptId" :event-id="receiptId" />
+    <template v-else>
+      <div v-if="!capturedReceipt" class="camera-container">
+        <video ref="videoElement" class="h-full w-full object-cover"></video>
         
-        <div v-if="permissionError" class="p-4 bg-red-500/80 text-white text-center">
-          {{ permissionError }}
-          <button @click="requestCameraPermission" class="btn-primary mt-2">
-            Grant Camera Access
-          </button>
-        </div>
-        
-        <div v-else class="p-4 bg-black/50 flex justify-between">
-          <button @click="toggleFlash" class="btn-secondary">
-            <span class="material-icons">flash_on</span>
-          </button>
-          <button @click="captureReceipt" class="btn-primary">
-            Capture Receipt
-          </button>
+        <div class="camera-overlay">
+          <div class="p-4 bg-black/50">
+            <h1 class="text-white text-center text-xl font-bold">Receipt Cash</h1>
+          </div>
+          
+          <div v-if="permissionError" class="p-4 bg-red-500/80 text-white text-center">
+            {{ permissionError }}
+            <button @click="requestCameraPermission" class="btn-primary mt-2">
+              Grant Camera Access
+            </button>
+          </div>
+          
+          <div v-else class="p-4 bg-black/50 flex justify-between">
+            <button @click="toggleFlash" class="btn-secondary">
+              <span class="material-icons">flash_on</span>
+            </button>
+            <button @click="captureReceipt" class="btn-primary">
+              Capture Receipt
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-    
-    <receipt-display 
-      v-if="capturedReceipt" 
-      :receipt-data="capturedReceipt"
-      @back="resetCapture"
-    />
+      
+      <receipt-display 
+        v-if="capturedReceipt" 
+        :receipt-data="capturedReceipt"
+        @back="resetCapture"
+      />
+    </template>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptDisplay from '../components/ReceiptDisplay.vue';
+import SettlementView from './SettlementView.vue';
 
 export default {
   name: 'HomeView',
   components: {
-    ReceiptDisplay
+    ReceiptDisplay,
+    SettlementView
   },
   setup() {
+    const route = useRoute();
     const videoElement = ref(null);
     const qrScanner = ref(null);
     const capturedReceipt = ref(null);
     const hasPermission = ref(false);
     const permissionError = ref(null);
+    const receiptId = computed(() => route.query.receipt);
     
     const requestCameraPermission = async () => {
       try {
@@ -267,6 +275,7 @@ export default {
       capturedReceipt,
       hasPermission,
       permissionError,
+      receiptId,
       toggleFlash,
       captureReceipt,
       resetCapture

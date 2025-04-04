@@ -114,16 +114,18 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router';
 import nostrService from '../services/nostr';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
 
 export default {
   name: 'SettlementView',
-  setup() {
-    const route = useRoute();
-    const eventId = computed(() => route.params.eventId);
-    
+  props: {
+    eventId: {
+      type: String,
+      required: true
+    }
+  },
+  setup(props) {
     const merchant = ref('');
     const date = ref('');
     const tax = ref(0);
@@ -201,7 +203,7 @@ export default {
     };
     
     const fetchReceiptData = async () => {
-      if (!eventId.value) {
+      if (!props.eventId) {
         error.value = 'Invalid event ID';
         loading.value = false;
         return;
@@ -211,7 +213,7 @@ export default {
         loading.value = true;
         
         // Fetch receipt data from Nostr network
-        const { receiptData, paymentRequest: pr } = await nostrService.fetchReceiptEvent(eventId.value);
+        const { receiptData, paymentRequest: pr } = await nostrService.fetchReceiptEvent(props.eventId);
         
         // Fetch current BTC price in the receipt's currency
         await fetchBtcPrice(receiptData.currency);
@@ -241,7 +243,7 @@ export default {
     
     const subscribeToUpdates = () => {
       // Subscribe to settlement events for this receipt
-      unsubscribe = nostrService.subscribeToSettlements(eventId.value, (settlement) => {
+      unsubscribe = nostrService.subscribeToSettlements(props.eventId, (settlement) => {
         // Update items with settlement data
         updateSettledItems(settlement.settledItems);
       });
@@ -280,7 +282,7 @@ export default {
         
         // After payment is completed, publish settlement event
         await nostrService.publishSettlementEvent(
-          eventId.value,
+          props.eventId,
           selectedItems.value
         );
         
