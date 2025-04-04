@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "publish": "vite build && npx nsite-cli upload dist && scp dist/index.html dist/404.html",
+    "publish": "vite build && npx nsite-cli upload dist",
     "preview": "vite preview"
   },
   "dependencies": {
