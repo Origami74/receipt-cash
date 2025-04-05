@@ -75,21 +75,21 @@
           <div class="p-3 flex justify-between items-center">
             <div>Subtotal</div>
             <div class="text-right">
-              <div>${{ selectedSubtotal.toFixed(2) }}</div>
+              <div>{{ formatPrice(selectedSubtotal) }}</div>
               <div class="text-sm text-gray-500">{{ toSats(selectedSubtotal) }} sats</div>
             </div>
           </div>
           <div class="p-3 flex justify-between items-center border-b border-gray-200">
             <div>Tax (included)</div>
             <div class="text-right">
-              <div>${{ calculatedTax.toFixed(2) }}</div>
+              <div>{{ formatPrice(calculatedTax) }}</div>
               <div class="text-sm text-gray-500">{{ toSats(calculatedTax) }} sats</div>
             </div>
           </div>
           <div class="p-3 flex justify-between items-center font-bold">
             <div>Total</div>
             <div class="text-right">
-              <div>${{ selectedSubtotal.toFixed(2) }}</div>
+              <div>{{ formatPrice(selectedSubtotal) }}</div>
               <div class="text-sm text-gray-500">{{ toSats(selectedSubtotal) }} sats</div>
             </div>
           </div>
@@ -122,11 +122,16 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import nostrService from '../services/nostr';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
+import { formatCurrency } from '../utils/currency';
 
 export default {
   name: 'SettlementView',
   props: {
     eventId: {
+      type: String,
+      required: true
+    },
+    decryptionKey: {
       type: String,
       required: true
     }
@@ -141,6 +146,7 @@ export default {
     const loading = ref(true);
     const error = ref(null);
     const btcPrice = ref(0);
+    const currency = ref('USD');
     
     const toSats = (amount) => {
       if (!btcPrice.value) return 0;
@@ -209,7 +215,7 @@ export default {
     };
     
     const formatPrice = (amount) => {
-      return `$${amount.toFixed(2)}`;
+      return formatCurrency(amount, currency.value);
     };
     
     const fetchReceiptData = async () => {
@@ -218,12 +224,19 @@ export default {
         loading.value = false;
         return;
       }
+
+      if (!props.decryptionKey) {
+        error.value = 'Missing decryption key';
+        loading.value = false;
+        return;
+      }
       
       try {
         loading.value = true;
         
+        console.log("decryptionKey: " + props.decryptionKey);
         // Fetch receipt data from Nostr network
-        const { receiptData, paymentRequest: pr } = await nostrService.fetchReceiptEvent(props.eventId);
+        const receiptData = await nostrService.fetchReceiptEvent(props.eventId, props.decryptionKey);
         
         // Fetch current BTC price in the receipt's currency
         await fetchBtcPrice(receiptData.currency);
@@ -233,12 +246,13 @@ export default {
         date.value = receiptData.date;
         tax.value = receiptData.tax;
         total.value = receiptData.total;
+        currency.value = receiptData.currency;
         items.value = receiptData.items.map(item => ({ 
           ...item, 
           selectedQuantity: 0,
           settled: false
         }));
-        paymentRequest.value = pr;
+        paymentRequest.value = receiptData.payment.request;
         
         // Subscribe to settlement updates
         subscribeToUpdates();

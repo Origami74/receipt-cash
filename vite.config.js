@@ -33,6 +33,10 @@ export default defineConfig({
   ],
   server: {
     host: true,
-    port: 3000
+    port: 3000,
+    https: process.env.VITE_USE_HTTPS === 'true' ? {
+      key: fs.readFileSync('certs/key.pem'),
+      cert: fs.readFileSync('certs/cert.pem'),
+    } : false
   }
 }); 

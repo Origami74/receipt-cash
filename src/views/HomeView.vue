@@ -1,6 +1,10 @@
 <template>
   <div class="h-full">
-    <settlement-view v-if="receiptId" :event-id="receiptId" />
+    <settlement-view 
+      v-if="receiptId" 
+      :event-id="receiptId"
+      :decryption-key="decryptionKey"
+    />
     <template v-else>
       <div v-if="!capturedReceipt" class="camera-container">
         <video ref="videoElement" class="h-full w-full object-cover"></video>
@@ -78,6 +82,7 @@ export default {
     const hasPermission = ref(false);
     const notification = ref(null);
     const receiptId = computed(() => route.query.receipt);
+    const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
     
     const showNotification = (message, type = 'error') => {
@@ -287,6 +292,7 @@ Here are some things to keep in mind:
       hasPermission,
       notification,
       receiptId,
+      decryptionKey,
       isProcessing,
       toggleFlash,
       captureReceipt,

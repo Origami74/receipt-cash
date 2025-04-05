@@ -1,5 +1,6 @@
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
-import { generateSecretKey, getPublicKey } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, nip44 } from 'nostr-tools';
+import { Buffer } from 'buffer';
 
 // Initialize NDK with default relays
 const ndk = new NDK({
@@ -12,6 +13,8 @@ const ndk = new NDK({
 // Variables to store keys
 let privateKey;
 let publicKey;
+let encryptionPrivateKey; // Added for content encryption
+let encryptionPublicKey; // Added for content encryption
 
 // Connect to relays
 const connect = async () => {
@@ -32,7 +35,7 @@ const connect = async () => {
 };
 
 // Helper to initialize keys
-const initializeKeys = () => {
+const initializeKeys = ()  => {
   if (!privateKey) {
     privateKey = generateSecretKey();
     console.log('Generated new private key');
@@ -41,52 +44,69 @@ const initializeKeys = () => {
     publicKey = getPublicKey(privateKey);
     console.log('Generated new public key');
   }
-  return { privateKey, publicKey };
+  if (!encryptionPrivateKey) {
+    encryptionPrivateKey = generateSecretKey();
+    console.log('Generated new encryption key');
+  }
+  if (!encryptionPublicKey) {
+    encryptionPublicKey = getPublicKey(encryptionPrivateKey);
+    console.log('Generated new encryption public key');
+  }
+
+  return { privateKey, publicKey, encryptionPrivateKey, encryptionPublicKey };
 };
 
 /**
  * Publish a receipt event (kind 9567)
  * @param {Object} receiptData - The receipt data in JSON format
- * @param {String} paymentRequest - The NUT-18 Cashu payment request
- * @returns {String} The event ID
+ * @param {String} paymentRequest - The NUT-18 Cashu payment request or LNURL
+ * @param {String} paymentType - Type of payment request ('nut18' or 'lnurl')
+ * @returns {Object} The event ID and encryption key
  */
-const publishReceiptEvent = async (receiptData, paymentRequest) => {
+const publishReceiptEvent = async (receiptData, paymentRequest, paymentType) => {
   try {
     // Initialize keys and connect if not already done
-    const { privateKey: pk, publicKey: pubKey } = initializeKeys();
+    const { privateKey: pk, publicKey: pubKey, encryptionPrivateKey: encryptionPrivateKey, encryptionPublicKey: encryptionPublicKey } = initializeKeys();
+  
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
 
+    // Add payment info to receipt data
+    const fullReceiptData = {
+      ...receiptData,
+      payment: {
+        type: paymentType,
+        request: paymentRequest
+      }
+    };
+
     // Create event content
-    const content = JSON.stringify(receiptData);
+    const content = JSON.stringify(fullReceiptData);
+    
+    // Encrypt the content using NIP-44
+    const encryptedContent = await nip44.encrypt(content, encryptionPrivateKey);
     
     // Create the Nostr event
     const ndkEvent = new NDKEvent(ndk);
     ndkEvent.kind = 9567;
-    ndkEvent.content = content;
+    ndkEvent.content = encryptedContent;
     ndkEvent.tags = [
-      ['payment-request', paymentRequest],
       ['expiration', Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString()]
     ];
     
     // Sign and publish
+    await ndkEvent.publish();  
     
+    // Convert the encryption private key to hex string
+    const encryptionPrivateKeyHex = Buffer.from(encryptionPrivateKey).toString('hex');
     
-    await ndkEvent.publish();
-    
-    return ndkEvent.id;
+    return {
+      id: ndkEvent.id,
+      encryptionPrivateKey: encryptionPrivateKeyHex
+    };
   } catch (error) {
-    console.error('Error publishing receipt event:', {
-      error,
-      receiptData,
-      paymentRequest,
-      publicKey,
-      ndkState: {
-        connected: ndk.pool?.connectedRelays?.size > 0,
-        relays: Array.from(ndk.pool?.connectedRelays || []).map(r => r.url)
-      }
-    });
+    console.error('Error publishing receipt event:', error);
     throw new Error(`Failed to publish receipt: ${error.message}`);
   }
 };
@@ -95,9 +115,10 @@ const publishReceiptEvent = async (receiptData, paymentRequest) => {
  * Publish a settlement event (kind 9568)
  * @param {String} receiptEventId - The ID of the original receipt event
  * @param {Array} settledItems - The items that were settled
+ * @param {String} receiptEncryptionKey - The encryption key from the original receipt
  * @returns {String} The event ID
  */
-const publishSettlementEvent = async (receiptEventId, settledItems) => {
+const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey) => {
   try {
     // Initialize keys and connect if not already done
     if (!ndk.pool?.connectedRelays?.size) {
@@ -107,12 +128,19 @@ const publishSettlementEvent = async (receiptEventId, settledItems) => {
     // Create event content
     const content = JSON.stringify({ settledItems });
     
+    // Convert keys to Uint8Array for encryption
+    const encryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
+    const pubKeyBytes = Uint8Array.from(Buffer.from(publicKey, 'hex'));
+    
+    // Encrypt the content using the same key as the receipt
+    const encryptedContent = await nip44.encrypt(encryptionKey, pubKeyBytes, content);
+    
     // Create the Nostr event
     const event = {
       kind: 9568,
       pubkey: publicKey,
       created_at: Math.floor(Date.now() / 1000),
-      content: content,
+      content: encryptedContent,
       tags: [
         ['e', receiptEventId]
       ]
@@ -133,10 +161,11 @@ const publishSettlementEvent = async (receiptEventId, settledItems) => {
 /**
  * Subscribe to settlement events for a receipt
  * @param {String} receiptEventId - The ID of the receipt event
+ * @param {String} receiptEncryptionKey - The encryption key from the original receipt
  * @param {Function} callback - Callback function when new settlements arrive
  * @returns {Function} Unsubscribe function
  */
-const subscribeToSettlements = (receiptEventId, callback) => {
+const subscribeToSettlements = (receiptEventId, receiptEncryptionKey, callback) => {
   const filter = {
     kinds: [9568],
     '#e': [receiptEventId]
@@ -144,9 +173,17 @@ const subscribeToSettlements = (receiptEventId, callback) => {
   
   const subscription = ndk.subscribe(filter);
   
-  subscription.on('event', (event) => {
+  // Convert keys to Uint8Array once
+  const decryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
+  
+  subscription.on('event', async (event) => {
     try {
-      const settledItems = JSON.parse(event.content);
+      // Convert pubkey to bytes for decryption
+      const pubKeyBytes = Uint8Array.from(Buffer.from(event.pubkey, 'hex'));
+      
+      // Decrypt the content using the same key as the receipt
+      const decryptedContent = await nip44.decrypt(event.content, decryptionKey);
+      const { settledItems } = JSON.parse(decryptedContent);
       callback(settledItems);
     } catch (error) {
       console.error('Error processing settlement event:', error);
@@ -159,9 +196,10 @@ const subscribeToSettlements = (receiptEventId, callback) => {
 /**
  * Fetch a receipt event by ID
  * @param {String} eventId - The event ID to fetch
- * @returns {Object} The receipt data and payment request
+ * @param {String} encryptionKey - The hex-encoded encryption key to decrypt the content
+ * @returns {Object} The receipt data including payment information
  */
-const fetchReceiptEvent = async (eventId) => {
+const fetchReceiptEvent = async (eventId, encryptionKey) => {
   try {
     const filter = {
       ids: [eventId],
@@ -176,14 +214,19 @@ const fetchReceiptEvent = async (eventId) => {
     
     const event = Array.from(events)[0];
     
-    // Parse the content
-    const receiptData = JSON.parse(event.content);
+    // Convert keys to Uint8Array
+    const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
+    const pubKeyBytes = Uint8Array.from(Buffer.from(event.pubkey, 'hex'));
     
-    // Get payment request from tags
-    const paymentRequestTag = event.tags.find(tag => tag[0] === 'payment-request');
-    const paymentRequest = paymentRequestTag ? paymentRequestTag[1] : null;
+    // Decrypt the content
+    const decryptedContent = await nip44.decrypt(event.content, decryptionKey);
     
-    return { receiptData, paymentRequest };
+    console.log("decryptedContent: " + decryptedContent);
+
+    // Parse the decrypted content
+    const receiptData = JSON.parse(decryptedContent);
+    
+    return receiptData;
   } catch (error) {
     console.error('Error fetching receipt event:', error);
     throw error;

@@ -73,7 +73,7 @@
           <div class="font-medium mb-2">Share this QR code</div>
           <div class="qr-container mb-4">
             <QRCodeVue 
-              :value="`${hostUrl}?receipt=${eventId}`"
+              :value="receiptLink"
               :size="256"
               level="H"
               render-as="svg"
@@ -145,10 +145,13 @@ export default {
     const step = ref('payment-request');
     const paymentRequest = ref('');
     const eventId = ref('');
+    const eventEncryptionPrivateKey = ref('');
     const showSaveDialog = ref(false);
     const newPaymentRequest = ref('');
     
     const hostUrl = computed(() => `https://${location.host}`);
+    
+    const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(() => {
       // Try to load the last used payment request
@@ -203,12 +206,15 @@ export default {
     const proceedWithRequest = async () => {
       try {
         // Publish receipt event to Nostr
-        const id = await nostrService.publishReceiptEvent(
+        const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receipt.value,
           paymentRequest.value
         );
         
-        eventId.value = id;
+      
+        eventId.value = publishedReceiptEvent.id;
+        eventEncryptionPrivateKey.value = publishedReceiptEvent.encryptionPrivateKey;
+        alert("eventEncryptionPrivateKey: " + eventEncryptionPrivateKey.value);
         step.value = 'qr-display';
       } catch (error) {
         console.error('Error creating payment request:', error);
@@ -229,7 +235,7 @@ export default {
     };
     
     const copyLink = () => {
-      const link = `${hostUrl.value}?receipt=${eventId.value}`;
+      const link = receiptLink.value;
       navigator.clipboard.writeText(link)
         .then(() => {
           console.log('Link copied to clipboard');
@@ -244,6 +250,7 @@ export default {
       step.value = 'receipt-display';
       paymentRequest.value = '';
       eventId.value = '';
+      eventEncryptionPrivateKey.value = '';
     };
 
     const pasteFromClipboard = async () => {
@@ -261,7 +268,7 @@ export default {
         const shareData = {
           title: 'Be my sugardad? 🥺',
           text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here:`,
-          url: `${hostUrl.value}?receipt=${eventId.value}`
+          url: receiptLink.value
         };
 
         if (navigator.share) {
@@ -289,6 +296,7 @@ export default {
       step,
       paymentRequest,
       eventId,
+      eventEncryptionPrivateKey,
       hostUrl,
       showSaveDialog,
       newPaymentRequest,
@@ -302,7 +310,8 @@ export default {
       saveAndProceed,
       skipSaving,
       shareToSocial,
-      selectAllItems
+      selectAllItems,
+      receiptLink
     };
   }
 };
