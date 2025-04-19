@@ -187,15 +187,6 @@ const publishReceiptEvent = async (receiptData, paymentRequest, paymentType, dev
       await connect();
     }
 
-    // Calculate developer fee if amount exists in receipt data
-    let devFeeAmount = 0;
-    let authorAmount = 0;
-    
-    if (receiptData.amount) {
-      devFeeAmount = Math.floor(receiptData.amount * (devFeePercent / 100));
-      authorAmount = receiptData.amount - devFeeAmount;
-    }
-
     // Add payment and split info to receipt data
     const fullReceiptData = {
       ...receiptData,
