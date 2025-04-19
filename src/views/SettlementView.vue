@@ -79,14 +79,31 @@
               <div class="text-sm text-gray-500">{{ toSats(selectedSubtotal) }} sats</div>
             </div>
           </div>
-          <div class="p-3 flex justify-between items-center border-b border-gray-200">
+          <div class="p-3 flex justify-between items-center">
             <div>Tax (included)</div>
             <div class="text-right">
               <div>{{ formatPrice(calculatedTax) }}</div>
               <div class="text-sm text-gray-500">{{ toSats(calculatedTax) }} sats</div>
             </div>
           </div>
-          <div class="p-3 flex justify-between items-center font-bold">
+          <div class="p-3 border-t border-gray-200" v-if="devPercentage > 0">
+            <div class="text-sm text-gray-500 mb-2">This payment will be split as follows:</div>
+            <div class="flex justify-between items-center">
+              <div>Receipt Creator ({{ 100 - devPercentage }}%)</div>
+              <div class="text-right">
+                <div>{{ formatPrice(payerShare) }}</div>
+                <div class="text-sm text-gray-500">{{ toSats(payerShare) }} sats</div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+              <div>Developer ({{ devPercentage }}%)</div>
+              <div class="text-right">
+                <div>{{ formatPrice(developerFee) }}</div>
+                <div class="text-sm text-gray-500">{{ toSats(developerFee) }} sats</div>
+              </div>
+            </div>
+          </div>
+          <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
             <div>Total</div>
             <div class="text-right">
               <div>{{ formatPrice(selectedSubtotal) }}</div>
@@ -119,10 +136,11 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import nostrService from '../services/nostr';
-import { decodePaymentRequest } from '@cashu/cashu-ts';
-import { formatCurrency } from '../utils/currency';
+import { ref, onMounted, onUnmounted } from 'vue';
+import receiptService from '../services/receipt';
+import paymentService from '../services/payment';
+import { showAlertNotification } from '../utils/notification';
+import usePaymentProcessing from '../composables/usePaymentProcessing';
 
 export default {
   name: 'SettlementView',
@@ -142,54 +160,54 @@ export default {
     const tax = ref(0);
     const total = ref(0);
     const items = ref([]);
-    const paymentRequest = ref('');
     const loading = ref(true);
     const error = ref(null);
     const btcPrice = ref(0);
     const currency = ref('USD');
+    const paymentRecipientPubKey = ref(''); // Receipt creator's public key
     
-    const toSats = (amount) => {
-      if (!btcPrice.value) return 0;
-      // Convert USD to sats: (USD amount * 100000000) / BTC price
-      return Math.round((amount * 100000000) / btcPrice.value);
-    };
-    
-    const selectedItems = computed(() => {
-      return items.value.filter(item => item.selectedQuantity > 0);
-    });
-    
-    const selectedSubtotal = computed(() => {
-      return selectedItems.value.reduce((sum, item) => {
-        return sum + (item.price * item.selectedQuantity);
-      }, 0);
-    });
-    
-    const calculatedTax = computed(() => {
-      if (selectedSubtotal.value === 0) return 0;
-      const fullSubtotal = items.value.reduce((sum, item) => {
-        return sum + (item.price * item.quantity);
-      }, 0);
-      return (selectedSubtotal.value / fullSubtotal) * tax.value;
-    });
-    
-    const getPaymentRequest = computed(() => {
-      if (!paymentRequest.value) return '';
-      try {
-        // Decode the original payment request
-        const decodedRequest = decodePaymentRequest(paymentRequest.value);
+    // Initialize payment processing composable
+    const paymentProcessing = usePaymentProcessing({
+      items,
+      currency,
+      btcPrice,
+      tax,
+      paymentRecipientPubKey,
+      receiptEventId: props.eventId,
+      decryptionKey: props.decryptionKey,
+      onPaymentSuccess: async (selectedItems) => {
+        // Publish settlement event
+        await receiptService.publishSettlement(
+          props.eventId,
+          selectedItems,
+          props.decryptionKey
+        );
         
-        // Update the amount with the selected subtotal
-        decodedRequest.amount = Math.round(toSats(selectedSubtotal.value));
-        
-        console.log('decodedRequest.toEncodedRequest()', decodedRequest.toEncodedRequest());
-        // Re-encode the payment request with the new amount
-        return decodedRequest.toEncodedRequest();
-      } catch (err) {
-        console.error('Error modifying payment request:', err);
-        return paymentRequest.value; // Fallback to original if modification fails
-      }
+        // Update UI to reflect settlement
+        selectedItems.forEach(item => {
+          item.settled = true;
+          item.selectedQuantity = 0;
+        });
+      },
+      updateSettledItems
     });
     
+    // Destructure values and methods from composable
+    const {
+      selectedItems,
+      selectedSubtotal,
+      calculatedTax,
+      developerFee,
+      payerShare,
+      paymentStatus,
+      toSats,
+      formatPrice,
+      selectAllItems,
+      payFromWallet,
+      copyPaymentRequest
+    } = paymentProcessing;
+    
+    // Item quantity management
     const incrementQuantity = (index) => {
       if (items.value[index].selectedQuantity < items.value[index].quantity && !items.value[index].settled) {
         items.value[index].selectedQuantity++;
@@ -204,42 +222,21 @@ export default {
       }
     };
     
-    const fetchBtcPrice = async (currency = 'usd') => {
-      try {
-        const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency}`);
-        const data = await response.json();
-        btcPrice.value = data.bitcoin[currency.toLowerCase()];
-      } catch (err) {
-        console.error('Error fetching BTC price:', err);
-      }
+    // Utility for updating total
+    const updateTotal = () => {
+      total.value = selectedSubtotal.value;
     };
     
-    const formatPrice = (amount) => {
-      return formatCurrency(amount, currency.value);
-    };
-    
+    // Fetch receipt data from service
     const fetchReceiptData = async () => {
-      if (!props.eventId) {
-        error.value = 'Invalid event ID';
-        loading.value = false;
-        return;
-      }
-
-      if (!props.decryptionKey) {
-        error.value = 'Missing decryption key';
-        loading.value = false;
-        return;
-      }
-      
       try {
         loading.value = true;
         
-        console.log("decryptionKey: " + props.decryptionKey);
-        // Fetch receipt data from Nostr network
-        const receiptData = await nostrService.fetchReceiptEvent(props.eventId, props.decryptionKey);
-        
-        // Fetch current BTC price in the receipt's currency
-        await fetchBtcPrice(receiptData.currency);
+        // Use receipt service to fetch data
+        const receiptData = await receiptService.fetchReceipt(
+          props.eventId,
+          props.decryptionKey
+        );
         
         // Update component state with the fetched data
         merchant.value = receiptData.merchant;
@@ -247,12 +244,20 @@ export default {
         tax.value = receiptData.tax;
         total.value = receiptData.total;
         currency.value = receiptData.currency;
-        items.value = receiptData.items.map(item => ({ 
-          ...item, 
-          selectedQuantity: 0,
-          settled: false
-        }));
-        paymentRequest.value = receiptData.payment.request;
+        btcPrice.value = receiptData.btcPrice;
+        items.value = receiptData.items;
+        
+        // Extract developer percentage from receipt data
+        // Update dev percentage in the payment composable
+        paymentProcessing.setDevPercentage(receiptData.devPercentage);
+        
+        // Store payment recipient pubkey if available
+        if (receiptData.payment && receiptData.payment.recipientPubKey) {
+          paymentRecipientPubKey.value = receiptData.payment.recipientPubKey;
+        }
+        
+        // Set payment request in the payment composable
+        paymentProcessing.setPaymentRequest(receiptData.payment.request);
         
         // Subscribe to settlement updates
         subscribeToUpdates();
@@ -264,21 +269,27 @@ export default {
       }
     };
     
+    // Subscription management
     let unsubscribe;
     
     const subscribeToUpdates = () => {
       // Subscribe to settlement events for this receipt
-      unsubscribe = nostrService.subscribeToSettlements(props.eventId, (settlement) => {
-        // Update items with settlement data
-        updateSettledItems(settlement.settledItems);
-      });
+      unsubscribe = receiptService.subscribeToSettlementUpdates(
+        props.eventId,
+        props.decryptionKey,
+        (settlement) => {
+          // Update items with settlement data
+          updateSettledItems(settlement);
+        }
+      );
     };
     
+    // Function to update items based on settlement data
     const updateSettledItems = (settledItems) => {
       // Mark items as settled based on settlement data
       settledItems.forEach(settledItem => {
-        const item = items.value.find(i => 
-          i.name === settledItem.name && 
+        const item = items.value.find(i =>
+          i.name === settledItem.name &&
           i.price === settledItem.price
         );
         
@@ -289,72 +300,15 @@ export default {
       });
     };
     
-    const updateTotal = () => {
-      total.value = selectedSubtotal.value;
-    };
     
-    const settlePayment = async () => {
-      if (selectedItems.value.length === 0) {
-        alert('Please select at least one item to settle');
-        return;
-      }
-      
-      try {
-        // Create a Cashu payment
-        // For now, just simulate with an alert
-        const paymentAmount = total.value;
-        alert(`Please send ${paymentAmount.toFixed(2)} sats using Cashu to:\n${getPaymentRequest.value}`);
-        
-        // After payment is completed, publish settlement event
-        await nostrService.publishSettlementEvent(
-          props.eventId,
-          selectedItems.value
-        );
-        
-        // Update UI to reflect settlement
-        selectedItems.value.forEach(item => {
-          item.settled = true;
-          item.selectedQuantity = 0;
-        });
-        
-        alert('Payment completed! Your items have been settled.');
-      } catch (error) {
-        console.error('Error settling payment:', error);
-        alert('Failed to complete settlement. Please try again.');
-      }
-    };
     
-    const payFromWallet = () => {
-      if (selectedItems.value.length === 0) return;
-      window.open(`cashu://${getPaymentRequest.value}`, '_blank');
-    };
-    
-    const copyPaymentRequest = async () => {
-      if (selectedItems.value.length === 0) return;
-      try {
-        await navigator.clipboard.writeText(getPaymentRequest.value);
-      } catch (err) {
-        console.error('Failed to copy payment request:', err);
-        alert('Failed to copy payment request. Please try again.');
-      }
-    };
-    
-    const selectAllItems = () => {
-      const allUnsettled = items.value.filter(item => !item.settled);
-      if (allUnsettled.length === 0) return;
-      
-      const allMaxed = allUnsettled.every(item => item.selectedQuantity === item.quantity);
-      allUnsettled.forEach(item => {
-        item.selectedQuantity = allMaxed ? 0 : item.quantity;
-      });
-    };
-    
+    // Component lifecycle
     onMounted(() => {
       fetchReceiptData();
     });
     
     onUnmounted(() => {
-      // Clean up subscription when component is unmounted
+      // Clean up subscriptions when component is unmounted
       if (unsubscribe) {
         unsubscribe();
       }
@@ -367,11 +321,13 @@ export default {
       selectedItems,
       selectedSubtotal,
       calculatedTax,
+      developerFee,
+      payerShare,
       total,
       loading,
       error,
-      updateTotal,
-      settlePayment,
+      paymentStatus,
+      fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
       payFromWallet,

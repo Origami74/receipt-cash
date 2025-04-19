@@ -65,6 +65,8 @@ import ReceiptDisplay from '../components/ReceiptDisplay.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
+import { createNotification } from '../utils/notification';
+import receiptService from '../services/receipt';
 
 export default {
   name: 'HomeView',
@@ -86,7 +88,7 @@ export default {
     const isProcessing = ref(false);
     
     const showNotification = (message, type = 'error') => {
-      notification.value = { message, type };
+      notification.value = createNotification(message, type);
     };
     
     const requestCameraPermission = async () => {
@@ -147,6 +149,7 @@ export default {
 
       try {
         isProcessing.value = true;
+        
         // Create a canvas element
         const canvas = document.createElement('canvas');
         const video = videoElement.value;
@@ -171,89 +174,13 @@ export default {
         
         showNotification('Processing receipt...', 'info');
         
-        // Send to ppq.ai API
-        const response = await fetch('https://api.ppq.ai/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_PPQ_API_KEY ?? "sk-uh7yDIMONkvLmreJgw0bDA"}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Please analyze this receipt and extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
-{
-  "items": [
-    {
-      "name": "Item1",
-      "quantity": 3,
-      "price": 0.90,
-      "total": 2.70
-    }
-  ],
-  "tax": {
-    "amount": 0.85
-  },
-  "currency": "EUR",
-  "total_amount": 4.70
-}
-
-Here are some things to keep in mind:
-- The receipt can be in any language
-- The receipt can be blurry or have a low resolution
-- NEVER use a column indicating tax (tx) as the quantity of an item!
-- Some receipts don't show the price per item, only the total price for that line item
-`
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:image/jpeg;base64,${base64Image}`
-                    }
-                  }
-                ]
-              }
-            ]
-          })
-        });
+        // Use receipt service to process the image
+        const processedReceipt = await receiptService.processReceiptImage(base64Image);
         
-        if (!response.ok) {
-          throw new Error(`Failed to process receipt: ${response.status} ${response.statusText}`);
-        }
+        // Store the processed receipt data
+        capturedReceipt.value = processedReceipt;
         
-        const receiptData = await response.json();
-        const responseText = receiptData.choices[0].message.content;
-
-        try {
-          // Try to parse the response as JSON
-          const parsedData = JSON.parse(responseText);
-          
-          // Transform the data to match our component's format
-          capturedReceipt.value = {
-            merchant: "Store", // We'll get this from the API later
-            date: new Date().toISOString().split('T')[0],
-            items: parsedData.items.map(item => ({
-              name: item.name,
-              price: item.price,
-              quantity: item.quantity,
-              total: item.total
-            })),
-            tax: parsedData.tax.amount,
-            currency: parsedData.currency,
-            total: parsedData.total_amount
-          };
-
-          showNotification('Receipt processed successfully!', 'success');
-        } catch (error) {
-          console.log("Response:", responseText);
-          console.error('Error parsing receipt data:', error);
-          throw new Error('Failed to read receipt data. Please try again, make sure the receipt is in focus and not blurry.');
-        }
+        showNotification('Receipt processed successfully!', 'success');
         
         // Stop the camera since we don't need it anymore
         if (qrScanner.value) {
