@@ -27,20 +27,23 @@
         <div class="space-y-6">
           <!-- General Settings -->
           <div>
-            <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">General</h4>
+            <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Payment</h4>
             <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <span class="text-sm font-medium">Dark Mode</span>
-                <button class="ml-2 bg-gray-200 relative inline-flex h-6 w-11 items-center rounded-full">
-                  <span class="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition"></span>
-                </button>
-              </div>
-              
-              <div class="flex items-center justify-between">
-                <span class="text-sm font-medium">Notifications</span>
-                <button class="ml-2 bg-indigo-600 relative inline-flex h-6 w-11 items-center rounded-full">
-                  <span class="translate-x-6 inline-block h-4 w-4 transform rounded-full bg-white transition"></span>
-                </button>
+              <div>
+                <label for="paymentAddress" class="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Address
+                </label>
+                <input
+                  id="paymentAddress"
+                  v-model="settings.paymentAddress"
+                  type="text"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Lightning address, nostr npub, or NUT-18 request"
+                  @change="saveSettings"
+                />
+                <p class="mt-1 text-xs text-gray-500">
+                  Used as default when creating new payment requests
+                </p>
               </div>
             </div>
           </div>
@@ -113,7 +116,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { getAiSettings, saveAiSettings, clearAiSettings } from '../utils/storage';
+import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
 
 export default {
   name: 'SettingsMenu',
@@ -128,22 +131,41 @@ export default {
     const settings = ref({
       completionsUrl: '',
       apiKey: '',
-      model: 'gpt-4.1-mini'
+      model: 'gpt-4.1-mini',
+      paymentAddress: ''
     });
 
     // Load settings from storage when component mounts
     onMounted(() => {
+      // Load AI settings
       const storedSettings = getAiSettings();
       settings.value = {
         completionsUrl: storedSettings.completionsUrl || 'https://api.ppq.ai/chat/completions',
         apiKey: storedSettings.apiKey || '',
-        model: storedSettings.model || 'gpt-4.1-mini'
+        model: storedSettings.model || 'gpt-4.1-mini',
+        paymentAddress: ''
       };
+      
+      // Load the last payment request
+      const lastRequest = getLastPaymentRequest();
+      if (lastRequest) {
+        settings.value.paymentAddress = lastRequest;
+      }
     });
 
     // Save settings to storage
     const saveSettings = () => {
-      saveAiSettings(settings.value);
+      // Save AI settings
+      saveAiSettings({
+        completionsUrl: settings.value.completionsUrl,
+        apiKey: settings.value.apiKey,
+        model: settings.value.model
+      });
+      
+      // Save payment address if entered
+      if (settings.value.paymentAddress) {
+        savePaymentRequest(settings.value.paymentAddress);
+      }
     };
 
     // Clear all settings
@@ -152,7 +174,8 @@ export default {
       settings.value = {
         completionsUrl: 'https://api.ppq.ai/chat/completions',
         apiKey: '',
-        model: 'gpt-4.1-mini'
+        model: 'gpt-4.1-mini',
+        paymentAddress: ''
       };
     };
 

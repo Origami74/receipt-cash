@@ -55,7 +55,7 @@
           <div class="flex gap-2 mb-4">
             <input
               v-model="paymentRequest"
-              placeholder="Enter NUT-18 Cashu payment request"
+              placeholder="Lightning address, nostr npub, or NUT-18 request"
               class="flex-1 p-2 border rounded"
             />
             <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
@@ -182,7 +182,7 @@ export default {
     const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(() => {
-      // Try to load the last used payment request
+      // Try to load the last used payment request (could be a lightning address, nostr npub, or NUT-18 request)
       const lastRequest = getLastPaymentRequest();
       if (lastRequest) {
         paymentRequest.value = lastRequest;
@@ -270,6 +270,22 @@ export default {
       displayDevSplit.value = percentage.toString();
     };
 
+    // Determine the type of payment request
+    const determinePaymentType = (request) => {
+      // Check if it's a lightning address (contains @ symbol)
+      if (request.includes('@')) {
+        return 'lightning';
+      }
+      // Check if it's a nostr npub (starts with npub)
+      else if (request.startsWith('npub')) {
+        return 'nostr';
+      }
+      // Default to NUT-18 Cashu payment request
+      else {
+        return 'nut18';
+      }
+    };
+
     const proceedWithRequest = async () => {
       try {
         // Prepare receipt with developer split
@@ -278,10 +294,14 @@ export default {
           devPercentage: parseInt(developerSplit.value)
         };
         
+        // Determine payment type
+        const paymentType = determinePaymentType(paymentRequest.value);
+        
         // Publish receipt event to Nostr
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receiptWithDevSplit,
-          paymentRequest.value
+          paymentRequest.value,
+          paymentType
         );
         
         eventId.value = publishedReceiptEvent.id;
@@ -386,7 +406,8 @@ export default {
       developerSplit,
       displayDevSplit,
       updateDevSplit,
-      sliderValue
+      sliderValue,
+      determinePaymentType
     };
   }
 };

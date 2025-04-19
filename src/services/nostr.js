@@ -202,17 +202,14 @@ const publishReceiptEvent = async (receiptData, paymentRequest, paymentType, dev
       payment: {
         type: paymentType,
         request: paymentRequest,
-        split: {
-          devFeePercent,
-          devFeeAmount,
-          authorAmount
-        }
+        splitPercentage: devFeePercent
       }
     };
 
     // Create event content
     const content = JSON.stringify(fullReceiptData);
     
+    console.log(content);
     // Encrypt the content using NIP-44
     const encryptedContent = await nip44.encrypt(content, encryptionPrivateKey);
     
