@@ -1,4 +1,4 @@
-import nostrService from './nostr';
+import cashuService from './cashuService'; // Import the new cashuService
 import { formatCurrency } from '../utils/currency';
 
 /**
@@ -74,86 +74,6 @@ export const calculateDeveloperFee = (amount, devPercentage) => {
   return amount * (devPercentage / 100);
 };
 
-/**
- * Settles payment by creating a payment request and handling splitting
- * @param {Object} options - Settlement options
- * @param {Array} options.items - Items being settled
- * @param {Number} options.subtotal - Subtotal amount
- * @param {Number} options.devPercentage - Developer fee percentage
- * @param {String} options.paymentRequest - Original payment request 
- * @param {String} options.pubKey - Recipient public key
- * @param {Function} options.onSuccess - Success callback
- * @param {Function} options.onError - Error callback
- * @returns {Promise<Object>} Settlement result
- */
-export const settlePayment = async (options) => {
-  const { 
-    items, 
-    subtotal, 
-    devPercentage, 
-    paymentRequest, 
-    pubKey,
-    btcPrice,
-    onSuccess,
-    onError
-  } = options;
-  
-  if (!items || items.length === 0) {
-    throw new Error('Please select at least one item to settle');
-  }
-  
-  try {
-    // Convert to satoshis
-    const satAmount = toSats(subtotal, btcPrice);
-    
-    // Generate unique payment ID
-    const paymentId = `payment-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    
-    // Create a NEW payment request for the settler
-    const settlerPaymentRequest = await nostrService.createPaymentRequest(satAmount);
-    
-    // Setup payment reception listener
-    const cleanup = await nostrService.subscribeToPaymentUpdates(
-      paymentId,
-      async (receivedPayment) => {
-        if (receivedPayment.status === 'received') {
-          try {
-            // Process payment with fee splitting and forwarding
-            const paymentResult = await nostrService.handlePaymentReceived(
-              paymentId,
-              receivedPayment.token,
-              pubKey,
-              devPercentage,
-              paymentRequest
-            );
-            
-            if (paymentResult.success) {
-              onSuccess && onSuccess(paymentResult);
-            } else {
-              onError && onError(new Error('Payment processing failed'));
-            }
-          } catch (error) {
-            console.error('Error processing payment:', error);
-            onError && onError(error);
-          }
-          
-          // Unsubscribe from payment updates
-          if (cleanup) cleanup();
-        }
-      }
-    );
-    
-    return {
-      paymentId,
-      settlerPaymentRequest,
-      satAmount
-    };
-  } catch (error) {
-    console.error('Error settling payment:', error);
-    throw error;
-  }
-};
-
 export default {
   toSats,
   fetchBtcPrice,
@@ -161,5 +81,5 @@ export default {
   calculateSelectedSubtotal,
   calculateTax,
   calculateDeveloperFee,
-  settlePayment
+  // settlePayment // Moved to usePaymentProcessing composable
 };

@@ -1,5 +1,7 @@
 import { ref, computed } from 'vue';
-import paymentService from '../services/payment';
+import paymentService from '../services/payment'; // Still needed for calculations
+import cashuService from '../services/cashuService'; // Import for Cashu operations
+import nostrService from '../services/nostr'; // Import for Nostr subscriptions
 import { showConfirmation, showAlertNotification } from '../utils/notification';
 import { decodePaymentRequest } from '@cashu/cashu-ts';
 
@@ -107,71 +109,107 @@ export default function usePaymentProcessing(options) {
     }
   };
 
-  // Payment settlement
+  // Payment settlement (Moved from payment.js)
   const settlePayment = async () => {
     if (selectedItems.value.length === 0) {
       showAlertNotification('Please select at least one item to settle');
-      return;
+      return; // Return void or null, not error object
     }
-    
+
+    // Define onError within settlePayment or pass via options if needed elsewhere
+    const onError = (error) => {
+      paymentStatus.value = 'failed';
+      showAlertNotification('Payment processing failed: ' + error.message);
+    }
+
     try {
       // Prepare confirmation message
       const totalAmount = selectedSubtotal.value;
       const satAmount = toSats(totalAmount);
-      
+
       // Show payment confirmation with split information
       const confirmMessage = devPercentage.value > 0
         ? `Please send ${formatPrice(totalAmount)} (${satAmount} sats) using Cashu.\n\nThis payment will be split as follows:\n- Receipt Creator: ${formatPrice(payerShare.value)} (${100-devPercentage.value}%)\n- Developer: ${formatPrice(developerFee.value)} (${devPercentage.value}%)`
         : `Please send ${formatPrice(totalAmount)} (${satAmount} sats) using Cashu.`;
-        
+
       if (!showConfirmation(confirmMessage)) {
         return; // User cancelled payment
       }
-      
+
       // Set payment status
       paymentStatus.value = 'pending';
-      
-      // Use payment service to handle the settlement
-      const result = await paymentService.settlePayment({
-        items: selectedItems.value,
-        subtotal: selectedSubtotal.value,
-        devPercentage: devPercentage.value,
-        paymentRequest: paymentRequest.value,
-        pubKey: paymentRecipientPubKey.value,
-        btcPrice: btcPrice.value,
-        onSuccess: async (paymentResult) => {
-          paymentStatus.value = 'complete';
-          
-          // Call the callback function for successful payment handling
-          if (onPaymentSuccess) {
-            await onPaymentSuccess(selectedItems.value);
+
+      // Convert to satoshis
+      const subtotalSatAmount = toSats(selectedSubtotal.value); // Use selectedSubtotal
+
+      // Generate unique payment ID
+      const uniquePaymentId = `payment-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      paymentId.value = uniquePaymentId; // Store payment ID
+
+      // Create a NEW payment request for the settler using cashuService
+      const newSettlerRequest = await cashuService.createPaymentRequest(subtotalSatAmount);
+      settlerPaymentRequest.value = newSettlerRequest; // Store request
+
+      // Setup payment reception listener using nostrService
+      const cleanup = await nostrService.subscribeToPaymentUpdates(
+        uniquePaymentId,
+        async (receivedPayment) => {
+          if (receivedPayment.status === 'received') {
+            try {
+              // Process payment with fee splitting and forwarding using cashuService
+              const paymentResult = await cashuService.handlePaymentReceived(
+                uniquePaymentId,
+                receivedPayment.token,
+                paymentRecipientPubKey.value, // Use ref value
+                devPercentage.value,         // Use ref value
+                paymentRequest.value        // Use ref value (original creator's request)
+              );
+
+              if (paymentResult.success) {
+                paymentStatus.value = 'complete';
+                if (onPaymentSuccess) {
+                   await onPaymentSuccess(selectedItems.value, paymentResult); // Pass result back
+                }
+
+                // Success notification (adjust as needed)
+                showAlertNotification(
+                  `Payment completed! Your items have been settled.\n\nPayment of ${formatPrice(selectedSubtotal.value)} was split:\n- Receipt Creator: ${formatPrice(payerShare.value)} (${100 - devPercentage.value}%)\n- Developer: ${formatPrice(developerFee.value)} (${devPercentage.value}%)\n\nThe receipt creator has been paid automatically.`,
+                  'success'
+                );
+
+              } else {
+                 onError(new Error(paymentResult.error || 'Payment processing failed'));
+              }
+            } catch (error) {
+              console.error('Error processing payment:', error);
+              onError(error);
+            }
+
+            // Unsubscribe from payment updates
+            if (cleanup) cleanup();
           }
-          
-          showAlertNotification(
-            `Payment completed! Your items have been settled.\n\nPayment of ${formatPrice(selectedSubtotal.value)} was split:\n- Receipt Creator: ${formatPrice(payerShare.value)} (${100-devPercentage.value}%)\n- Developer: ${formatPrice(developerFee.value)} (${devPercentage.value}%)\n\nThe receipt creator has been paid automatically.`,
-            'success'
-          );
-        },
-        onError: (error) => {
-          paymentStatus.value = 'failed';
-          showAlertNotification('Payment processing failed: ' + error.message);
         }
-      });
-      
-      // Store the payment details for UI
-      paymentId.value = result.paymentId;
-      settlerPaymentRequest.value = result.settlerPaymentRequest;
-      
+      );
+
       // Show instructions to the user
       showAlertNotification(
-        `Please send ${result.satAmount} sats to:\n${result.settlerPaymentRequest}\n\nWaiting for payment confirmation...`,
+        `Please send ${subtotalSatAmount} sats to:\n${newSettlerRequest}\n\nWaiting for payment confirmation...`,
         'info'
       );
 
-      return result;
+      return { // Return details needed by caller, e.g., payFromWallet
+        paymentId: uniquePaymentId,
+        settlerPaymentRequest: newSettlerRequest,
+        satAmount: subtotalSatAmount
+      };
+
     } catch (error) {
-      console.error('Error settling payment:', error);
-      showAlertNotification('Failed to complete settlement: ' + error.message);
+      console.error('Error initiating settlement:', error);
+      showAlertNotification('Failed to initiate settlement: ' + error.message);
+      paymentStatus.value = 'failed';
+      // Rethrow or handle error appropriately
+      // throw error; // Or return null/error object
+      return null;
     }
   };
 
