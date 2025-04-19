@@ -1,5 +1,6 @@
 import nostrService from './nostr';
 import paymentService from './payment';
+import { getAiSettings } from '../utils/storage';
 
 /**
  * Process a captured receipt image using the PPQ API
@@ -8,22 +9,32 @@ import paymentService from './payment';
  */
 export const processReceiptImage = async (base64Image) => {
   try {
-    // Send to ppq.ai API
-    const response = await fetch('https://api.ppq.ai/chat/completions', {
+    // Get AI settings from storage
+    const aiSettings = getAiSettings();
+    
+    // Send to AI API using settings from storage
+    const response = await fetch(aiSettings.completionsUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_PPQ_API_KEY ?? "sk-uh7yDIMONkvLmreJgw0bDA"}`,
+        'Authorization': `Bearer ${aiSettings.apiKey || import.meta.env.VITE_PPQ_API_KEY || "sk-uh7yDIMONkvLmreJgw0bDA"}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: aiSettings.model || "gpt-4.1-mini",
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Please analyze this receipt and extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
+                text: `Please analyze this photograph of a printed receipt. Keep in mind the following things:
+
+                - The photograph may be taken from a skewed angle
+                - The receipt might be crumbled or curled up.
+                - The receipt may be from any country/region, Try to determine where it's made to inform how to interpret the data on the receipt.
+                - The image might be blurry, especially number might be hard to read but are incredibly important to get right.
+
+                Extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
 {
   "items": [
     {

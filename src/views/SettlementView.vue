@@ -166,6 +166,22 @@ export default {
     const currency = ref('USD');
     const paymentRecipientPubKey = ref(''); // Receipt creator's public key
     
+    // Function to update items based on settlement data
+    const updateSettledItems = (settledItems) => {
+      // Mark items as settled based on settlement data
+      settledItems.forEach(settledItem => {
+        const item = items.value.find(i =>
+          i.name === settledItem.name &&
+          i.price === settledItem.price
+        );
+        
+        if (item) {
+          // Mark as settled (disable checkbox)
+          item.settled = true;
+        }
+      });
+    };
+    
     // Initialize payment processing composable
     const paymentProcessing = usePaymentProcessing({
       items,
@@ -283,23 +299,6 @@ export default {
         }
       );
     };
-    
-    // Function to update items based on settlement data
-    const updateSettledItems = (settledItems) => {
-      // Mark items as settled based on settlement data
-      settledItems.forEach(settledItem => {
-        const item = items.value.find(i =>
-          i.name === settledItem.name &&
-          i.price === settledItem.price
-        );
-        
-        if (item) {
-          // Mark as settled (disable checkbox)
-          item.settled = true;
-        }
-      });
-    };
-    
     
     
     // Component lifecycle
