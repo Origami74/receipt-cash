@@ -55,7 +55,7 @@
           <div class="flex gap-2 mb-4">
             <input
               v-model="paymentRequest"
-              placeholder="Lightning address, nostr npub, or NUT-18 request"
+              placeholder="NUT-18 Cashu request"
               class="flex-1 p-2 border rounded"
             />
             <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
@@ -211,6 +211,12 @@ export default {
         return;
       }
       
+      // Validate that it's not a Lightning address
+      if (paymentRequest.value.includes('@')) {
+        alert('Lightning addresses are not supported. Please enter a NUT-18 Cashu request.');
+        return;
+      }
+      
       try {
         // Check if this is a new payment request
         const lastRequest = getLastPaymentRequest();
@@ -270,21 +276,6 @@ export default {
       displayDevSplit.value = percentage.toString();
     };
 
-    // Determine the type of payment request
-    const determinePaymentType = (request) => {
-      // Check if it's a lightning address (contains @ symbol)
-      if (request.includes('@')) {
-        return 'lightning';
-      }
-      // Check if it's a nostr npub (starts with npub)
-      else if (request.startsWith('npub')) {
-        return 'nostr';
-      }
-      // Default to NUT-18 Cashu payment request
-      else {
-        return 'nut18';
-      }
-    };
 
     const proceedWithRequest = async () => {
       try {
@@ -294,14 +285,10 @@ export default {
           devPercentage: parseInt(developerSplit.value)
         };
         
-        // Determine payment type
-        const paymentType = determinePaymentType(paymentRequest.value);
-        
         // Publish receipt event to Nostr
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receiptWithDevSplit,
-          paymentRequest.value,
-          paymentType
+          paymentRequest.value
         );
         
         eventId.value = publishedReceiptEvent.id;
@@ -406,8 +393,7 @@ export default {
       developerSplit,
       displayDevSplit,
       updateDevSplit,
-      sliderValue,
-      determinePaymentType
+      sliderValue
     };
   }
 };

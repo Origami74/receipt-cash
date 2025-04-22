@@ -81,5 +81,4 @@ export default {
   calculateSelectedSubtotal,
   calculateTax,
   calculateDeveloperFee,
-  // settlePayment // Moved to usePaymentProcessing composable
 };

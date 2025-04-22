@@ -126,7 +126,7 @@ const processSplitPayment = async (receivedToken, authorWallet, devFeePercent) =
 
     // Send NIP-04 DM to developer with payment details using nostrService
     if (devProofs.length > 0) {
-      await nostrService.sendDeveloperPaymentNotification(devFeeAmount, authorWallet, devFeePercent);
+      await nostrService.sendNip04Dm(devFeeAmount, authorWallet, devFeePercent);
     }
 
     return {

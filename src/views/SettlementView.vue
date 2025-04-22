@@ -116,11 +116,11 @@
       <div class="p-4 bg-white shadow-inner border-t border-gray-200">
         <div class="space-y-2">
           <button 
-            @click="payFromWallet" 
+            @click="payWithLightning"
             class="w-full btn-primary"
             :disabled="selectedItems.length === 0"
           >
-            Pay from wallet
+            Pay with Lightning
           </button>
           <button 
             @click="copyPaymentRequest" 
@@ -132,6 +132,48 @@
         </div>
       </div>
     </template>
+    
+    <!-- Lightning Invoice Modal -->
+    <div v-if="showLightningModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+        <h3 class="text-lg font-medium mb-4">Pay with Lightning</h3>
+        
+        <div class="mb-4 text-center">
+          <div v-if="lightningInvoice" class="mb-4">
+            <QRCode
+              :value="lightningInvoice"
+              :size="240"
+              level="M"
+              render-as="svg"
+              class="mx-auto"
+            />
+          </div>
+          
+          <div class="text-sm text-gray-600 mb-2">
+            Amount: {{ toSats(selectedSubtotal) }} sats
+          </div>
+          
+          <div class="text-xs text-gray-500 break-all bg-gray-100 p-2 rounded mb-4">
+            {{ lightningInvoice }}
+          </div>
+        </div>
+        
+        <div class="flex gap-4">
+          <button
+            @click="showLightningModal = false"
+            class="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            @click="openInLightningWallet"
+            class="flex-1 py-2 px-4 bg-blue-600 text-white rounded"
+          >
+            Open in Wallet
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -141,9 +183,13 @@ import receiptService from '../services/receipt';
 import paymentService from '../services/payment';
 import { showAlertNotification } from '../utils/notification';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
+import QRCode from 'qrcode.vue';
 
 export default {
   name: 'SettlementView',
+  components: {
+    QRCode
+  },
   props: {
     eventId: {
       type: String,
@@ -191,6 +237,7 @@ export default {
       paymentRecipientPubKey,
       receiptEventId: props.eventId,
       decryptionKey: props.decryptionKey,
+      
       onPaymentSuccess: async (selectedItems) => {
         // Publish settlement event
         await receiptService.publishSettlement(
@@ -219,8 +266,12 @@ export default {
       toSats,
       formatPrice,
       selectAllItems,
-      payFromWallet,
-      copyPaymentRequest
+      payWithLightning,
+      copyPaymentRequest,
+      lightningInvoice,
+      showLightningModal,
+      invoiceQrCode,
+      openInLightningWallet
     } = paymentProcessing;
     
     // Item quantity management
@@ -267,13 +318,10 @@ export default {
         // Update dev percentage in the payment composable
         paymentProcessing.setDevPercentage(receiptData.devPercentage);
         
-        // Store payment recipient pubkey if available
-        if (receiptData.payment && receiptData.payment.recipientPubKey) {
-          paymentRecipientPubKey.value = receiptData.payment.recipientPubKey;
-        }
-        
         // Set payment request in the payment composable
-        paymentProcessing.setPaymentRequest(receiptData.payment.request);
+        paymentProcessing.setSettlePayment({
+          request: receiptData.paymentRequest
+        });
         
         // Subscribe to settlement updates
         subscribeToUpdates();
@@ -329,11 +377,15 @@ export default {
       fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
-      payFromWallet,
+      payWithLightning,
       copyPaymentRequest,
       toSats,
       selectAllItems,
-      formatPrice
+      formatPrice,
+      lightningInvoice,
+      showLightningModal,
+      invoiceQrCode,
+      openInLightningWallet
     };
   }
 };

@@ -1,5 +1,6 @@
 import nostrService from './nostr';
 import paymentService from './payment';
+import settlementService from './settlement';
 import { getAiSettings } from '../utils/storage';
 
 /**
@@ -150,7 +151,7 @@ export const fetchReceipt = async (eventId, decryptionKey) => {
  */
 export const publishSettlement = async (receiptEventId, settledItems, decryptionKey) => {
   try {
-    return await nostrService.publishSettlementEvent(
+    return await settlementService.publishSettlementEvent(
       receiptEventId,
       settledItems,
       decryptionKey
@@ -168,9 +169,9 @@ export const publishSettlement = async (receiptEventId, settledItems, decryption
  * @param {Function} callback - Callback function when new settlements arrive
  * @returns {Function} Unsubscribe function
  */
-export const subscribeToSettlementUpdates = (receiptEventId, decryptionKey, callback) => {
+export const subscribeToSettlementUpdates = async (receiptEventId, decryptionKey, callback) => {
   try {
-    return nostrService.subscribeToSettlements(receiptEventId, decryptionKey, (settlement) => {
+    return await settlementService.subscribeToSettlements(receiptEventId, decryptionKey, (settlement) => {
       callback(settlement);
     });
   } catch (error) {

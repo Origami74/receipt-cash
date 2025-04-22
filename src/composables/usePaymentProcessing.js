@@ -1,9 +1,13 @@
 import { ref, computed } from 'vue';
-import paymentService from '../services/payment'; // Still needed for calculations
+import paymentService, { calculateDeveloperFee } from '../services/payment'; // Still needed for calculations
 import cashuService from '../services/cashuService'; // Import for Cashu operations
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
 import { showConfirmation, showAlertNotification } from '../utils/notification';
-import { decodePaymentRequest } from '@cashu/cashu-ts';
+import { decodePaymentRequest, CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
+
+
+const DEV_PUBKEY = '1a80047bd9295f0c87ca212d1d9698419facc755d6f1ded70331d58dda18b938'; // Developer public key (Needed for DM target)
+
 
 /**
  * Composable for payment processing functionality
@@ -97,9 +101,12 @@ export default function usePaymentProcessing(options) {
     }
   });
 
-  // Update payment request from receipt data
-  const setPaymentRequest = (request) => {
-    paymentRequest.value = request;
+  // Update payment information from receipt data
+  const setSettlePayment = (paymentData) => {
+    if (!paymentData) return;
+    
+    // Store the payment request (NUT-18 Cashu request)
+    paymentRequest.value = paymentData.request;
   };
 
   // Update developer percentage from receipt data
@@ -108,6 +115,7 @@ export default function usePaymentProcessing(options) {
       devPercentage.value = percentage;
     }
   };
+
 
   // Payment settlement (Moved from payment.js)
   const settlePayment = async () => {
@@ -213,17 +221,135 @@ export default function usePaymentProcessing(options) {
     }
   };
 
-  // Wallet integration
-  const payFromWallet = () => {
+  // Lightning payment integration using cashu-ts
+  const lightningInvoice = ref('');
+  const showLightningModal = ref(false);
+  const invoiceQrCode = ref('');
+  
+  const payWithLightning = async () => {
     if (selectedItems.value.length === 0) return;
     
-    // First trigger settlement to generate new payment request
-    settlePayment().then(() => {
-      // If settler payment request was generated, open it in wallet
-      if (settlerPaymentRequest.value) {
-        window.open(`cashu://${settlerPaymentRequest.value}`, '_blank');
+    try {
+      // Calculate the amount in sats
+      const satAmount = toSats(selectedSubtotal.value);
+      
+      // Initialize the Cashu mint and wallet
+      const mintUrl = 'https://testnut.cashu.space';
+      const mint = new CashuMint(mintUrl);
+      const wallet = new CashuWallet(mint);
+      await wallet.loadMint(); // persist wallet.keys and wallet.keysets to avoid calling loadMint() in the future
+      
+      // Step 1: Request a Lightning invoice from the mint
+      const mintQuote = await wallet.createMintQuote(satAmount);
+      
+      // Pay the invoice here before you continue...
+      const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
+      lightningInvoice.value = mintQuoteChecked.request;
+      
+      // Show the Lightning invoice modal
+      showLightningModal.value = true;
+      
+      // Set up a check for payment completion
+      const checkPayment = async () => {
+        try {
+          if (mintQuoteChecked.state == MintQuoteState.PAID) {
+            await executePayout(wallet, mintUrl, satAmount, mintQuote);
+          } else {
+            // Check again in 3 seconds
+            setTimeout(checkPayment, 3000);
+          }
+        } catch (error) {
+          console.error('Error checking payment status:', error);
+          showAlertNotification('Error checking payment status: ' + error.message, 'error');
+        }
+      };
+      
+      // Start checking for payment
+      checkPayment();
+    } catch (error) {
+      console.error('Error generating Lightning invoice:', error);
+      showAlertNotification('Error generating Lightning invoice: ' + error.message, 'error');
+    }
+  };
+
+  const executePayout = async (wallet, mintUrl, satAmount, mintQuote) => {
+    try {
+      const proofs = await wallet.mintProofs(satAmount, mintQuote.quote);
+      console.log(`payerShare: ${toSats(payerShare.value)}`);
+      console.log(`developerFee: ${toSats(developerFee.value)}`);
+      
+      // Split tokens between developer and receipt creator
+      const {keep: developerProofs, send: payerProofs} = await wallet.send(toSats(payerShare.value), proofs);
+      const developerToken = getEncodedTokenV4({ mint: mintUrl, proofs: developerProofs });
+      
+      // Handle sending the payment to the receipt creator using NUT-18
+      // This part would need to be customized based on how your system works,
+      // but since we're only supporting NUT-18 now, we have a simplified approach
+      
+      // Example: Send the payer's share as a token
+      const payerToken = getEncodedTokenV4({ mint: mintUrl, proofs: payerProofs });
+      console.log('Payment token created:', payerToken);
+      
+      console.log(paymentRequest.value)
+
+      const cashuPaymentRequest = decodePaymentRequest(paymentRequest.value)
+      
+      console.log(`transport: ${JSON.stringify(cashuPaymentRequest.transport)}`)
+      
+      // Extract recipient pubkey from transport if it's a Nostr transport type
+      let recipientPubkey;
+      
+      if (cashuPaymentRequest.transport &&
+          Array.isArray(cashuPaymentRequest.transport) &&
+          cashuPaymentRequest.transport.length > 0) {
+        
+        const nostrTransport = cashuPaymentRequest.transport.find(t => t.type === "nostr");
+        
+        if (nostrTransport && nostrTransport.target) {
+          try {
+            // Decode the nprofile to get the pubkey
+            const { pubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
+            console.log(relays)
+            recipientPubkey = pubkey;
+            console.log(`Extracted pubkey from nprofile: ${pubkey}`);
+            
+            // Send payment to recipient using NIP-17 DM
+            if (recipientPubkey && payerToken) {
+              // Format the message as expected by the receiver
+              const paymentMessage = JSON.stringify({
+                type: 'payment',
+                id: cashuPaymentRequest.id || Math.random().toString(36).substring(2, 15),
+                token: payerToken
+              });
+              
+              await nostrService.sendNip17Dm(
+                recipientPubkey,
+                paymentMessage,
+                { subject: "Cashu Payment" }
+              );
+              console.log(`Payment sent to ${recipientPubkey}`);
+            }
+          } catch (error) {
+            console.error("Error extracting pubkey from nprofile:", error);
+          }
+        }
       }
-    });
+      
+      // Send developer payment
+      await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+      
+      showAlertNotification('Payment processed successfully!', 'success');
+    } catch (error) {
+      console.error('Error executing payout:', error);
+      showAlertNotification('Error processing payment: ' + error.message, 'error');
+    }
+  }
+  
+  // Open invoice in Lightning wallet
+  const openInLightningWallet = () => {
+    if (lightningInvoice.value) {
+      window.open(`lightning:${lightningInvoice.value}`, '_blank');
+    }
   };
 
   // Copy payment request to clipboard
@@ -256,6 +382,9 @@ export default function usePaymentProcessing(options) {
     paymentId,
     paymentStatus,
     devPercentage,
+    lightningInvoice,
+    showLightningModal,
+    invoiceQrCode,
 
     // Computed
     selectedItems,
@@ -266,10 +395,11 @@ export default function usePaymentProcessing(options) {
     getPaymentRequest,
 
     // Methods
-    setPaymentRequest,
+    setSettlePayment,
     setDevPercentage,
     settlePayment,
-    payFromWallet,
+    payWithLightning,
+    openInLightningWallet,
     copyPaymentRequest,
     selectAllItems,
     toSats,

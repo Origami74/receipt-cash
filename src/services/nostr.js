@@ -1,5 +1,5 @@
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
-import { generateSecretKey, getPublicKey, nip44 } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, nip44, nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
 // Initialize NDK with default relays
@@ -15,8 +15,6 @@ let privateKey;
 let publicKey;
 let encryptionPrivateKey; // Added for content encryption
 let encryptionPublicKey; // Added for content encryption
-
-const DEV_PUBKEY = 'a745806d90a71d89f1a33ed9c349834c45ae4c071493639afd3d25e4f411a0a5'; // Developer public key (Needed for DM target)
 
 // Connect to relays
 const connect = async () => {
@@ -59,14 +57,13 @@ const initializeKeys = ()  => {
 };
 
 /**
- * Publish a receipt event (kind 9567)
- * @param {Object} receiptData - The receipt data in JSON format
- * @param {String} paymentRequest - The NUT-18 Cashu payment request or LNURL
- * @param {String} paymentType - Type of payment request ('nut18' or 'lnurl')
- * @param {Number} devFeePercent - Developer fee percentage
- * @returns {Object} The event ID and encryption key
- */
-const publishReceiptEvent = async (receiptData, paymentRequest, paymentType, devFeePercent) => {
+* Publish a receipt event (kind 9567)
+* @param {Object} receiptData - The receipt data in JSON format
+* @param {String} paymentRequest - The NUT-18 Cashu payment request
+* @param {Number} devFeePercent - Developer fee percentage
+* @returns {Object} The event ID and encryption key
+*/
+const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent) => {
   try {
     // Initialize keys and connect if not already done
     const { privateKey: pk, publicKey: pubKey, encryptionPrivateKey: encryptionPrivateKey, encryptionPublicKey: encryptionPublicKey } = initializeKeys();
@@ -75,14 +72,11 @@ const publishReceiptEvent = async (receiptData, paymentRequest, paymentType, dev
       await connect();
     }
 
-    // Add payment and split info to receipt data
+    // Add payment request to receipt data
     const fullReceiptData = {
       ...receiptData,
-      payment: {
-        type: paymentType,
-        request: paymentRequest,
-        splitPercentage: devFeePercent
-      }
+      paymentRequest: paymentRequest,
+      splitPercentage: devFeePercent
     };
 
     // Create event content
@@ -116,127 +110,7 @@ const publishReceiptEvent = async (receiptData, paymentRequest, paymentType, dev
   }
 };
 
-/**
- * Process a payment with fee splitting
- * @param {Object} receiptData - The receipt data
- * @param {String} authorWallet - The author's wallet address
- * @param {Number} devFeePercent - Developer fee percentage
- * @returns {Object} The receipt and payment details
- */
-const processPaymentWithSplit_UNUSED = async (receiptData, authorWallet, devFeePercent = 5 /* Default 5% */) => {
-  // NOTE: This function seems unused and relies on the now-moved createPaymentRequest.
-  // Keeping it commented out or removing it might be best.
-  // try {
-  //   // Create a standard payment request (not structured)
-  //   // const paymentRequest = await cashuService.createPaymentRequest(receiptData.amount); // Needs cashuService import
-    
-    // Calculate the expected split (for information only)
-    const devFeeAmount = Math.floor(receiptData.amount * (devFeePercent / 100));
-    const authorAmount = receiptData.amount - devFeeAmount;
-    
-    // Publish receipt event with the payment request and split info
-    const receipt = await publishReceiptEvent(
-      receiptData,
-      paymentRequest,
-      'nut18',
-      devFeePercent
-    );
-    
-    return {
-      ...receipt,
-      paymentRequest,
-      split: {
-        devFeePercent,
-        devFeeAmount,
-        authorAmount
-      },
-      authorWallet,
-      // Add a note for processing required
-      processingRequired: true
-    };
-};
-
-/**
- * Publish a settlement event (kind 9568)
- * @param {String} receiptEventId - The ID of the original receipt event
- * @param {Array} settledItems - The items that were settled
- * @param {String} receiptEncryptionKey - The encryption key from the original receipt
- * @returns {String} The event ID
- */
-const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey) => {
-  try {
-    // Initialize keys and connect if not already done
-    if (!ndk.pool?.connectedRelays?.size) {
-      await connect();
-    }
-
-    // Create event content
-    const content = JSON.stringify({ settledItems });
-    
-    // Convert keys to Uint8Array for encryption
-    const encryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
-    const pubKeyBytes = Uint8Array.from(Buffer.from(publicKey, 'hex'));
-    
-    // Encrypt the content using the same key as the receipt
-    const encryptedContent = await nip44.encrypt(content, encryptionKey);
-    
-    // Create the Nostr event
-    const event = {
-      kind: 9568,
-      pubkey: publicKey,
-      created_at: Math.floor(Date.now() / 1000),
-      content: encryptedContent,
-      tags: [
-        ['e', receiptEventId]
-      ]
-    };
-    
-    // Sign and publish
-    const signedEvent = await ndk.signer.sign(event);
-    const ndkEvent = new NDKEvent(ndk, signedEvent);
-    await ndkEvent.publish();
-    
-    return signedEvent.id;
-  } catch (error) {
-    console.error('Error publishing settlement event:', error);
-    throw error;
-  }
-};
-
-/**
- * Subscribe to settlement events for a receipt
- * @param {String} receiptEventId - The ID of the receipt event
- * @param {String} receiptEncryptionKey - The encryption key from the original receipt
- * @param {Function} callback - Callback function when new settlements arrive
- * @returns {Function} Unsubscribe function
- */
-const subscribeToSettlements = (receiptEventId, receiptEncryptionKey, callback) => {
-  const filter = {
-    kinds: [9568],
-    '#e': [receiptEventId]
-  };
-  
-  const subscription = ndk.subscribe(filter);
-  
-  // Convert keys to Uint8Array once
-  const decryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
-  
-  subscription.on('event', async (event) => {
-    try {
-      // Convert pubkey to bytes for decryption
-      const pubKeyBytes = Uint8Array.from(Buffer.from(event.pubkey, 'hex'));
-      
-      // Decrypt the content using the same key as the receipt
-      const decryptedContent = await nip44.decrypt(event.content, decryptionKey);
-      const { settledItems } = JSON.parse(decryptedContent);
-      callback(settledItems);
-    } catch (error) {
-      console.error('Error processing settlement event:', error);
-    }
-  });
-  
-  return () => subscription.stop();
-};
+// Settlement-related functions have been moved to settlement.js
 
 /**
  * Fetch a receipt event by ID
@@ -331,31 +205,21 @@ const subscribeToPaymentUpdates = async (paymentId, callback) => {
 
 /**
  * Send NIP-04 encrypted DM to developer with payment details
- * @param {Number} amount - Amount sent to developer
- * @param {String} fromWallet - Wallet address of the payer
+ * @param {String} token - Token sent to developer
  * @returns {Promise} Promise that resolves when message is sent
  */
-const sendDeveloperPaymentNotification = async (amount, fromWallet, percentage) => {
+const sendNip04Dm = async (recipientPubkey, token) => {
   try {
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
     
-    // Create message content
-    const messageContent = {
-      type: 'developer_fee',
-      amount,
-      fromWallet,
-      percentage: percentage, // Use passed percentage
-      timestamp: Math.floor(Date.now() / 1000)
-    };
-    
     // Create NIP-04 encrypted DM
     const event = new NDKEvent(ndk);
     event.kind = 4; // DM
-    event.content = await ndk.signer.encrypt(DEV_PUBKEY, JSON.stringify(messageContent));
+    event.content = await ndk.signer.encrypt(ndk.getUser({pubkey: recipientPubkey}), token);
     event.tags = [
-      ['p', DEV_PUBKEY]
+      ['p', recipientPubkey]
     ];
     
     // Publish the DM
@@ -369,19 +233,172 @@ const sendDeveloperPaymentNotification = async (amount, fromWallet, percentage) 
   }
 };
 
+/**
+ * Send a NIP-17 gift-wrapped direct message
+ * @param {String} recipientPubkey - Public key of recipient
+ * @param {String} message - Plain text message to send
+ * @param {Object} options - Additional options
+ * @param {String} options.subject - Optional subject/title for conversation
+ * @param {String} options.replyTo - Optional event ID to reply to for threading
+ * @returns {Promise<boolean>} True if sent successfully
+ */
+const sendNip17Dm = async (recipientPubkey, message, options = {}) => {
+  try {
+    if (!ndk.pool?.connectedRelays?.size) {
+      await connect();
+    }
+
+    // Make sure we have our keys
+    const { privateKey: senderPrivateKey, publicKey: senderPublicKey } = initializeKeys();
+
+    // 1. Create the unsigned kind:14 chat message
+    const unsignedKind14 = {
+      pubkey: senderPublicKey,
+      kind: 14,
+      created_at: Math.floor(Date.now() / 1000 - Math.random() * 172800), // Random time up to 2 days in past
+      tags: [
+        ["p", recipientPubkey]
+      ],
+      content: message
+    };
+    // 2. Generate random keys for the seal
+    const sealPrivateKey = generateSecretKey();
+    const sealPublicKey = getPublicKey(sealPrivateKey);
+
+    // 3. Create the kind:13 seal (encrypt the unsigned kind:14)
+    const encryptedContent = await nip44.encrypt(
+      JSON.stringify(unsignedKind14),
+      recipientPubkey
+    );
+
+    const seal = {
+      pubkey: senderPublicKey,
+      kind: 13,
+      created_at: Math.floor(Date.now() / 1000 - Math.random() * 172800), // Random time up to 2 days in past
+      tags: [],
+      content: encryptedContent
+    };
+
+    // Sign the seal
+    const signer = new NDKPrivateKeySigner(senderPrivateKey);
+    const signedSeal = await signer.sign(seal);
+
+    // 4. Generate random keys for the gift wrap
+    const giftWrapPrivateKey = generateSecretKey();
+    const giftWrapPublicKey = getPublicKey(giftWrapPrivateKey);
+
+    // 5. Create the kind:1059 gift wrap (encrypt the signed seal)
+    const giftWrapContent = await nip44.encrypt(
+      JSON.stringify(signedSeal),
+      recipientPubkey
+      
+    );
+
+    // Create the gift wrap event
+    const giftWrap = new NDKEvent(ndk);
+    giftWrap.kind = 1059;
+    giftWrap.pubkey = giftWrapPublicKey;
+    giftWrap.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800); // Random time up to 2 days in past
+    giftWrap.tags = [["p", recipientPubkey]];
+    giftWrap.content = giftWrapContent;
+
+    // Sign and publish the gift wrap
+    const giftWrapSigner = new NDKPrivateKeySigner(giftWrapPrivateKey);
+    ndk.signer = giftWrapSigner;
+    await giftWrap.publish();
+
+    // Reset the signer back to the user's signer
+    ndk.signer = new NDKPrivateKeySigner(senderPrivateKey);
+
+    // Also send a copy to ourselves so we can see our own messages
+    // Create a second gift wrap to ourselves
+    const selfGiftWrapPrivateKey = generateSecretKey();
+    const selfGiftWrapPublicKey = getPublicKey(selfGiftWrapPrivateKey);
+
+    const selfGiftWrapContent = await nip44.encrypt(
+      JSON.stringify(signedSeal),
+      senderPublicKey,
+    );
+
+    const selfGiftWrap = new NDKEvent(ndk);
+    selfGiftWrap.kind = 1059;
+    selfGiftWrap.pubkey = selfGiftWrapPublicKey;
+    selfGiftWrap.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800);
+    selfGiftWrap.tags = [["p", senderPublicKey]];
+    selfGiftWrap.content = selfGiftWrapContent;
+
+    const selfGiftWrapSigner = new NDKPrivateKeySigner(selfGiftWrapPrivateKey);
+    ndk.signer = selfGiftWrapSigner;
+    await selfGiftWrap.publish();
+
+    // Reset the signer back again
+    ndk.signer = new NDKPrivateKeySigner(senderPrivateKey);
+
+    console.log('NIP-17 message sent successfully');
+    return true;
+  } catch (error) {
+    console.error('Error sending NIP-17 message:', error);
+    return false;
+  }
+};
+
+/**
+ * Decode a Nostr NIP-19 nprofile identifier to extract the pubkey and relay information
+ * @param {String} nprofileStr - NIP-19 nprofile string
+ * @returns {Object} Object containing pubkey and optional relays array
+ */
+const decodeNprofile = (nprofileStr) => {
+  try {
+    // Verify it's an nprofile identifier
+    if (!nprofileStr || !nprofileStr.startsWith('nprofile')) {
+      throw new Error('Not a valid nprofile identifier');
+    }
+
+    // Use nip19 from nostr-tools to decode
+    const decoded = nip19.decode(nprofileStr);
+    
+    if (decoded.type !== 'nprofile') {
+      throw new Error(`Expected nprofile type but got ${decoded.type}`);
+    }
+    
+    // Return an object with the pubkey and relays (if available)
+    return {
+      pubkey: decoded.data.pubkey,
+      relays: decoded.data.relays || []
+    };
+  } catch (error) {
+    console.error('Error decoding nprofile:', error);
+    throw error;
+  }
+};
+
+// Helper functions to expose NDK instance and keys for other services
+const getNdk = async () => {
+  if (!ndk.pool?.connectedRelays?.size) {
+    await connect();
+  }
+  return ndk;
+};
+
+const getNostrPublicKey = async () => { // Renamed this getter
+  if (!publicKey) {
+    initializeKeys(); // Ensures publicKey is initialized
+  }
+  return publicKey;
+};
+
 // Export the service functions
 export default {
   connect,
   initializeKeys,
   publishReceiptEvent,
-  publishSettlementEvent,
-  subscribeToSettlements,
   fetchReceiptEvent,
-  // createPaymentRequest, // Moved
-  // processSplitPayment, // Moved
-  // processPaymentWithSplit, // Unused / Relies on moved functions
-  // handlePaymentReceived, // Moved
-  sendDeveloperPaymentNotification, // Kept
+  sendNip04Dm,
+  sendNip17Dm,
   subscribeToPaymentUpdates,
-  // forwardPaymentToRequest // Moved
+  decodeNprofile,
+  
+  // Expose these for other services that need access to NDK
+  getNdk,
+  getNostrPublicKey // Export renamed getter
 };
