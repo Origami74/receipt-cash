@@ -1,4 +1,3 @@
-import cashuService from './cashuService'; // Import the new cashuService
 import { formatCurrency } from '../utils/currency';
 
 /**
