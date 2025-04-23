@@ -6,8 +6,7 @@ import { Buffer } from 'buffer';
 const ndk = new NDK({
   explicitRelayUrls: [
     'wss://relay.damus.io',
-    'wss://relay.primal.net',
-    'wss://auth.nostr1.com'
+    'wss://relay.primal.net'
   ]
 });
 
@@ -238,9 +237,6 @@ const sendNip04Dm = async (recipientPubkey, token) => {
  * Send a NIP-17 gift-wrapped direct message
  * @param {String} recipientPubkey - Public key of recipient
  * @param {String} message - Plain text message to send
- * @param {Object} options - Additional options
- * @param {String} options.subject - Optional subject/title for conversation
- * @param {String} options.replyTo - Optional event ID to reply to for threading
  * @returns {Promise<boolean>} True if sent successfully
  */
 const sendNip17Dm = async (recipientPubkey, message) => {
@@ -258,11 +254,9 @@ const sendNip17Dm = async (recipientPubkey, message) => {
       ['p', recipientPubkey]
     ];
     event.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800) // Random time up to 2 days in past
-
     event.sig = await ndk.signer.sign(event)
 
     const giftWrapped = await giftWrap(event, new NDKUser({pubkey: recipientPubkey}), ndk.signer, {scheme: "nip44"})
-
     await giftWrapped.publish()
 
     console.log('NIP-17 message sent successfully');

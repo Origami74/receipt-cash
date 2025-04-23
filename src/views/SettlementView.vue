@@ -180,7 +180,6 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import receiptService from '../services/receipt';
-import paymentService from '../services/payment';
 import { showAlertNotification } from '../utils/notification';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
 import QRCode from 'qrcode.vue';
@@ -204,13 +203,11 @@ export default {
     const merchant = ref('');
     const date = ref('');
     const tax = ref(0);
-    const total = ref(0);
     const items = ref([]);
     const loading = ref(true);
     const error = ref(null);
     const btcPrice = ref(0);
     const currency = ref('USD');
-    const paymentRecipientPubKey = ref(''); // Receipt creator's public key
     
     // Function to update items based on settlement data
     const updateSettledItems = (settledItems) => {
@@ -234,7 +231,6 @@ export default {
       currency,
       btcPrice,
       tax,
-      paymentRecipientPubKey,
       receiptEventId: props.eventId,
       decryptionKey: props.decryptionKey,
       
@@ -262,7 +258,6 @@ export default {
       calculatedTax,
       developerFee,
       payerShare,
-      paymentStatus,
       toSats,
       formatPrice,
       selectAllItems,
@@ -270,28 +265,22 @@ export default {
       copyPaymentRequest,
       lightningInvoice,
       showLightningModal,
-      invoiceQrCode,
       openInLightningWallet
     } = paymentProcessing;
     
     // Item quantity management
+    
+    // No need for updateTotal since selectedSubtotal is already reactive
     const incrementQuantity = (index) => {
       if (items.value[index].selectedQuantity < items.value[index].quantity && !items.value[index].settled) {
         items.value[index].selectedQuantity++;
-        updateTotal();
       }
     };
     
     const decrementQuantity = (index) => {
       if (items.value[index].selectedQuantity > 0 && !items.value[index].settled) {
         items.value[index].selectedQuantity--;
-        updateTotal();
       }
-    };
-    
-    // Utility for updating total
-    const updateTotal = () => {
-      total.value = selectedSubtotal.value;
     };
     
     // Fetch receipt data from service
@@ -309,7 +298,6 @@ export default {
         merchant.value = receiptData.merchant;
         date.value = receiptData.date;
         tax.value = receiptData.tax;
-        total.value = receiptData.total;
         currency.value = receiptData.currency;
         btcPrice.value = receiptData.btcPrice;
         items.value = receiptData.items;
@@ -319,9 +307,7 @@ export default {
         paymentProcessing.setDevPercentage(receiptData.devPercentage);
         
         // Set payment request in the payment composable
-        paymentProcessing.setSettlePayment({
-          request: receiptData.paymentRequest
-        });
+        paymentProcessing.setPaymentRequest(receiptData.paymentRequest);
         
         // Subscribe to settlement updates
         subscribeToUpdates();
@@ -370,10 +356,8 @@ export default {
       calculatedTax,
       developerFee,
       payerShare,
-      total,
       loading,
       error,
-      paymentStatus,
       fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
@@ -384,7 +368,6 @@ export default {
       formatPrice,
       lightningInvoice,
       showLightningModal,
-      invoiceQrCode,
       openInLightningWallet
     };
   }

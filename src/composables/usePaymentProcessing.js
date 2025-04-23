@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue';
 import paymentService, { calculateDeveloperFee } from '../services/payment'; // Still needed for calculations
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
-import { showConfirmation, showAlertNotification } from '../utils/notification';
+import { showAlertNotification } from '../utils/notification';
 import { decodePaymentRequest, CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 
@@ -83,7 +83,7 @@ export default function usePaymentProcessing(options) {
   };
 
   // Process payment request
-  const getPaymentRequest = computed(() => {
+  const getCashuPaymentRequest = computed(() => {
     if (!paymentRequest.value) return '';
     try {
       // Decode the original payment request
@@ -101,11 +101,11 @@ export default function usePaymentProcessing(options) {
   });
 
   // Update payment information from receipt data
-  const setSettlePayment = (paymentData) => {
-    if (!paymentData) return;
+  const setPaymentRequest = (request) => {
+    if (!paymentRequest) return;
     
     // Store the payment request (NUT-18 Cashu request)
-    paymentRequest.value = paymentData.request;
+    paymentRequest.value = request;
   };
 
   // Update developer percentage from receipt data
@@ -118,7 +118,6 @@ export default function usePaymentProcessing(options) {
   // Lightning payment integration using cashu-ts
   const lightningInvoice = ref('');
   const showLightningModal = ref(false);
-  const invoiceQrCode = ref('');
   
   const payWithLightning = async () => {
     if (selectedItems.value.length === 0) return;
@@ -240,7 +239,7 @@ export default function usePaymentProcessing(options) {
   const copyPaymentRequest = async () => {
     if (selectedItems.value.length === 0) return;
     try {
-      await navigator.clipboard.writeText(getPaymentRequest.value);
+      await navigator.clipboard.writeText(getCashuPaymentRequest.value);
       showAlertNotification('Payment request copied to clipboard!', 'success');
     } catch (err) {
       console.error('Failed to copy payment request:', err);
@@ -268,7 +267,6 @@ export default function usePaymentProcessing(options) {
     devPercentage,
     lightningInvoice,
     showLightningModal,
-    invoiceQrCode,
 
     // Computed
     selectedItems,
@@ -276,10 +274,10 @@ export default function usePaymentProcessing(options) {
     calculatedTax,
     developerFee,
     payerShare,
-    getPaymentRequest,
+    getPaymentRequest: getCashuPaymentRequest,
 
     // Methods
-    setSettlePayment,
+    setPaymentRequest,
     setDevPercentage,
     payWithLightning,
     openInLightningWallet,

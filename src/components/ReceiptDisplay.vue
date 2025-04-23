@@ -151,6 +151,7 @@ import nostrService from '../services/nostr';
 import QRCodeVue from 'qrcode.vue';
 import { formatCurrency } from '../utils/currency';
 import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
+import { showAlertNotification } from '../utils/notification';
 
 export default {
   name: 'ReceiptDisplay',
@@ -163,7 +164,8 @@ export default {
       required: true
     }
   },
-  setup(props) {
+  emits: ['select-all'],
+  setup(props, { emit }) {
     const receipt = computed(() => props.receiptData);
     const step = ref('payment-request');
     const paymentRequest = ref('');
@@ -178,7 +180,6 @@ export default {
     const sliderValue = ref(calculateSliderFromPercentage(2)); // Slider position value (0-100)
     
     const hostUrl = computed(() => `https://${location.host}`);
-    
     const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(() => {
@@ -199,11 +200,6 @@ export default {
       }, 0);
     };
     
-    const nextStep = () => {
-      if (step.value === 'receipt-display') {
-        step.value = 'payment-request';
-      }
-    };
     
     const createRequest = async () => {
       if (!paymentRequest.value) {
@@ -213,7 +209,7 @@ export default {
       
       // Validate that it's not a Lightning address
       if (paymentRequest.value.includes('@')) {
-        alert('Lightning addresses are not supported. Please enter a NUT-18 Cashu request.');
+        alert('Lightning addresses are not supported (yet!). Please enter a NUT-18 Cashu request.');
         return;
       }
       
@@ -354,12 +350,12 @@ export default {
         } else {
           // Fallback for browsers that don't support Web Share API
           await navigator.clipboard.writeText(`${shareData.text}\n\n${shareData.url}`);
-          showNotification('Link copied to clipboard', 'success');
+          showAlertNotification('Link copied to clipboard', 'success');
         }
       } catch (error) {
         if (error.name !== 'AbortError') {
           console.error('Error sharing:', error);
-          showNotification('Failed to share', 'error');
+          showAlertNotification('Failed to share', 'error');
         }
       }
     };
@@ -380,7 +376,6 @@ export default {
       newPaymentRequest,
       calculateSubtotal,
       formatPrice,
-      nextStep,
       createRequest,
       copyLink,
       resetProcess,
