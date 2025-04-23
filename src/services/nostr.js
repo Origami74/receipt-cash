@@ -1,14 +1,20 @@
-import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, giftWrap } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKPrivateKeySigner, NDKRelay, NDKRelayAuthPolicies, NDKUser, giftWrap } from '@nostr-dev-kit/ndk';
 import { generateSecretKey, getPublicKey, nip44, nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
+// Default relays as fallback
+const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.primal.net'
+];
+
 // Initialize NDK with default relays
 const ndk = new NDK({
-  explicitRelayUrls: [
-    'wss://relay.damus.io',
-    'wss://relay.primal.net'
-  ]
+  explicitRelayUrls: DEFAULT_RELAYS
 });
+
+// Tracking which relays are connected
+let connectedRelays = new Set(DEFAULT_RELAYS);
 
 // Variables to store keys
 let privateKey;
@@ -16,8 +22,39 @@ let publicKey;
 let encryptionPrivateKey; // Added for content encryption
 let encryptionPublicKey; // Added for content encryption
 
+/**
+ * Add relays to the NDK instance
+ * @param {Array} relayUrls - Array of relay URLs to add
+ */
+const addRelays = async (relayUrls) => {
+  if (!relayUrls || !Array.isArray(relayUrls) || relayUrls.length === 0) {
+    return;
+  }
+
+  try {
+    // Filter out relays that we've already tracked
+    const newRelays = relayUrls.filter(url => !connectedRelays.has(url));
+    
+    // If no new relays, exit early
+    if (newRelays.length === 0) {
+      return;
+    }
+    
+    // Add relays to our tracking set and to NDK
+    newRelays.forEach(url => {
+      connectedRelays.add(url);
+      const x = new NDKRelay(url, NDKRelayAuthPolicies.disconnect, ndk);
+      ndk.pool.addRelay(x);
+    });
+    
+    console.log(`Added relays: ${newRelays.join(', ')}`);
+  } catch (error) {
+    console.error('Failed to add relays:', error);
+  }
+};
+
 // Connect to relays
-const connect = async () => {
+const connect = async (additionalRelays = []) => {
   try {
     // Initialize keys if not already done
     const { privateKey: pk } = initializeKeys();
@@ -25,6 +62,9 @@ const connect = async () => {
     // Create a proper NDKPrivateKeySigner
     const signer = new NDKPrivateKeySigner(privateKey);
     ndk.signer = signer;
+    
+    // Add any additional relays before connecting
+    await addRelays(additionalRelays);
     
     await ndk.connect();
     console.log('Connected to Nostr relays');
@@ -157,8 +197,14 @@ const fetchReceiptEvent = async (eventId, encryptionKey) => {
  * @param {String} token - Token sent to developer
  * @returns {Promise} Promise that resolves when message is sent
  */
-const sendNip04Dm = async (recipientPubkey, token) => {
+const sendNip04Dm = async (recipientPubkey, token, relays = []) => {
   try {
+    // First, add any relays that were passed in
+    if (relays && relays.length > 0) {
+      await addRelays(relays);
+    }
+
+    // Connect if not already connected
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
@@ -188,8 +234,14 @@ const sendNip04Dm = async (recipientPubkey, token) => {
  * @param {String} message - Plain text message to send
  * @returns {Promise<boolean>} True if sent successfully
  */
-const sendNip17Dm = async (recipientPubkey, message) => {
+const sendNip17Dm = async (recipientPubkey, message, relays = []) => {
   try {
+    // First, add any relays that were passed in
+    if (relays && relays.length > 0) {
+      await addRelays(relays);
+    }
+
+    // Connect if not already connected
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
@@ -269,6 +321,7 @@ export default {
   sendNip04Dm,
   sendNip17Dm,
   decodeNprofile,
+  addRelays,
   
   // Expose these for other services that need access to NDK
   getNdk,

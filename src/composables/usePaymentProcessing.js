@@ -1,11 +1,13 @@
 import { ref, computed } from 'vue';
 import paymentService, { calculateDeveloperFee } from '../services/payment'; // Still needed for calculations
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
+import cashuService from '../services/cashu'; // Import for Cashu operations
 import { showAlertNotification } from '../utils/notification';
-import { decodePaymentRequest, CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
+import { CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 
 const DEV_PUBKEY = '1a80047bd9295f0c87ca212d1d9698419facc755d6f1ded70331d58dda18b938'; // Developer public key (Needed for DM target)
+const DEV_CASHU_REQ = 'creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWdxZDVycWpscW14MmhhNzA0OXl2eXBjcmZrdXMydWd5bGwzN2w4YXhrcnJnM216cXJkcWRnMzNyajl4YWeBgmFuYjE3YWloNWZlOTQ5ZmZhdWNzYXQ='; // Developer cashu payment request
 
 
 /**
@@ -85,19 +87,14 @@ export default function usePaymentProcessing(options) {
   // Process payment request
   const getCashuPaymentRequest = computed(() => {
     if (!paymentRequest.value) return '';
-    try {
-      // Decode the original payment request
-      const decodedRequest = decodePaymentRequest(paymentRequest.value);
-      
-      // Update the amount with the selected subtotal (total amount is split later)
-      decodedRequest.amount = Math.round(toSats(selectedSubtotal.value));
-      
-      // Re-encode the payment request with the new amount
-      return decodedRequest.toEncodedRequest();
-    } catch (err) {
-      console.error('Error modifying payment request:', err);
-      return paymentRequest.value; // Fallback to original if modification fails
-    }
+    
+    // Use the cashu service to update the amount
+    const updatedRequest = cashuService.updateRequestAmount(
+      paymentRequest.value,
+      Math.round(toSats(selectedSubtotal.value))
+    );
+    
+    return updatedRequest || paymentRequest.value; // Fallback to original if update fails
   });
 
   // Update payment information from receipt data
@@ -176,51 +173,70 @@ export default function usePaymentProcessing(options) {
       const {keep: developerProofs, send: payerProofs} = await wallet.send(toSats(payerShare.value), proofs);
       const developerToken = getEncodedTokenV4({ mint: mintUrl, proofs: developerProofs });
       
-      console.log(paymentRequest.value)
-
-      const cashuPaymentRequest = decodePaymentRequest(paymentRequest.value)
+      // Extract recipient payment information
+      const transportInfo = cashuService.extractNostrTransport(paymentRequest.value);
       
-      console.log(`transport: ${JSON.stringify(cashuPaymentRequest.transport)}`)
-      
-      if (cashuPaymentRequest.transport &&
-          Array.isArray(cashuPaymentRequest.transport) &&
-          cashuPaymentRequest.transport.length > 0) {
-        
-        const nostrTransport = cashuPaymentRequest.transport.find(t => t.type === "nostr");
-        
-        if (nostrTransport && nostrTransport.target) {
-          try {
-            // Decode the nprofile to get the pubkey
-            const { pubkey: recipientPubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
-            console.log(relays)
-            
-            // Send payment to recipient using NIP-17 DM
-            if (!recipientPubkey) {
-              throw new Error("could not extract nprofile pubkey")
-            }
-
-            // Format the message as expected by the receiver
-            const paymentMessage = JSON.stringify({
-              id: cashuPaymentRequest.id,
-              mint: mintUrl,
-              unit: cashuPaymentRequest.unit,
-              proofs: payerProofs
-            });
-            
-            await nostrService.sendNip17Dm(
-              recipientPubkey,
-              paymentMessage
-            );
-            console.log(`Payment sent to ${recipientPubkey}`);
-            
-          } catch (error) {
-            console.error("Error extracting pubkey from nprofile:", error);
-          }
+      // Send payment to recipient if transport info is available
+      if (transportInfo) {
+        try {
+          // Format the message as expected by the receiver
+          const paymentMessage = cashuService.createPaymentMessage(
+            transportInfo.id,
+            mintUrl,
+            transportInfo.unit,
+            payerProofs
+          );
+          
+          // Pass the relays to the nostr service for recipient payment
+          await nostrService.sendNip17Dm(
+            transportInfo.pubkey,
+            paymentMessage,
+            transportInfo.relays
+          );
+          
+          console.log(`Payment sent to ${transportInfo.pubkey} using relays: ${transportInfo.relays.join(', ')}`);
+        } catch (error) {
+          console.error("Error sending payment to recipient:", error);
         }
+      } else {
+        console.error("No valid nostr transport found in payment request");
       }
       
-      // Send developer payment
-      await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+      // Extract developer payment information if DEV_CASHU_REQ is available
+      if (DEV_CASHU_REQ) {
+        const devTransportInfo = cashuService.extractNostrTransport(DEV_CASHU_REQ);
+        
+        if (devTransportInfo) {
+          try {
+            // Format the message for the developer
+            const devPaymentMessage = cashuService.createPaymentMessage(
+              devTransportInfo.id,
+              mintUrl,
+              devTransportInfo.unit,
+              developerProofs
+            );
+            
+            // Send payment to developer using NIP-17 DM
+            await nostrService.sendNip17Dm(
+              devTransportInfo.pubkey,
+              devPaymentMessage,
+              devTransportInfo.relays
+            );
+            
+            console.log(`Developer payment sent to ${devTransportInfo.pubkey} using relays: ${devTransportInfo.relays.join(', ')}`);
+          } catch (error) {
+            console.error("Error sending payment to developer:", error);
+            // Fallback to old method
+            await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+          }
+        } else {
+          // Fallback to old method if transport info can't be extracted
+          await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+        }
+      } else {
+        // Fallback to old method if DEV_CASHU_REQ is not available
+        await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+      }
       
       showAlertNotification('Payment processed successfully!', 'success');
     } catch (error) {

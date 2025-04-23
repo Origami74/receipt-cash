@@ -10,8 +10,13 @@ import { Buffer } from 'buffer';
  * @param {String} receiptEncryptionKey - The encryption key from the original receipt
  * @returns {String} The event ID
  */
-const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey) => {
+const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, relays = []) => {
   try {
+    // Add any relays that were passed in
+    if (relays && relays.length > 0) {
+      await nostrService.addRelays(relays);
+    }
+    
     // Get access to the ndk instance and ensure we're connected
     const ndk = await nostrService.getNdk();
     const publicKey = await nostrService.getNostrPublicKey(); // Use renamed getter
@@ -55,7 +60,12 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
  * @param {Function} callback - Callback function when new settlements arrive
  * @returns {Function} Unsubscribe function
  */
-const subscribeToSettlements = async (receiptEventId, receiptEncryptionKey, callback) => {
+const subscribeToSettlements = async (receiptEventId, receiptEncryptionKey, callback, relays = []) => {
+  // Add any relays that were passed in
+  if (relays && relays.length > 0) {
+    await nostrService.addRelays(relays);
+  }
+  
   // Get access to the ndk instance
   const ndk = await nostrService.getNdk();
   
