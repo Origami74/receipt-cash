@@ -197,6 +197,7 @@ export default {
       });
     };
     
+    
     // Initialize payment processing composable
     const paymentProcessing = usePaymentProcessing({
       items,
