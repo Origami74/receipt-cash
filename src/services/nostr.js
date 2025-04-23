@@ -1,4 +1,4 @@
-import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, giftWrap } from '@nostr-dev-kit/ndk';
 import { generateSecretKey, getPublicKey, nip44, nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
@@ -6,7 +6,8 @@ import { Buffer } from 'buffer';
 const ndk = new NDK({
   explicitRelayUrls: [
     'wss://relay.damus.io',
-    'wss://relay.primal.net'
+    'wss://relay.primal.net',
+    'wss://auth.nostr1.com'
   ]
 });
 
@@ -217,7 +218,7 @@ const sendNip04Dm = async (recipientPubkey, token) => {
     // Create NIP-04 encrypted DM
     const event = new NDKEvent(ndk);
     event.kind = 4; // DM
-    event.content = await ndk.signer.encrypt(ndk.getUser({pubkey: recipientPubkey}), token);
+    event.content = await ndk.signer.encrypt(new NDKUser({pubkey: recipientPubkey}), token);
     event.tags = [
       ['p', recipientPubkey]
     ];
@@ -242,103 +243,32 @@ const sendNip04Dm = async (recipientPubkey, token) => {
  * @param {String} options.replyTo - Optional event ID to reply to for threading
  * @returns {Promise<boolean>} True if sent successfully
  */
-const sendNip17Dm = async (recipientPubkey, message, options = {}) => {
+const sendNip17Dm = async (recipientPubkey, message) => {
   try {
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
-
-    // Make sure we have our keys
-    const { privateKey: senderPrivateKey, publicKey: senderPublicKey } = initializeKeys();
-
+    
     // 1. Create the unsigned kind:14 chat message
-    const unsignedKind14 = {
-      pubkey: senderPublicKey,
-      kind: 14,
-      created_at: Math.floor(Date.now() / 1000 - Math.random() * 172800), // Random time up to 2 days in past
-      tags: [
-        ["p", recipientPubkey]
-      ],
-      content: message
-    };
-    // 2. Generate random keys for the seal
-    const sealPrivateKey = generateSecretKey();
-    const sealPublicKey = getPublicKey(sealPrivateKey);
+    const event = new NDKEvent(ndk);
+    event.pubkey = publicKey;
+    event.kind = 14; // DM
+    event.content = message
+    event.tags = [
+      ['p', recipientPubkey]
+    ];
+    event.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800) // Random time up to 2 days in past
 
-    // 3. Create the kind:13 seal (encrypt the unsigned kind:14)
-    const encryptedContent = await nip44.encrypt(
-      JSON.stringify(unsignedKind14),
-      recipientPubkey
-    );
+    event.sig = await ndk.signer.sign(event)
 
-    const seal = {
-      pubkey: senderPublicKey,
-      kind: 13,
-      created_at: Math.floor(Date.now() / 1000 - Math.random() * 172800), // Random time up to 2 days in past
-      tags: [],
-      content: encryptedContent
-    };
+    const giftWrapped = await giftWrap(event, new NDKUser({pubkey: recipientPubkey}), ndk.signer, {scheme: "nip44"})
 
-    // Sign the seal
-    const signer = new NDKPrivateKeySigner(senderPrivateKey);
-    const signedSeal = await signer.sign(seal);
-
-    // 4. Generate random keys for the gift wrap
-    const giftWrapPrivateKey = generateSecretKey();
-    const giftWrapPublicKey = getPublicKey(giftWrapPrivateKey);
-
-    // 5. Create the kind:1059 gift wrap (encrypt the signed seal)
-    const giftWrapContent = await nip44.encrypt(
-      JSON.stringify(signedSeal),
-      recipientPubkey
-      
-    );
-
-    // Create the gift wrap event
-    const giftWrap = new NDKEvent(ndk);
-    giftWrap.kind = 1059;
-    giftWrap.pubkey = giftWrapPublicKey;
-    giftWrap.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800); // Random time up to 2 days in past
-    giftWrap.tags = [["p", recipientPubkey]];
-    giftWrap.content = giftWrapContent;
-
-    // Sign and publish the gift wrap
-    const giftWrapSigner = new NDKPrivateKeySigner(giftWrapPrivateKey);
-    ndk.signer = giftWrapSigner;
-    await giftWrap.publish();
-
-    // Reset the signer back to the user's signer
-    ndk.signer = new NDKPrivateKeySigner(senderPrivateKey);
-
-    // Also send a copy to ourselves so we can see our own messages
-    // Create a second gift wrap to ourselves
-    const selfGiftWrapPrivateKey = generateSecretKey();
-    const selfGiftWrapPublicKey = getPublicKey(selfGiftWrapPrivateKey);
-
-    const selfGiftWrapContent = await nip44.encrypt(
-      JSON.stringify(signedSeal),
-      senderPublicKey,
-    );
-
-    const selfGiftWrap = new NDKEvent(ndk);
-    selfGiftWrap.kind = 1059;
-    selfGiftWrap.pubkey = selfGiftWrapPublicKey;
-    selfGiftWrap.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800);
-    selfGiftWrap.tags = [["p", senderPublicKey]];
-    selfGiftWrap.content = selfGiftWrapContent;
-
-    const selfGiftWrapSigner = new NDKPrivateKeySigner(selfGiftWrapPrivateKey);
-    ndk.signer = selfGiftWrapSigner;
-    await selfGiftWrap.publish();
-
-    // Reset the signer back again
-    ndk.signer = new NDKPrivateKeySigner(senderPrivateKey);
+    await giftWrapped.publish()
 
     console.log('NIP-17 message sent successfully');
-    return true;
   } catch (error) {
     console.error('Error sending NIP-17 message:', error);
-    return false;
+    throw error;
   }
 };
 

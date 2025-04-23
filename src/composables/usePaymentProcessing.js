@@ -282,22 +282,11 @@ export default function usePaymentProcessing(options) {
       const {keep: developerProofs, send: payerProofs} = await wallet.send(toSats(payerShare.value), proofs);
       const developerToken = getEncodedTokenV4({ mint: mintUrl, proofs: developerProofs });
       
-      // Handle sending the payment to the receipt creator using NUT-18
-      // This part would need to be customized based on how your system works,
-      // but since we're only supporting NUT-18 now, we have a simplified approach
-      
-      // Example: Send the payer's share as a token
-      const payerToken = getEncodedTokenV4({ mint: mintUrl, proofs: payerProofs });
-      console.log('Payment token created:', payerToken);
-      
       console.log(paymentRequest.value)
 
       const cashuPaymentRequest = decodePaymentRequest(paymentRequest.value)
       
       console.log(`transport: ${JSON.stringify(cashuPaymentRequest.transport)}`)
-      
-      // Extract recipient pubkey from transport if it's a Nostr transport type
-      let recipientPubkey;
       
       if (cashuPaymentRequest.transport &&
           Array.isArray(cashuPaymentRequest.transport) &&
@@ -308,27 +297,28 @@ export default function usePaymentProcessing(options) {
         if (nostrTransport && nostrTransport.target) {
           try {
             // Decode the nprofile to get the pubkey
-            const { pubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
+            const { pubkey: recipientPubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
             console.log(relays)
-            recipientPubkey = pubkey;
-            console.log(`Extracted pubkey from nprofile: ${pubkey}`);
             
             // Send payment to recipient using NIP-17 DM
-            if (recipientPubkey && payerToken) {
-              // Format the message as expected by the receiver
-              const paymentMessage = JSON.stringify({
-                type: 'payment',
-                id: cashuPaymentRequest.id || Math.random().toString(36).substring(2, 15),
-                token: payerToken
-              });
-              
-              await nostrService.sendNip17Dm(
-                recipientPubkey,
-                paymentMessage,
-                { subject: "Cashu Payment" }
-              );
-              console.log(`Payment sent to ${recipientPubkey}`);
+            if (!recipientPubkey) {
+              throw new Error("could not extract nprofile pubkey")
             }
+
+            // Format the message as expected by the receiver
+            const paymentMessage = JSON.stringify({
+              id: cashuPaymentRequest.id,
+              mint: mintUrl,
+              unit: cashuPaymentRequest.unit,
+              proofs: payerProofs
+            });
+            
+            await nostrService.sendNip17Dm(
+              recipientPubkey,
+              paymentMessage
+            );
+            console.log(`Payment sent to ${recipientPubkey}`);
+            
           } catch (error) {
             console.error("Error extracting pubkey from nprofile:", error);
           }

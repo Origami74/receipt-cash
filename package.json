@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@cashu/cashu-ts": "^2.1.0",
-    "@nostr-dev-kit/ndk": "^2.12.2",
+    "@nostr-dev-kit/ndk": "^2.14.2",
     "@scure/base": "^1.1.5",
     "@vueuse/core": "^10.9.0",
     "pinia": "^2.1.7",
