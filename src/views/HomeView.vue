@@ -14,13 +14,6 @@
             <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
           </div>
           
-          <Notification
-            v-if="notification"
-            :message="notification.message"
-            :type="notification.type"
-            @close="notification = null"
-          />
-          
           <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
             <button
               @click="toggleFlash"
@@ -85,7 +78,7 @@ import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
-import { createNotification } from '../utils/notification';
+import { showNotification, useNotification } from '../utils/notification';
 import receiptService from '../services/receipt';
 
 export default {
@@ -103,15 +96,13 @@ export default {
     const qrScanner = ref(null);
     const capturedReceipt = ref(null);
     const hasPermission = ref(false);
-    const notification = ref(null);
     const receiptId = computed(() => route.query.receipt);
     const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
     const isSettingsOpen = ref(false);
     
-    const showNotification = (message, type = 'error') => {
-      notification.value = createNotification(message, type);
-    };
+    // Use the global notification system
+    const { notification, clearNotification } = useNotification();
     
     const requestCameraPermission = async () => {
       try {
@@ -244,6 +235,7 @@ export default {
       capturedReceipt,
       hasPermission,
       notification,
+      clearNotification,
       receiptId,
       decryptionKey,
       isProcessing,

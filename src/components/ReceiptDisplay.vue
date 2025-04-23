@@ -151,7 +151,6 @@ import nostrService from '../services/nostr';
 import QRCodeVue from 'qrcode.vue';
 import { formatCurrency } from '../utils/currency';
 import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
-import { showAlertNotification } from '../utils/notification';
 
 export default {
   name: 'ReceiptDisplay',
@@ -203,13 +202,13 @@ export default {
     
     const createRequest = async () => {
       if (!paymentRequest.value) {
-        alert('Please enter a payment request');
+        showNotification('Please enter a payment request', 'error');
         return;
       }
       
       // Validate that it's not a Lightning address
       if (paymentRequest.value.includes('@')) {
-        alert('Lightning addresses are not supported (yet!). Please enter a NUT-18 Cashu request.');
+        showNotification('Lightning addresses are not supported (yet!). Please enter a NUT-18 Cashu request.', 'error');
         return;
       }
       
@@ -229,7 +228,8 @@ export default {
           receipt: receipt.value,
           paymentRequest: paymentRequest.value
         });
-        alert(`Failed to create payment request: ${error.message}`);
+        showNotification(`Failed to create payment request`, 'error');
+        console.error(`Failed to create payment request: ${error.message}`)
       }
     };
     
@@ -292,7 +292,7 @@ export default {
         step.value = 'qr-display';
       } catch (error) {
         console.error('Error creating payment request:', error);
-        alert(`Failed to create payment request: ${error.message}`);
+        showNotification(`Failed to create payment request`, 'error');
       }
     };
     
@@ -312,10 +312,10 @@ export default {
       const link = receiptLink.value;
       navigator.clipboard.writeText(link)
         .then(() => {
-          showAlertNotification('Link copied to clipboard', 'success');
+          showNotification('Link copied to clipboard', 'success');
         })
         .catch(err => {
-          showAlertNotification('Failed to copy link', 'error');
+          showNotification('Failed to copy link', 'error');
           console.error('Failed to copy link:', err);
         });
     };
@@ -333,8 +333,8 @@ export default {
         const text = await navigator.clipboard.readText();
         paymentRequest.value = text;
       } catch (err) {
+        showNotification('Failed to paste from clipboard!', 'error');
         console.error('Failed to paste from clipboard:', err);
-        alert('Failed to paste from clipboard. Please check your browser permissions.');
       }
     };
     
@@ -351,12 +351,12 @@ export default {
         } else {
           // Fallback for browsers that don't support Web Share API
           await navigator.clipboard.writeText(`${shareData.text}\n\n${shareData.url}`);
-          showAlertNotification('Link copied to clipboard', 'success');
+          showNotification('Link copied to clipboard', 'success');
         }
       } catch (error) {
         if (error.name !== 'AbortError') {
           console.error('Error sharing:', error);
-          showAlertNotification('Failed to share', 'error');
+          showNotification('Failed to share', 'error');
         }
       }
     };

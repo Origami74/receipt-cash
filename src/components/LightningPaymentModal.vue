@@ -4,7 +4,12 @@
       <h3 class="text-lg font-medium mb-4">Pay with Lightning</h3>
       
       <div class="mb-4 text-center">
-        <div v-if="invoice" class="mb-4">
+        <div v-if="!invoice" class="mb-4">
+          <div class="animate-spin rounded-full h-16 w-16 border-4 border-amber-500 border-t-transparent mx-auto mb-4"></div>
+          <div class="text-gray-600 mb-2">Generating invoice...</div>
+        </div>
+
+        <div v-else class="mb-4">
           <QRCode
             :value="invoice"
             :size="240"
@@ -23,13 +28,17 @@
       <div class="flex flex-col gap-3">
         <button
           @click="openWallet"
-          class="w-full py-2 px-4 bg-amber-500 text-white rounded hover:bg-amber-600"
+          :disabled="!invoice"
+          class="w-full py-2 px-4 rounded"
+          :class="invoice ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-amber-300 text-white cursor-not-allowed'"
         >
           ⚡️ Open in Wallet
         </button>
         <button
           @click="copyRequest"
-          class="w-full py-2 px-4 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          :disabled="!invoice"
+          class="w-full py-2 px-4 rounded"
+          :class="invoice ? 'bg-gray-200 text-gray-800 hover:bg-gray-300' : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
         >
           Copy request
         </button>
@@ -46,7 +55,7 @@
 
 <script>
 import QRCode from 'qrcode.vue';
-import { showAlertNotification } from '../utils/notification';
+import { showNotification } from '../utils/notification';
 
 export default {
   name: 'LightningPaymentModal',
@@ -73,15 +82,18 @@ export default {
       this.$emit('close');
     },
     openWallet() {
+      if (!this.invoice) return;
       this.$emit('open-wallet');
     },
     async copyRequest() {
+      if (!this.invoice) return;
+      
       try {
         await navigator.clipboard.writeText(this.invoice);
-        showAlertNotification('Payment request copied to clipboard!', 'success');
+        showNotification('Payment request copied to clipboard!', 'success');
       } catch (err) {
         console.error('Failed to copy payment request:', err);
-        showAlertNotification('Failed to copy payment request. Please try again.', 'error');
+        showNotification('Failed to copy payment request. Please try again.', 'error');
       }
     }
   }

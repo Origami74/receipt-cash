@@ -2,7 +2,7 @@ import { ref, computed } from 'vue';
 import paymentService, { calculateDeveloperFee } from '../services/payment'; // Still needed for calculations
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
 import cashuService from '../services/cashu'; // Import for Cashu operations
-import { showAlertNotification } from '../utils/notification';
+import { showNotification } from '../utils/notification';
 import { CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 
@@ -120,6 +120,10 @@ export default function usePaymentProcessing(options) {
   const payWithLightning = async () => {
     if (selectedItems.value.length === 0) return;
     
+    // Show the Lightning invoice modal immediately with empty invoice
+    lightningInvoice.value = ''; // Clear any previous invoice
+    showLightningModal.value = true;
+    
     try {
       // Calculate the amount in sats
       const satAmount = toSats(selectedSubtotal.value);
@@ -137,9 +141,6 @@ export default function usePaymentProcessing(options) {
       const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
       lightningInvoice.value = mintQuoteChecked.request;
       
-      // Show the Lightning invoice modal
-      showLightningModal.value = true;
-      
       // Set up a check for payment completion
       const checkPayment = async () => {
         try {
@@ -151,7 +152,7 @@ export default function usePaymentProcessing(options) {
           }
         } catch (error) {
           console.error('Error checking payment status:', error);
-          showAlertNotification('Error checking payment status: ' + error.message, 'error');
+          showNotification('Error checking payment status: ' + error.message, 'error');
         }
       };
       
@@ -159,7 +160,7 @@ export default function usePaymentProcessing(options) {
       checkPayment();
     } catch (error) {
       console.error('Error generating Lightning invoice:', error);
-      showAlertNotification('Error generating Lightning invoice: ' + error.message, 'error');
+      showNotification('Error generating Lightning invoice: ' + error.message, 'error');
     }
   };
 
@@ -238,10 +239,10 @@ export default function usePaymentProcessing(options) {
         await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
       }
       
-      showAlertNotification('Payment processed successfully!', 'success');
+      showNotification('Payment processed successfully!', 'success');
     } catch (error) {
       console.error('Error executing payout:', error);
-      showAlertNotification('Error processing payment: ' + error.message, 'error');
+      showNotification('Error processing payment: ' + error.message, 'error');
     }
   }
   
@@ -270,10 +271,10 @@ export default function usePaymentProcessing(options) {
     if (selectedItems.value.length === 0) return;
     try {
       await navigator.clipboard.writeText(getCashuPaymentRequest.value);
-      showAlertNotification('Payment request copied to clipboard!', 'success');
+      showNotification('Payment request copied to clipboard!', 'success');
     } catch (err) {
       console.error('Failed to copy payment request:', err);
-      showAlertNotification('Failed to copy payment request. Please try again.');
+      showNotification('Failed to copy payment request. Please try again.');
     }
   };
   

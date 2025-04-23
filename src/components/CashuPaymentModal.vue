@@ -46,7 +46,7 @@
 
 <script>
 import QRCode from 'qrcode.vue';
-import { showAlertNotification } from '../utils/notification';
+import { showNotification } from '../utils/notification';
 
 export default {
   name: 'CashuPaymentModal',
@@ -78,10 +78,10 @@ export default {
     async copyRequest() {
       try {
         await navigator.clipboard.writeText(this.paymentRequest);
-        showAlertNotification('Payment request copied to clipboard!', 'success');
+        showNotification('Payment request copied to clipboard!', 'success');
       } catch (err) {
         console.error('Failed to copy payment request:', err);
-        showAlertNotification('Failed to copy payment request. Please try again.', 'error');
+        showNotification('Failed to copy payment request. Please try again.', 'error');
       }
     }
   }

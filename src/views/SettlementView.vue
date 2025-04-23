@@ -143,16 +143,18 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import receiptService from '../services/receipt';
-import { showAlertNotification } from '../utils/notification';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
+import Notification from '../components/Notification.vue';
+import { showNotification, useNotification } from '../utils/notification';
 
 export default {
   name: 'SettlementView',
   components: {
     CashuPaymentModal,
-    LightningPaymentModal
+    LightningPaymentModal,
+    Notification
   },
   props: {
     eventId: {
@@ -173,6 +175,9 @@ export default {
     const error = ref(null);
     const btcPrice = ref(0);
     const currency = ref('USD');
+    
+    // Use the global notification system
+    const { notification, clearNotification } = useNotification();
     
     // Function to update items based on settlement data
     const updateSettledItems = (settledItems) => {
@@ -329,6 +334,8 @@ export default {
       devPercentage,
       loading,
       error,
+      notification,
+      clearNotification,
       fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
