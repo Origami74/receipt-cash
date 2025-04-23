@@ -72,6 +72,11 @@
           <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
             Summary
           </div>
+          <div class="p-3 border-t border-gray-200" v-if="devPercentage > 0">
+            <div class="text-sm text-gray-500">
+              Total includes {{ devPercentage }}% maintainer split set by receipt creator. 
+            </div>
+          </div>
           <div class="p-3 flex justify-between items-center">
             <div>Subtotal</div>
             <div class="text-right">
@@ -86,23 +91,6 @@
               <div class="text-sm text-gray-500">{{ toSats(calculatedTax) }} sats</div>
             </div>
           </div>
-          <div class="p-3 border-t border-gray-200" v-if="devPercentage > 0">
-            <div class="text-sm text-gray-500 mb-2">This payment will be split as follows:</div>
-            <div class="flex justify-between items-center">
-              <div>Receipt Creator ({{ 100 - devPercentage }}%)</div>
-              <div class="text-right">
-                <div>{{ formatPrice(payerShare) }}</div>
-                <div class="text-sm text-gray-500">{{ toSats(payerShare) }} sats</div>
-              </div>
-            </div>
-            <div class="flex justify-between items-center mt-2">
-              <div>Developer ({{ devPercentage }}%)</div>
-              <div class="text-right">
-                <div>{{ formatPrice(developerFee) }}</div>
-                <div class="text-sm text-gray-500">{{ toSats(developerFee) }} sats</div>
-              </div>
-            </div>
-          </div>
           <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
             <div>Total</div>
             <div class="text-right">
@@ -115,65 +103,40 @@
       
       <div class="p-4 bg-white shadow-inner border-t border-gray-200">
         <div class="space-y-2">
-          <button 
+          <button
             @click="payWithLightning"
-            class="w-full btn-primary"
+            class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
             :disabled="selectedItems.length === 0"
           >
-            Pay with Lightning
+            ⚡️ Pay with Lightning
           </button>
-          <button 
-            @click="copyPaymentRequest" 
-            class="w-full btn-secondary"
+          <button
+            @click="payWithCashu"
+            class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
             :disabled="selectedItems.length === 0"
           >
-            Copy payment request
+            🥜 Pay with Cashu
           </button>
         </div>
       </div>
     </template>
     
-    <!-- Lightning Invoice Modal -->
-    <div v-if="showLightningModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
-        <h3 class="text-lg font-medium mb-4">Pay with Lightning</h3>
-        
-        <div class="mb-4 text-center">
-          <div v-if="lightningInvoice" class="mb-4">
-            <QRCode
-              :value="lightningInvoice"
-              :size="240"
-              level="M"
-              render-as="svg"
-              class="mx-auto"
-            />
-          </div>
-          
-          <div class="text-sm text-gray-600 mb-2">
-            Amount: {{ toSats(selectedSubtotal) }} sats
-          </div>
-          
-          <div class="text-xs text-gray-500 break-all bg-gray-100 p-2 rounded mb-4">
-            {{ lightningInvoice }}
-          </div>
-        </div>
-        
-        <div class="flex gap-4">
-          <button
-            @click="showLightningModal = false"
-            class="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded"
-          >
-            Cancel
-          </button>
-          <button
-            @click="openInLightningWallet"
-            class="flex-1 py-2 px-4 bg-blue-600 text-white rounded"
-          >
-            Open in Wallet
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Payment Modals -->
+    <LightningPaymentModal
+      :show="showLightningModal"
+      :invoice="lightningInvoice"
+      :amount="toSats(selectedSubtotal)"
+      @close="showLightningModal = false"
+      @open-wallet="openInLightningWallet"
+    />
+    
+    <CashuPaymentModal
+      :show="showCashuModal"
+      :payment-request="getPaymentRequest"
+      :amount="toSats(selectedSubtotal)"
+      @close="showCashuModal = false"
+      @open-wallet="openInCashuWallet"
+    />
   </div>
 </template>
 
@@ -182,12 +145,14 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import receiptService from '../services/receipt';
 import { showAlertNotification } from '../utils/notification';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
-import QRCode from 'qrcode.vue';
+import CashuPaymentModal from '../components/CashuPaymentModal.vue';
+import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 
 export default {
   name: 'SettlementView',
   components: {
-    QRCode
+    CashuPaymentModal,
+    LightningPaymentModal
   },
   props: {
     eventId: {
@@ -258,14 +223,19 @@ export default {
       calculatedTax,
       developerFee,
       payerShare,
+      devPercentage,
       toSats,
       formatPrice,
       selectAllItems,
       payWithLightning,
+      payWithCashu,
       copyPaymentRequest,
       lightningInvoice,
       showLightningModal,
-      openInLightningWallet
+      showCashuModal,
+      openInLightningWallet,
+      openInCashuWallet,
+      getPaymentRequest
     } = paymentProcessing;
     
     // Item quantity management
@@ -356,19 +326,24 @@ export default {
       calculatedTax,
       developerFee,
       payerShare,
+      devPercentage,
       loading,
       error,
       fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
       payWithLightning,
+      payWithCashu,
       copyPaymentRequest,
       toSats,
       selectAllItems,
       formatPrice,
       lightningInvoice,
       showLightningModal,
-      openInLightningWallet
+      showCashuModal,
+      openInLightningWallet,
+      openInCashuWallet,
+      getPaymentRequest
     };
   }
 };

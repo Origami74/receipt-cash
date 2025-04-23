@@ -118,6 +118,7 @@ export default function usePaymentProcessing(options) {
   // Lightning payment integration using cashu-ts
   const lightningInvoice = ref('');
   const showLightningModal = ref(false);
+  const showCashuModal = ref(false);
   
   const payWithLightning = async () => {
     if (selectedItems.value.length === 0) return;
@@ -235,6 +236,19 @@ export default function usePaymentProcessing(options) {
     }
   };
 
+  // Pay with Cashu - opens the modal
+  const payWithCashu = async () => {
+    if (selectedItems.value.length === 0) return;
+    
+    // Debug logging
+    console.log("Pay with Cashu clicked");
+    console.log("Payment request:", getCashuPaymentRequest.value);
+    console.log("Selected items:", selectedItems.value.length);
+    
+    // Show the modal
+    showCashuModal.value = true;
+  };
+  
   // Copy payment request to clipboard
   const copyPaymentRequest = async () => {
     if (selectedItems.value.length === 0) return;
@@ -244,6 +258,13 @@ export default function usePaymentProcessing(options) {
     } catch (err) {
       console.error('Failed to copy payment request:', err);
       showAlertNotification('Failed to copy payment request. Please try again.');
+    }
+  };
+  
+  // Open in Cashu wallet
+  const openInCashuWallet = () => {
+    if (getCashuPaymentRequest.value) {
+      window.open(`cashu:${getCashuPaymentRequest.value}`, '_blank');
     }
   };
 
@@ -267,6 +288,7 @@ export default function usePaymentProcessing(options) {
     devPercentage,
     lightningInvoice,
     showLightningModal,
+    showCashuModal,
 
     // Computed
     selectedItems,
@@ -280,7 +302,9 @@ export default function usePaymentProcessing(options) {
     setPaymentRequest,
     setDevPercentage,
     payWithLightning,
+    payWithCashu,
     openInLightningWallet,
+    openInCashuWallet,
     copyPaymentRequest,
     selectAllItems,
     toSats,

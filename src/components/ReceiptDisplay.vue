@@ -312,9 +312,10 @@ export default {
       const link = receiptLink.value;
       navigator.clipboard.writeText(link)
         .then(() => {
-          console.log('Link copied to clipboard');
+          showAlertNotification('Link copied to clipboard', 'success');
         })
         .catch(err => {
+          showAlertNotification('Failed to copy link', 'error');
           console.error('Failed to copy link:', err);
         });
     };

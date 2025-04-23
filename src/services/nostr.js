@@ -153,57 +153,6 @@ const fetchReceiptEvent = async (eventId, encryptionKey) => {
 };
 
 /**
- * Subscribe to payment updates via NIP-04 DMs
- * @param {String} paymentId - Unique ID for this payment
- * @param {Function} callback - Function to call when payment is received
- * @returns {Function} Unsubscribe function
- */
-const subscribeToPaymentUpdates = async (paymentId, callback) => {
-  try {
-    if (!ndk.pool?.connectedRelays?.size) {
-      await connect();
-    }
-    
-    // Set up a filter for incoming DMs
-    const filter = {
-      kinds: [4], // DM
-      '#p': [publicKey] // Messages to our public key
-    };
-    
-    const subscription = ndk.subscribe(filter);
-    
-    subscription.on('event', async (event) => {
-      try {
-        // Only process DMs from other users
-        if (event.pubkey === publicKey) return;
-        
-        // Decrypt the content
-        const decryptedContent = await ndk.signer.decrypt(event.pubkey, event.content);
-        const data = JSON.parse(decryptedContent);
-        
-        // Check if this is a payment message
-        if (data.type === 'payment' && data.id === paymentId) {
-          // Process the payment
-          callback({
-            status: 'received',
-            token: data.token,
-            from: event.pubkey
-          });
-        }
-      } catch (error) {
-        console.error('Error processing payment DM:', error);
-      }
-    });
-    
-    // Return unsubscribe function
-    return () => subscription.stop();
-  } catch (error) {
-    console.error('Error subscribing to payment updates:', error);
-    throw error;
-  }
-};
-
-/**
  * Send NIP-04 encrypted DM to developer with payment details
  * @param {String} token - Token sent to developer
  * @returns {Promise} Promise that resolves when message is sent
@@ -319,7 +268,6 @@ export default {
   fetchReceiptEvent,
   sendNip04Dm,
   sendNip17Dm,
-  subscribeToPaymentUpdates,
   decodeNprofile,
   
   // Expose these for other services that need access to NDK
