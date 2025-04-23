@@ -4,7 +4,19 @@
       <h3 class="text-lg font-medium mb-4">Pay with Cashu</h3>
       
       <div class="mb-4 text-center">
-        <div class="mb-4">
+        <!-- Success state with big green checkmark -->
+        <div v-if="paymentSuccess" class="mb-4 flex flex-col items-center justify-center py-6">
+          <div class="text-green-500 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-32 w-32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div class="text-xl font-bold text-green-600 mb-2">Payment Successful!</div>
+          <div class="text-gray-600">Your payment has been processed successfully</div>
+        </div>
+        
+        <!-- QR code state -->
+        <div v-else class="mb-4">
           <QRCode
             :value="paymentRequest"
             :size="240"
@@ -14,30 +26,40 @@
           />
         </div>
         
-        <div class="text-sm text-gray-600 mb-2">
+        <div v-if="!paymentSuccess" class="text-sm text-gray-600 mb-2">
           Amount: {{ amount }} sats
         </div>
-        
       </div>
       
       <div class="flex flex-col gap-3">
+        <!-- Only show buttons if payment is not successful -->
+        <template v-if="!paymentSuccess">
+          <button
+            @click="openWallet"
+            class="w-full py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            🥜 Pay with wallet
+          </button>
+          <button
+            @click="copyRequest"
+            class="w-full py-2 px-4 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          >
+            Copy request
+          </button>
+          <button
+            @click="close"
+            class="w-full py-2 px-4 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+        </template>
+        <!-- Show "Done" button when payment is successful -->
         <button
-          @click="openWallet"
-          class="w-full py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700"
-        >
-          🥜 Pay with wallet
-        </button>
-        <button
-          @click="copyRequest"
-          class="w-full py-2 px-4 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-        >
-          Copy request
-        </button>
-        <button
+          v-else
           @click="close"
-          class="w-full py-2 px-4 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+          class="w-full py-2 px-4 bg-green-500 text-white rounded hover:bg-green-600"
         >
-          Cancel
+          Done
         </button>
       </div>
     </div>
@@ -65,6 +87,10 @@ export default {
     amount: {
       type: [Number, String],
       required: true
+    },
+    paymentSuccess: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['close', 'open-wallet'],

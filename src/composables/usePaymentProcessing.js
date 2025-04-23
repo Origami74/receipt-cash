@@ -43,6 +43,7 @@ export default function usePaymentProcessing(options) {
   const settlerPaymentRequest = ref('');
   const paymentId = ref('');
   const paymentStatus = ref('pending'); // pending, processing, complete, failed
+  const paymentSuccess = ref(false); // Set to true when payment is successful
   const devPercentage = ref(5); // Default dev percentage (will be overridden from receipt)
 
   // Computed properties for selected items and calculations
@@ -239,7 +240,20 @@ export default function usePaymentProcessing(options) {
         await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
       }
       
+      // Set payment success to true when payment is processed successfully
+      paymentSuccess.value = true;
       showNotification('Payment processed successfully!', 'success');
+      
+      // Call the onPaymentSuccess callback if provided
+      if (onPaymentSuccess) {
+        await onPaymentSuccess(selectedItems.value);
+        
+        // Auto-close the modals after a delay
+        setTimeout(() => {
+          showLightningModal.value = false;
+          showCashuModal.value = false;
+        }, 3000); // Close after 3 seconds to give time to see the checkmark
+      }
     } catch (error) {
       console.error('Error executing payout:', error);
       showNotification('Error processing payment: ' + error.message, 'error');
@@ -302,6 +316,7 @@ export default function usePaymentProcessing(options) {
     settlerPaymentRequest,
     paymentId,
     paymentStatus,
+    paymentSuccess,
     devPercentage,
     lightningInvoice,
     showLightningModal,

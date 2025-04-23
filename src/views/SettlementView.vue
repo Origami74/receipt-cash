@@ -126,6 +126,7 @@
       :show="showLightningModal"
       :invoice="lightningInvoice"
       :amount="toSats(selectedSubtotal)"
+      :payment-success="paymentSuccess"
       @close="showLightningModal = false"
       @open-wallet="openInLightningWallet"
     />
@@ -134,6 +135,7 @@
       :show="showCashuModal"
       :payment-request="getPaymentRequest"
       :amount="toSats(selectedSubtotal)"
+      :payment-success="paymentSuccess"
       @close="showCashuModal = false"
       @open-wallet="openInCashuWallet"
     />
@@ -240,7 +242,8 @@ export default {
       showCashuModal,
       openInLightningWallet,
       openInCashuWallet,
-      getPaymentRequest
+      getPaymentRequest,
+      paymentSuccess
     } = paymentProcessing;
     
     // Item quantity management
@@ -350,7 +353,8 @@ export default {
       showCashuModal,
       openInLightningWallet,
       openInCashuWallet,
-      getPaymentRequest
+      getPaymentRequest,
+      paymentSuccess
     };
   }
 };
