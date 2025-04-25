@@ -30,6 +30,17 @@
             render-as="svg"
             class="mx-auto"
           />
+          
+          <!-- Checking payment indicator -->
+          <div class="mt-4 flex flex-col items-center justify-center">
+            <div class="animate-pulse flex space-x-2 items-center">
+              <div class="w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
+              <div class="text-amber-600 text-sm font-medium">Checking for payment...</div>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              This may take a moment after payment is sent
+            </div>
+          </div>
         </div>
         
         <div v-if="!paymentSuccess" class="text-sm text-gray-600 mb-2">

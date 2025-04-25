@@ -16,8 +16,8 @@ const extractNostrTransport = (paymentRequest) => {
     const decodedRequest = decodePaymentRequest(paymentRequest);
     
     // Check if there's transport information with nostr
-    if (!decodedRequest.transport || 
-        !Array.isArray(decodedRequest.transport) || 
+    if (!decodedRequest.transport ||
+        !Array.isArray(decodedRequest.transport) ||
         decodedRequest.transport.length === 0) {
       return null;
     }
@@ -36,12 +36,13 @@ const extractNostrTransport = (paymentRequest) => {
       return null;
     }
     
-    // Return an object with the payment request ID, pubkey, and relays
+    // Return an object with the payment request ID, pubkey, relays, and mints
     return {
       id: decodedRequest.id,
       unit: decodedRequest.unit,
       pubkey,
-      relays
+      relays,
+      mints: decodedRequest.mints // Include mints array from the payment request
     };
   } catch (error) {
     console.error('Error extracting nostr transport:', error);

@@ -3,7 +3,14 @@ import paymentService, { calculateDeveloperFee } from '../services/payment'; // 
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
 import cashuService from '../services/cashu'; // Import for Cashu operations
 import { showNotification } from '../utils/notification';
-import { saveProofs, updateProofStatus } from '../utils/storage';
+import {
+  saveProofs,
+  updateProofStatus,
+  saveMintQuote,
+  getUnprocessedMintQuotes,
+  markMintQuoteProcessed,
+  deleteMintQuote
+} from '../utils/storage';
 import { CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 
@@ -138,8 +145,20 @@ export default function usePaymentProcessing(options) {
       // Calculate the amount in sats
       const satAmount = toSats(selectedSubtotal.value);
 
-      // Initialize the Cashu mint and wallet
-      const mintUrl = 'https://testnut.cashu.space';
+      // Extract recipient payment information first to get the mint URL
+      const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
+      
+      // Set default fallback mint
+      let mintUrl = 'https://mint.minibits.cash/Bitcoin';
+      
+      // Use the first mint from the payment request if available
+      if (recipientCashuDmInfo && recipientCashuDmInfo.mints && recipientCashuDmInfo.mints.length > 0) {
+        mintUrl = recipientCashuDmInfo.mints[0];
+        console.log(`Using mint URL from payment request: ${mintUrl}`);
+      } else {
+        console.log(`No mint found in payment request. Using fallback mint: ${mintUrl}`);
+      }
+      
       const mint = new CashuMint(mintUrl);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint(); // persist wallet.keys and wallet.keysets to avoid calling loadMint() in the future
@@ -147,6 +166,10 @@ export default function usePaymentProcessing(options) {
       // Step 1: Request a Lightning invoice from the mint
       const mintQuote = await wallet.createMintQuote(satAmount);
       
+      // Save mint quote to storage immediately in case user navigates away
+        saveMintQuote(currentTransactionId.value, mintQuote, satAmount, mintUrl);
+        console.log(`Saved mint quote for transaction ${currentTransactionId.value} to local storage`);
+
       // Pay the invoice here before you continue...
       const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
       lightningInvoice.value = mintQuoteChecked.request;
@@ -154,15 +177,24 @@ export default function usePaymentProcessing(options) {
       // Set up a check for payment completion
       const checkPayment = async () => {
         try {
-          if (mintQuoteChecked.state == MintQuoteState.PAID) {
-            await executePayout(wallet, mintUrl, satAmount, mintQuote);
+          // Check the current payment status
+          console.log("Checking payment status...");
+          const currentStatus = await wallet.checkMintQuote(mintQuote.quote);
+          console.log("Payment status:", currentStatus.state);
+          
+          if (currentStatus.state === MintQuoteState.PAID) {
+            console.log("Payment detected! Processing payout...");
+            await executePayout(wallet, mintUrl, satAmount, mintQuote, recipientCashuDmInfo);
           } else {
-            // Check again in 3 seconds
+            // Check again in 2 seconds
+            console.log("Payment not detected yet. Checking again in 2 seconds...");
             setTimeout(checkPayment, 2000);
           }
         } catch (error) {
           console.error('Error checking payment status:', error);
           showNotification('Error checking payment status: ' + error.message, 'error');
+          // Continue checking despite errors
+          setTimeout(checkPayment, 5000); // Longer timeout after error
         }
       };
       
@@ -174,7 +206,7 @@ export default function usePaymentProcessing(options) {
     }
   };
 
-  const executePayout = async (wallet, mintUrl, satAmount, mintQuote) => {
+  const executePayout = async (wallet, mintUrl, satAmount, mintQuote, recipientCashuDmInfo) => {
     try {
       // Mint proofs from the paid Lightning invoice
       const proofs = await wallet.mintProofs(satAmount, mintQuote.quote);
@@ -182,12 +214,13 @@ export default function usePaymentProcessing(options) {
       console.log(`developerFee: ${toSats(developerFee.value)}`);
       
       // Store the minted proofs in local storage
+      // Use the mint URL extracted from the payment request
       saveProofs(
         currentTransactionId.value,
         'minted',
         proofs,
         'pending',
-        mintUrl
+        mintUrl // This is now coming from the payment request
       );
       
       // Split tokens between developer and receipt creator
@@ -197,12 +230,13 @@ export default function usePaymentProcessing(options) {
       updateProofStatus(currentTransactionId.value, 'minted', 'spent');
       
       // Store the split proofs in local storage
+      // Use the mint URL extracted from the payment request
       saveProofs(
         currentTransactionId.value,
         'payer',
         payerProofs,
         'pending',
-        mintUrl
+        mintUrl // Using mint URL from payment request
       );
       
       saveProofs(
@@ -210,14 +244,12 @@ export default function usePaymentProcessing(options) {
         'developer',
         developerProofs,
         'pending',
-        mintUrl
+        mintUrl // Using mint URL from payment request
       );
       
-      // Extract recipient payment information
-      const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
-      
-      // Send payment to recipient if transport info is available
-      if (recipientCashuDmInfo) {
+      // recipientCashuDmInfo is already extracted at the beginning of this function
+      // Send payment to recipient since we already validated transport info is available
+      if (recipientCashuDmInfo.pubkey) {
         try {
           // Format the message as expected by the receiver
           const paymentMessage = cashuService.createPaymentMessage(

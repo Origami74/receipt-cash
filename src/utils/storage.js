@@ -1,6 +1,7 @@
 const PAYMENT_REQUESTS_KEY = 'receipt-cash-payment-requests';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
 const PROOFS_KEY = 'receipt-cash-proofs';
+const MINT_QUOTES_KEY = 'receipt-cash-mint-quotes';
 
 // Default AI settings
 const DEFAULT_AI_SETTINGS = {
@@ -258,5 +259,150 @@ export function getPendingProofs() {
   } catch (error) {
     console.error('Error getting pending proofs:', error);
     return {};
+  }
+}
+
+/**
+ * Save a mint quote to localStorage
+ * @param {string} transactionId - Unique identifier for the transaction
+ * @param {Object} mintQuote - The mint quote object from cashu-ts
+ * @param {number} satAmount - The amount in sats
+ * @param {string} mintUrl - The mint URL
+ * @param {Object} metadata - Additional metadata about the transaction (receiptId, items, etc.)
+ * @returns {boolean} True if saving was successful
+ */
+export function saveMintQuote(transactionId, mintQuote, satAmount, mintUrl, metadata = {}) {
+  try {
+    const mintQuotes = getMintQuotes();
+    
+    mintQuotes[transactionId] = {
+      timestamp: Date.now(),
+      mintQuote,
+      satAmount,
+      mintUrl,
+      processed: false,
+      metadata
+    };
+    
+    localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
+    console.log(`Saved mint quote for transaction ${transactionId}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving mint quote:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all mint quotes from localStorage
+ * @returns {Object} Object containing all mint quotes
+ */
+export function getMintQuotes() {
+  try {
+    const stored = localStorage.getItem(MINT_QUOTES_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (error) {
+    console.error('Error retrieving mint quotes:', error);
+    return {};
+  }
+}
+
+/**
+ * Get a specific mint quote by transaction ID
+ * @param {string} transactionId - The transaction ID
+ * @returns {Object|null} The mint quote or null if not found
+ */
+export function getMintQuote(transactionId) {
+  try {
+    const mintQuotes = getMintQuotes();
+    return mintQuotes[transactionId] || null;
+  } catch (error) {
+    console.error(`Error retrieving mint quote for transaction ${transactionId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Mark a mint quote as processed
+ * @param {string} transactionId - The transaction ID
+ * @returns {boolean} True if update was successful
+ */
+export function markMintQuoteProcessed(transactionId) {
+  try {
+    const mintQuotes = getMintQuotes();
+    
+    if (mintQuotes[transactionId]) {
+      mintQuotes[transactionId].processed = true;
+      mintQuotes[transactionId].processedTimestamp = Date.now();
+      
+      localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
+      console.log(`Marked mint quote for transaction ${transactionId} as processed`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`Error marking mint quote as processed for transaction ${transactionId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Get all unprocessed mint quotes
+ * @returns {Object} Object containing all unprocessed mint quotes
+ */
+export function getUnprocessedMintQuotes() {
+  try {
+    const mintQuotes = getMintQuotes();
+    const unprocessed = {};
+    
+    Object.keys(mintQuotes).forEach(transactionId => {
+      if (!mintQuotes[transactionId].processed) {
+        unprocessed[transactionId] = mintQuotes[transactionId];
+      }
+    });
+    
+    return unprocessed;
+  } catch (error) {
+    console.error('Error retrieving unprocessed mint quotes:', error);
+    return {};
+  }
+}
+
+/**
+ * Delete a mint quote
+ * @param {string} transactionId - The transaction ID
+ * @returns {boolean} True if deletion was successful
+ */
+export function deleteMintQuote(transactionId) {
+  try {
+    const mintQuotes = getMintQuotes();
+    
+    if (mintQuotes[transactionId]) {
+      delete mintQuotes[transactionId];
+      localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
+      console.log(`Deleted mint quote for transaction ${transactionId}`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`Error deleting mint quote for transaction ${transactionId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Clear all mint quotes
+ * @returns {boolean} True if clearing was successful
+ */
+export function clearMintQuotes() {
+  try {
+    localStorage.removeItem(MINT_QUOTES_KEY);
+    console.log('Cleared all mint quotes');
+    return true;
+  } catch (error) {
+    console.error('Error clearing mint quotes:', error);
+    return false;
   }
 }

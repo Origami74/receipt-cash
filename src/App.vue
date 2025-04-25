@@ -13,8 +13,10 @@
 </template>
 
 <script>
-import { useNotification } from './utils/notification';
+import { onMounted } from 'vue';
+import { showNotification, useNotification } from './utils/notification';
 import Notification from './components/Notification.vue';
+import recoveryService from './services/recovery';
 
 export default {
   name: 'App',
@@ -23,6 +25,22 @@ export default {
   },
   setup() {
     const { notification, clearNotification } = useNotification();
+    
+    // Check for unprocessed mint quotes when the app starts
+    onMounted(() => {
+      // Run after a short delay to ensure app is fully initialized
+      setTimeout(async () => {
+        try {
+          const recovered = await recoveryService.checkPendingLightningPayments();
+          if (recovered && recovered.length > 0) {
+            console.log(`Successfully recovered ${recovered.length} payments`);
+            showNotification(`Successfully recovered ${recovered.length} payments`, "success")
+          }
+        } catch (error) {
+          console.error('Error running recovery service:', error);
+        }
+      }, 1000);
+    });
     
     return {
       notification,
