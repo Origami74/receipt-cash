@@ -47,6 +47,7 @@ export default function usePaymentProcessing(options) {
   const paymentSuccess = ref(false); // Set to true when payment is successful
   const devPercentage = ref(5); // Default dev percentage (will be overridden from receipt)
   const currentTransactionId = ref(''); // Used to track the current transaction for proof recovery
+  const paymentInProgress = ref(false); // Set to true when payment is initiated, false when completed or canceled
 
   // Computed properties for selected items and calculations
   const selectedItems = computed(() => {
@@ -122,6 +123,9 @@ export default function usePaymentProcessing(options) {
   
   const payWithLightning = async () => {
     if (selectedItems.value.length === 0) return;
+    
+    // Set payment in progress state
+    paymentInProgress.value = true;
     
     // Show the Lightning invoice modal immediately with empty invoice
     lightningInvoice.value = ''; // Clear any previous invoice
@@ -269,6 +273,7 @@ export default function usePaymentProcessing(options) {
       
       // Set payment success to true when payment is processed successfully
       paymentSuccess.value = true;
+      // Keep paymentInProgress true to maintain item lock after successful payment
       showNotification('Payment processed successfully!', 'success');
       
       // Call the onPaymentSuccess callback if provided
@@ -297,6 +302,9 @@ export default function usePaymentProcessing(options) {
   // Pay with Cashu - opens the modal
   const payWithCashu = async () => {
     if (selectedItems.value.length === 0) return;
+    
+    // Set payment in progress state
+    paymentInProgress.value = true;
     
     // Debug logging
     console.log("Pay with Cashu clicked");
@@ -337,6 +345,13 @@ export default function usePaymentProcessing(options) {
     });
   };
 
+  // Method to cancel payment and reset payment in progress state
+  const cancelPayment = () => {
+    paymentInProgress.value = false;
+    showLightningModal.value = false;
+    showCashuModal.value = false;
+  };
+
   return {
     // State
     paymentRequest,
@@ -349,6 +364,7 @@ export default function usePaymentProcessing(options) {
     showLightningModal,
     showCashuModal,
     currentTransactionId,
+    paymentInProgress,
 
     // Computed
     selectedItems,
@@ -368,6 +384,7 @@ export default function usePaymentProcessing(options) {
     copyPaymentRequest,
     selectAllItems,
     toSats,
-    formatPrice
+    formatPrice,
+    cancelPayment
   };
 }

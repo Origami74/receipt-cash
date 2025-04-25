@@ -41,9 +41,10 @@
         <div class="bg-white rounded-lg shadow mb-4">
           <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
             <div>Items</div>
-            <button 
-              @click="selectAllItems" 
-              class="text-sm text-blue-500 hover:text-blue-600"
+            <button
+              @click="selectAllItems"
+              class="text-sm text-blue-500 hover:text-blue-600 disabled:text-gray-400 disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+              :disabled="paymentInProgress"
             >
               Select All
             </button>
@@ -51,16 +52,16 @@
           <div v-for="(item, index) in items" :key="index" class="receipt-item">
             <div class="flex items-center">
               <div class="flex items-center space-x-2">
-                <button 
+                <button
                   @click="decrementQuantity(index)"
                   class="px-2 py-1 text-sm border rounded"
-                  :disabled="item.selectedQuantity <= 0 || item.settled"
+                  :disabled="item.selectedQuantity <= 0 || item.settled || paymentInProgress"
                 >-</button>
                 <span class="w-8 text-center">{{ item.selectedQuantity }}</span>
-                <button 
+                <button
                   @click="incrementQuantity(index)"
                   class="px-2 py-1 text-sm border rounded"
-                  :disabled="item.selectedQuantity >= item.quantity || item.settled"
+                  :disabled="item.selectedQuantity >= item.quantity || item.settled || paymentInProgress"
                 >+</button>
               </div>
               <div class="ml-4">
@@ -142,6 +143,7 @@
       :payment-success="paymentSuccess"
       @close="showLightningModal = false"
       @open-wallet="openInLightningWallet"
+      @cancel="cancelPayment"
     />
     
     <CashuPaymentModal
@@ -151,6 +153,7 @@
       :payment-success="paymentSuccess"
       @close="showCashuModal = false"
       @open-wallet="openInCashuWallet"
+      @cancel="cancelPayment"
     />
     
     <!-- Settings Menu -->
@@ -273,7 +276,9 @@ export default {
       openInLightningWallet,
       openInCashuWallet,
       getPaymentRequest,
-      paymentSuccess
+      paymentSuccess,
+      paymentInProgress,
+      cancelPayment
     } = paymentProcessing;
     
     // Item quantity management
@@ -385,8 +390,10 @@ export default {
       openInCashuWallet,
       getPaymentRequest,
       paymentSuccess,
+      paymentInProgress,
       showSettings,
-      goToHome
+      goToHome,
+      cancelPayment
     };
   }
 };

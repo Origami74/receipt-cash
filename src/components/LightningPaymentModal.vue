@@ -57,7 +57,7 @@
             Copy request
           </button>
           <button
-            @click="close"
+            @click="cancel"
             class="w-full py-2 px-4 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
           >
             Cancel
@@ -103,9 +103,13 @@ export default {
       default: false
     }
   },
-  emits: ['close', 'open-wallet'],
+  emits: ['close', 'open-wallet', 'cancel'],
   methods: {
     close() {
+      this.$emit('close');
+    },
+    cancel() {
+      this.$emit('cancel');
       this.$emit('close');
     },
     openWallet() {
