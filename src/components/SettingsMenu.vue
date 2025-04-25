@@ -132,15 +132,48 @@
               <div v-for="(category, catName) in transaction.categories" :key="catName" class="mb-2">
                 <div class="flex justify-between items-center">
                   <span class="text-sm font-medium capitalize">{{ catName }} Proofs</span>
-                  <button
-                    @click="copyProofs(txId, catName, category)"
-                    class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
-                  >
-                    Copy
-                  </button>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="copyProofs(txId, catName, category)"
+                      class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      v-if="isProofCopied(txId, catName)"
+                      @click="showRecoveryConfirmation(txId, catName)"
+                      class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
+                    >
+                      Mark recovered
+                    </button>
+                  </div>
                 </div>
                 <div class="text-xs text-gray-500 mt-1">
                   Mint: {{ category.mintUrl }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- Confirmation Modal -->
+            <div v-if="showConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Are you sure you want to mark these proofs as recovered? They will be permanently deleted and can't be recovered again.
+                </p>
+                <div class="flex space-x-3 justify-end">
+                  <button
+                    @click="cancelRecovery"
+                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    @click="confirmRecovery"
+                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete Permanently
+                  </button>
                 </div>
               </div>
             </div>
@@ -173,6 +206,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, getLastPaymentRequest,
          getPendingProofs, clearProofs } from '../utils/storage';
 import { showNotification } from '../utils/notification';
+import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 export default {
   name: 'SettingsMenu',
@@ -199,6 +233,9 @@ export default {
     });
     
     const pendingProofs = ref({});
+    const copiedProofs = ref({}); // Track which proofs have been copied
+    const showConfirmationModal = ref(false); // Control confirmation modal visibility
+    const pendingRecoveryItem = ref({ txId: '', category: '' }); // Store item pending recovery
 
     // Load settings and proofs from storage when component mounts
     onMounted(() => {
@@ -272,27 +309,80 @@ export default {
       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
     };
     
-    // Copy proofs to clipboard
+    // Copy proofs to clipboard as a Cashu token
     const copyProofs = (txId, category, categoryData) => {
       try {
-        // Create a formatted JSON string with the proof data
-        const proofData = {
-          mintUrl: categoryData.mintUrl,
+        // Create a properly encoded Cashu token using the official library function
+        const tokenData = {
+          mint: categoryData.mintUrl,
           proofs: categoryData.proofs
         };
         
-        navigator.clipboard.writeText(JSON.stringify(proofData, null, 2));
-        showNotification(`Copied ${category} proofs to clipboard`, 'success');
+        // Get encoded token string with the cashu: prefix
+        const tokenString = getEncodedTokenV4(tokenData);
+        
+        navigator.clipboard.writeText(tokenString);
+        showNotification(`Copied ${category} Cashu token to clipboard`, 'success');
       } catch (error) {
-        console.error('Error copying proofs:', error);
-        showNotification('Failed to copy proofs', 'error');
+        console.error('Error copying Cashu token:', error);
+        showNotification('Failed to copy Cashu token', 'error');
       }
+      
+      // Mark as copied to show the recovery button
+      if (!copiedProofs.value[txId]) {
+        copiedProofs.value[txId] = {};
+      }
+      copiedProofs.value[txId][category] = true;
+    };
+    
+    // Check if specific proof has been copied
+    const isProofCopied = (txId, category) => {
+      return copiedProofs.value[txId] && copiedProofs.value[txId][category];
+    };
+    
+    // Show confirmation modal for recovery
+    const showRecoveryConfirmation = (txId, category) => {
+      pendingRecoveryItem.value = { txId, category };
+      showConfirmationModal.value = true;
+    };
+    
+    // Cancel recovery operation
+    const cancelRecovery = () => {
+      showConfirmationModal.value = false;
+      pendingRecoveryItem.value = { txId: '', category: '' };
+    };
+    
+    // Confirm recovery and delete the proofs
+    const confirmRecovery = () => {
+      const { txId, category } = pendingRecoveryItem.value;
+      
+      // Clear the specific proof category
+      clearProofs(txId, category);
+      
+      // Remove from copied proofs tracking
+      if (copiedProofs.value[txId]) {
+        delete copiedProofs.value[txId][category];
+        
+        // Clean up empty objects
+        if (Object.keys(copiedProofs.value[txId]).length === 0) {
+          delete copiedProofs.value[txId];
+        }
+      }
+      
+      // Refresh the proofs list
+      loadPendingProofs();
+      
+      // Close the modal
+      showConfirmationModal.value = false;
+      
+      showNotification(`${category} proofs marked as recovered and removed`, 'success');
     };
     
     // Clear all pending proofs
     const clearAllProofs = () => {
       clearProofs();
       pendingProofs.value = {};
+      copiedProofs.value = {}; // Clear copied state too
       showNotification('All pending proofs cleared', 'success');
     };
 
@@ -305,7 +395,13 @@ export default {
       formatDate,
       copyProofs,
       clearAllProofs,
-      loadPendingProofs
+      loadPendingProofs,
+      isProofCopied,
+      showRecoveryConfirmation,
+      cancelRecovery,
+      confirmRecovery,
+      showConfirmationModal,
+      pendingRecoveryItem
     };
   }
 }
