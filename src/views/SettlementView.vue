@@ -41,28 +41,52 @@
         <div class="bg-white rounded-lg shadow mb-4">
           <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
             <div>Items</div>
-            <button
-              @click="selectAllItems"
-              class="text-sm text-blue-500 hover:text-blue-600 disabled:text-gray-400 disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-              :disabled="paymentInProgress"
-            >
-              Select All
-            </button>
+            <template v-if="!paymentInProgress && !paymentSuccess">
+              <button
+                @click="selectAllItems"
+                class="text-sm text-blue-500 hover:text-blue-600"
+              >
+                Select All
+              </button>
+            </template>
+            <template v-else>
+              <div class="text-sm text-gray-500 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Locked
+              </div>
+            </template>
           </div>
           <div v-for="(item, index) in items" :key="index" class="receipt-item">
             <div class="flex items-center">
-              <div class="flex items-center space-x-2">
-                <button
-                  @click="decrementQuantity(index)"
-                  class="px-2 py-1 text-sm border rounded"
-                  :disabled="item.selectedQuantity <= 0 || item.settled || paymentInProgress"
-                >-</button>
-                <span class="w-8 text-center">{{ item.selectedQuantity }}</span>
-                <button
-                  @click="incrementQuantity(index)"
-                  class="px-2 py-1 text-sm border rounded"
-                  :disabled="item.selectedQuantity >= item.quantity || item.settled || paymentInProgress"
-                >+</button>
+              <div
+                class="flex items-center space-x-2"
+                :class="{'opacity-60': paymentInProgress || paymentSuccess}"
+              >
+                <template v-if="paymentInProgress || paymentSuccess">
+                  <!-- Locked quantity display -->
+                  <div class="px-2 py-1 text-sm border rounded bg-gray-100 text-gray-500 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span class="w-8 text-center">{{ item.selectedQuantity }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <!-- Normal quantity controls -->
+                  <button
+                    @click="decrementQuantity(index)"
+                    class="px-2 py-1 text-sm border rounded"
+                    :disabled="item.selectedQuantity <= 0 || item.settled"
+                  >-</button>
+                  <span class="w-8 text-center">{{ item.selectedQuantity }}</span>
+                  <button
+                    @click="incrementQuantity(index)"
+                    class="px-2 py-1 text-sm border rounded"
+                    :disabled="item.selectedQuantity >= item.quantity || item.settled"
+                  >+</button>
+                </template>
               </div>
               <div class="ml-4">
                 <div :class="{ 'line-through text-gray-400': item.settled }">
@@ -117,19 +141,31 @@
       
       <div class="p-4 bg-white shadow-inner border-t border-gray-200">
         <div class="space-y-2">
+          <!-- Show payment buttons when payment is not successful -->
+          <template v-if="!paymentSuccess">
+            <button
+              @click="payWithLightning"
+              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
+              :disabled="selectedItems.length === 0"
+            >
+              ⚡️ Pay with Lightning
+            </button>
+            <button
+              @click="payWithCashu"
+              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
+              :disabled="selectedItems.length === 0"
+            >
+              🥜 Pay with Cashu
+            </button>
+          </template>
+          
+          <!-- Show scan receipt button when payment is successful -->
           <button
-            @click="payWithLightning"
-            class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
-            :disabled="selectedItems.length === 0"
+            v-if="paymentSuccess"
+            @click="goToHome"
+            class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg"
           >
-            ⚡️ Pay with Lightning
-          </button>
-          <button
-            @click="payWithCashu"
-            class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
-            :disabled="selectedItems.length === 0"
-          >
-            🥜 Pay with Cashu
+            📱 Scan a Receipt
           </button>
         </div>
       </div>
