@@ -7,15 +7,16 @@
     leave-from-class="translate-y-0 opacity-100"
     leave-to-class="translate-y-[-100%] opacity-0"
   >
-    <div 
+    <div
       v-if="isOpen"
-      class="fixed top-20 right-4 z-50 w-[90%] max-w-sm"
+      class="fixed inset-0 z-50 bg-black bg-opacity-30"
+      @click.self="$emit('close')"
     >
-      <div class="bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 p-4">
-        <div class="flex justify-between items-center mb-4">
+      <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 w-[90%] max-w-sm flex flex-col max-h-[80vh] overflow-hidden">
+        <div class="flex justify-between items-center p-4 border-b border-gray-200">
           <h3 class="text-lg font-medium">Settings</h3>
-          <button 
-            @click="$emit('close')" 
+          <button
+            @click="$emit('close')"
             class="text-gray-400 hover:text-gray-600"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -24,7 +25,7 @@
           </button>
         </div>
         
-        <div class="space-y-6">
+        <div class="overflow-y-auto p-4 space-y-6 flex-grow" style="overscroll-behavior: contain;">
           <!-- General Settings -->
           <div>
             <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Payment</h4>
