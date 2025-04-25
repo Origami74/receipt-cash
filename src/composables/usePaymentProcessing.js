@@ -55,6 +55,11 @@ export default function usePaymentProcessing(options) {
   const devPercentage = ref(5); // Default dev percentage (will be overridden from receipt)
   const currentTransactionId = ref(''); // Used to track the current transaction for proof recovery
   const paymentInProgress = ref(false); // Set to true when payment is initiated, false when completed or canceled
+  
+  // More detailed payment processing state
+  // possible values: 'initial', 'minting', 'minted', 'sending', 'success', 'failed'
+  const paymentProcessingState = ref('initial');
+  const paymentErrorMessage = ref(''); // Store detailed error message when payment fails
 
   // Computed properties for selected items and calculations
   const selectedItems = computed(() => {
@@ -208,10 +213,16 @@ export default function usePaymentProcessing(options) {
 
   const executePayout = async (wallet, mintUrl, satAmount, mintQuote, recipientCashuDmInfo) => {
     try {
+      // Update state to minting
+      paymentProcessingState.value = 'minting';
+      
       // Mint proofs from the paid Lightning invoice
       const proofs = await wallet.mintProofs(satAmount, mintQuote.quote);
       console.log(`payerShare: ${toSats(payerShare.value)}`);
       console.log(`developerFee: ${toSats(developerFee.value)}`);
+      
+      // Update state to minted
+      paymentProcessingState.value = 'minted';
       
       // Store the minted proofs in local storage
       // Use the mint URL extracted from the payment request
@@ -247,6 +258,12 @@ export default function usePaymentProcessing(options) {
         mintUrl // Using mint URL from payment request
       );
       
+      // Update state to sending
+      paymentProcessingState.value = 'sending';
+      
+      let sendSuccess = true;
+      let sendError = null;
+      
       // recipientCashuDmInfo is already extracted at the beginning of this function
       // Send payment to recipient since we already validated transport info is available
       if (recipientCashuDmInfo.pubkey) {
@@ -269,6 +286,8 @@ export default function usePaymentProcessing(options) {
           console.log(`Payment sent to ${recipientCashuDmInfo.pubkey} using relays: ${recipientCashuDmInfo.relays.join(', ')}`);
         } catch (error) {
           console.error("Error sending payment to recipient:", error);
+          sendSuccess = false;
+          sendError = error;
         }
       } else {
         console.error("No valid nostr transport found in payment request");
@@ -295,32 +314,49 @@ export default function usePaymentProcessing(options) {
         console.log(`Developer payment sent to ${devTransportInfo.pubkey} using relays: ${devTransportInfo.relays.join(', ')}`);
       } catch (error) {
         console.error("Error sending payment to developer:", error);
+        // We don't set sendSuccess to false here since it's less critical than the recipient payment
         // Fallback to old method
-        await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+        try {
+          await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
+        } catch (fallbackError) {
+          console.error("Fallback payment method failed:", fallbackError);
+        }
       }
       
-      // Mark payer and developer proofs as spent after successful payments
-      updateProofStatus(currentTransactionId.value, 'payer', 'spent');
-      updateProofStatus(currentTransactionId.value, 'developer', 'spent');
-      
-      // Set payment success to true when payment is processed successfully
-      paymentSuccess.value = true;
-      // Keep paymentInProgress true to maintain item lock after successful payment
-      showNotification('Payment processed successfully!', 'success');
-      
-      // Call the onPaymentSuccess callback if provided
-      if (onPaymentSuccess) {
-        await onPaymentSuccess(selectedItems.value);
+      // If we successfully sent the payment, mark as success
+      if (sendSuccess) {
+        // Mark payer and developer proofs as spent after successful payments
+        updateProofStatus(currentTransactionId.value, 'payer', 'spent');
+        updateProofStatus(currentTransactionId.value, 'developer', 'spent');
         
-        // Auto-close the modals after a delay
-        setTimeout(() => {
-          showLightningModal.value = false;
-          showCashuModal.value = false;
-        }, 3000); // Close after 3 seconds to give time to see the checkmark
+        // Set payment success to true when payment is processed successfully
+        paymentSuccess.value = true;
+        paymentProcessingState.value = 'success';
+        // Keep paymentInProgress true to maintain item lock after successful payment
+        showNotification('Payment processed successfully!', 'success');
+        
+        // Call the onPaymentSuccess callback if provided
+        if (onPaymentSuccess) {
+          await onPaymentSuccess(selectedItems.value);
+          
+          // Auto-close the modals after a delay
+          setTimeout(() => {
+            showLightningModal.value = false;
+            showCashuModal.value = false;
+          }, 3000); // Close after 3 seconds to give time to see the checkmark
+        }
+      } else {
+        // Payment sending failed, but we already have the tokens stored for recovery
+        paymentProcessingState.value = 'failed';
+        paymentErrorMessage.value = sendError ? sendError.message : 'Failed to send payment';
+        
+        showNotification('Payment sending failed. The tokens have been saved and can be recovered from Settings.', 'error');
       }
     } catch (error) {
       console.error('Error executing payout:', error);
-      showNotification('Error processing payment: ' + error.message, 'error');
+      paymentProcessingState.value = 'failed';
+      paymentErrorMessage.value = error.message;
+      showNotification('Error processing payment: ' + error.message + '. If any tokens were minted, they can be recovered from Settings.', 'error');
     }
   }
   
@@ -397,6 +433,8 @@ export default function usePaymentProcessing(options) {
     showCashuModal,
     currentTransactionId,
     paymentInProgress,
+    paymentProcessingState,
+    paymentErrorMessage,
 
     // Computed
     selectedItems,

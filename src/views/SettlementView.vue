@@ -177,6 +177,8 @@
       :invoice="lightningInvoice"
       :amount="toSats(selectedSubtotal)"
       :payment-success="paymentSuccess"
+      :payment-processing-state="paymentProcessingState"
+      :payment-error-message="paymentErrorMessage"
       @close="showLightningModal = false"
       @open-wallet="openInLightningWallet"
       @cancel="cancelPayment"
@@ -187,6 +189,8 @@
       :payment-request="getPaymentRequest"
       :amount="toSats(selectedSubtotal)"
       :payment-success="paymentSuccess"
+      :payment-processing-state="paymentProcessingState"
+      :payment-error-message="paymentErrorMessage"
       @close="showCashuModal = false"
       @open-wallet="openInCashuWallet"
       @cancel="cancelPayment"
@@ -314,6 +318,8 @@ export default {
       getPaymentRequest,
       paymentSuccess,
       paymentInProgress,
+      paymentProcessingState,
+      paymentErrorMessage,
       cancelPayment
     } = paymentProcessing;
     
@@ -427,6 +433,8 @@ export default {
       getPaymentRequest,
       paymentSuccess,
       paymentInProgress,
+      paymentProcessingState,
+      paymentErrorMessage,
       showSettings,
       goToHome,
       cancelPayment

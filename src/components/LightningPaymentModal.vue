@@ -15,13 +15,41 @@
           <div class="text-gray-600">Your payment has been processed successfully</div>
         </div>
         
-        <!-- Loading state -->
+        <!-- Error state with error message -->
+        <div v-else-if="paymentProcessingState === 'failed'" class="mb-4 flex flex-col items-center justify-center py-6">
+          <div class="text-red-500 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="text-xl font-bold text-red-600 mb-2">Payment Failed!</div>
+          <div class="text-gray-600 mb-2">{{ paymentErrorMessage || 'An error occurred during payment sending.' }}</div>
+          <div class="text-sm bg-blue-50 text-blue-800 p-3 rounded-md">
+            <p class="font-medium">Don't worry, your funds are safe!</p>
+            <p>The tokens were saved and can be recovered from the Settings menu.</p>
+          </div>
+        </div>
+        
+        <!-- Payment Processing (minted -> sending) state -->
+        <div v-else-if="paymentProcessingState === 'minted' || paymentProcessingState === 'sending'" class="mb-4 flex flex-col items-center justify-center py-6">
+          <div class="relative mb-4">
+            <div class="animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto"></div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-purple-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </div>
+          <div class="text-lg font-medium text-purple-700 mb-2">Processing Payment</div>
+          <div class="text-gray-600 mb-1">Tokens have been minted. Sending payment...</div>
+          <div class="text-xs text-gray-500">Please do not close this window</div>
+        </div>
+        
+        <!-- Loading state (generating invoice) -->
         <div v-else-if="!invoice" class="mb-4">
           <div class="animate-spin rounded-full h-16 w-16 border-4 border-amber-500 border-t-transparent mx-auto mb-4"></div>
           <div class="text-gray-600 mb-2">Generating invoice...</div>
         </div>
 
-        <!-- QR code state -->
+        <!-- QR code state (initial/waiting for payment) -->
         <div v-else class="mb-4">
           <QRCode
             :value="invoice"
@@ -112,6 +140,14 @@ export default {
     paymentSuccess: {
       type: Boolean,
       default: false
+    },
+    paymentProcessingState: {
+      type: String,
+      default: 'initial'
+    },
+    paymentErrorMessage: {
+      type: String,
+      default: ''
     }
   },
   emits: ['close', 'open-wallet', 'cancel'],
