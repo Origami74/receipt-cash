@@ -70,7 +70,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptDisplay from '../components/ReceiptDisplay.vue';
@@ -124,6 +124,14 @@ export default {
       }
 
       try {
+        // Check if video element is available
+        if (!videoElement.value) {
+          console.warn('Video element not available yet, waiting for DOM update');
+          // Wait for the next tick to ensure video element is mounted
+          setTimeout(initializeCamera, 100);
+          return;
+        }
+
         qrScanner.value = new QrScanner(
           videoElement.value,
           (result) => {
@@ -220,8 +228,20 @@ export default {
       isSettingsOpen.value = !isSettingsOpen.value;
     };
 
+    // Watch for changes to receiptId
+    watch(receiptId, (newValue, oldValue) => {
+      // If we're transitioning from having a receipt to no receipt,
+      // initialize the camera for scanning a new receipt
+      if (oldValue && !newValue) {
+        requestCameraPermission();
+      }
+    });
+
     onMounted(() => {
-      requestCameraPermission();
+      // Only initialize camera if we're not showing a receipt
+      if (!receiptId.value) {
+        requestCameraPermission();
+      }
     });
 
     onUnmounted(() => {
