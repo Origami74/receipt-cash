@@ -1,5 +1,6 @@
 const PAYMENT_REQUESTS_KEY = 'receipt-cash-payment-requests';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
+const PROOFS_KEY = 'receipt-cash-proofs';
 
 // Default AI settings
 const DEFAULT_AI_SETTINGS = {
@@ -71,5 +72,191 @@ export function clearAiSettings() {
     localStorage.removeItem(AI_SETTINGS_KEY);
   } catch (error) {
     console.error('Error clearing AI settings:', error);
+  }
+}
+
+/**
+ * Saves proofs to local storage with a specified category and status
+ * @param {string} transactionId - Unique identifier for the transaction
+ * @param {string} category - Category of proofs (e.g., 'minted', 'payer', 'developer')
+ * @param {Array} proofs - Array of proof objects to store
+ * @param {string} status - Status of the proofs ('pending', 'spent', etc.)
+ * @param {string} mintUrl - The mint URL associated with these proofs
+ */
+export function saveProofs(transactionId, category, proofs, status = 'pending', mintUrl) {
+  try {
+    const allProofs = getProofs();
+    
+    // Create transaction entry if it doesn't exist
+    if (!allProofs[transactionId]) {
+      allProofs[transactionId] = {
+        timestamp: Date.now(),
+        categories: {}
+      };
+    }
+    
+    // Store proofs in the specified category
+    allProofs[transactionId].categories[category] = {
+      proofs,
+      status,
+      mintUrl,
+      lastUpdated: Date.now()
+    };
+    
+    localStorage.setItem(PROOFS_KEY, JSON.stringify(allProofs));
+    console.log(`Saved ${proofs.length} proofs in category ${category} with status ${status}`);
+  } catch (error) {
+    console.error('Error saving proofs:', error);
+  }
+}
+
+/**
+ * Retrieves proofs from local storage
+ * @param {string} transactionId - Optional transaction ID to filter by
+ * @param {string} category - Optional category to filter by
+ * @param {string} status - Optional status to filter by
+ * @returns {Object} Object containing the requested proofs
+ */
+export function getProofs(transactionId = null, category = null, status = null) {
+  try {
+    const stored = localStorage.getItem(PROOFS_KEY);
+    const allProofs = stored ? JSON.parse(stored) : {};
+    
+    // Return all proofs if no filters are provided
+    if (!transactionId) {
+      return allProofs;
+    }
+    
+    // Return transaction proofs if transaction ID is provided but no category
+    if (!category && allProofs[transactionId]) {
+      return allProofs[transactionId];
+    }
+    
+    // Return category proofs if both transaction ID and category are provided
+    if (allProofs[transactionId] &&
+        allProofs[transactionId].categories &&
+        allProofs[transactionId].categories[category]) {
+      
+      // Filter by status if provided
+      if (status && allProofs[transactionId].categories[category].status !== status) {
+        return null;
+      }
+      
+      return allProofs[transactionId].categories[category];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error retrieving proofs:', error);
+    return {};
+  }
+}
+
+/**
+ * Updates the status of proofs for a specific transaction and category
+ * @param {string} transactionId - Transaction ID
+ * @param {string} category - Category of proofs to update
+ * @param {string} newStatus - New status to set
+ * @returns {boolean} True if update was successful, false otherwise
+ */
+export function updateProofStatus(transactionId, category, newStatus) {
+  try {
+    const allProofs = getProofs();
+    
+    if (allProofs[transactionId] &&
+        allProofs[transactionId].categories &&
+        allProofs[transactionId].categories[category]) {
+      
+      allProofs[transactionId].categories[category].status = newStatus;
+      allProofs[transactionId].categories[category].lastUpdated = Date.now();
+      
+      localStorage.setItem(PROOFS_KEY, JSON.stringify(allProofs));
+      console.log(`Updated proofs status for transaction ${transactionId}, category ${category} to ${newStatus}`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error updating proof status:', error);
+    return false;
+  }
+}
+
+/**
+ * Clears proofs from local storage
+ * @param {string} transactionId - Optional transaction ID to clear specific transaction proofs
+ * @param {string} category - Optional category to clear specific category proofs
+ * @returns {boolean} True if clearing was successful, false otherwise
+ */
+export function clearProofs(transactionId = null, category = null) {
+  try {
+    // Clear all proofs if no transaction ID is provided
+    if (!transactionId) {
+      localStorage.removeItem(PROOFS_KEY);
+      console.log('Cleared all proofs from storage');
+      return true;
+    }
+    
+    const allProofs = getProofs();
+    
+    // Clear transaction proofs if transaction ID is provided but no category
+    if (!category && allProofs[transactionId]) {
+      delete allProofs[transactionId];
+      localStorage.setItem(PROOFS_KEY, JSON.stringify(allProofs));
+      console.log(`Cleared all proofs for transaction ${transactionId}`);
+      return true;
+    }
+    
+    // Clear category proofs if both transaction ID and category are provided
+    if (allProofs[transactionId] &&
+        allProofs[transactionId].categories &&
+        allProofs[transactionId].categories[category]) {
+      
+      delete allProofs[transactionId].categories[category];
+      localStorage.setItem(PROOFS_KEY, JSON.stringify(allProofs));
+      console.log(`Cleared proofs for transaction ${transactionId}, category ${category}`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error clearing proofs:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all pending (unspent) proofs
+ * @returns {Object} Object containing all pending proofs grouped by transaction ID and category
+ */
+export function getPendingProofs() {
+  try {
+    const allProofs = getProofs();
+    const pendingProofs = {};
+    
+    // Filter for pending proofs
+    Object.keys(allProofs).forEach(transactionId => {
+      const transaction = allProofs[transactionId];
+      const pendingCategories = {};
+      
+      Object.keys(transaction.categories || {}).forEach(category => {
+        const categoryData = transaction.categories[category];
+        if (categoryData.status === 'pending') {
+          pendingCategories[category] = categoryData;
+        }
+      });
+      
+      if (Object.keys(pendingCategories).length > 0) {
+        pendingProofs[transactionId] = {
+          timestamp: transaction.timestamp,
+          categories: pendingCategories
+        };
+      }
+    });
+    
+    return pendingProofs;
+  } catch (error) {
+    console.error('Error getting pending proofs:', error);
+    return {};
   }
 }

@@ -3,6 +3,7 @@ import paymentService, { calculateDeveloperFee } from '../services/payment'; // 
 import nostrService from '../services/nostr'; // Import for Nostr subscriptions
 import cashuService from '../services/cashu'; // Import for Cashu operations
 import { showNotification } from '../utils/notification';
+import { saveProofs, updateProofStatus } from '../utils/storage';
 import { CashuMint, CashuWallet, MintQuoteState, getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 
@@ -45,6 +46,7 @@ export default function usePaymentProcessing(options) {
   const paymentStatus = ref('pending'); // pending, processing, complete, failed
   const paymentSuccess = ref(false); // Set to true when payment is successful
   const devPercentage = ref(5); // Default dev percentage (will be overridden from receipt)
+  const currentTransactionId = ref(''); // Used to track the current transaction for proof recovery
 
   // Computed properties for selected items and calculations
   const selectedItems = computed(() => {
@@ -126,9 +128,12 @@ export default function usePaymentProcessing(options) {
     showLightningModal.value = true;
     
     try {
+      // Generate a unique transaction ID using receipt event ID and timestamp
+      currentTransactionId.value = `${receiptEventId}-${Date.now()}`;
+      
       // Calculate the amount in sats
       const satAmount = toSats(selectedSubtotal.value);
-      
+
       // Initialize the Cashu mint and wallet
       const mintUrl = 'https://testnut.cashu.space';
       const mint = new CashuMint(mintUrl);
@@ -149,7 +154,7 @@ export default function usePaymentProcessing(options) {
             await executePayout(wallet, mintUrl, satAmount, mintQuote);
           } else {
             // Check again in 3 seconds
-            setTimeout(checkPayment, 3000);
+            setTimeout(checkPayment, 2000);
           }
         } catch (error) {
           console.error('Error checking payment status:', error);
@@ -167,36 +172,65 @@ export default function usePaymentProcessing(options) {
 
   const executePayout = async (wallet, mintUrl, satAmount, mintQuote) => {
     try {
+      // Mint proofs from the paid Lightning invoice
       const proofs = await wallet.mintProofs(satAmount, mintQuote.quote);
       console.log(`payerShare: ${toSats(payerShare.value)}`);
       console.log(`developerFee: ${toSats(developerFee.value)}`);
       
+      // Store the minted proofs in local storage
+      saveProofs(
+        currentTransactionId.value,
+        'minted',
+        proofs,
+        'pending',
+        mintUrl
+      );
+      
       // Split tokens between developer and receipt creator
       const {keep: developerProofs, send: payerProofs} = await wallet.send(toSats(payerShare.value), proofs);
-      const developerToken = getEncodedTokenV4({ mint: mintUrl, proofs: developerProofs });
+      
+      // Mark original proofs as spent since they've been divided
+      updateProofStatus(currentTransactionId.value, 'minted', 'spent');
+      
+      // Store the split proofs in local storage
+      saveProofs(
+        currentTransactionId.value,
+        'payer',
+        payerProofs,
+        'pending',
+        mintUrl
+      );
+      
+      saveProofs(
+        currentTransactionId.value,
+        'developer',
+        developerProofs,
+        'pending',
+        mintUrl
+      );
       
       // Extract recipient payment information
-      const transportInfo = cashuService.extractNostrTransport(paymentRequest.value);
+      const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
       
       // Send payment to recipient if transport info is available
-      if (transportInfo) {
+      if (recipientCashuDmInfo) {
         try {
           // Format the message as expected by the receiver
           const paymentMessage = cashuService.createPaymentMessage(
-            transportInfo.id,
+            recipientCashuDmInfo.id,
             mintUrl,
-            transportInfo.unit,
+            recipientCashuDmInfo.unit,
             payerProofs
           );
           
           // Pass the relays to the nostr service for recipient payment
           await nostrService.sendNip17Dm(
-            transportInfo.pubkey,
+            recipientCashuDmInfo.pubkey,
             paymentMessage,
-            transportInfo.relays
+            recipientCashuDmInfo.relays
           );
           
-          console.log(`Payment sent to ${transportInfo.pubkey} using relays: ${transportInfo.relays.join(', ')}`);
+          console.log(`Payment sent to ${recipientCashuDmInfo.pubkey} using relays: ${recipientCashuDmInfo.relays.join(', ')}`);
         } catch (error) {
           console.error("Error sending payment to recipient:", error);
         }
@@ -204,41 +238,34 @@ export default function usePaymentProcessing(options) {
         console.error("No valid nostr transport found in payment request");
       }
       
-      // Extract developer payment information if DEV_CASHU_REQ is available
-      if (DEV_CASHU_REQ) {
-        const devTransportInfo = cashuService.extractNostrTransport(DEV_CASHU_REQ);
+      const devTransportInfo = cashuService.extractNostrTransport(DEV_CASHU_REQ);
+      
+      try {
+        // Format the message for the developer
+        const devPaymentMessage = cashuService.createPaymentMessage(
+          devTransportInfo.id,
+          mintUrl,
+          devTransportInfo.unit,
+          developerProofs
+        );
         
-        if (devTransportInfo) {
-          try {
-            // Format the message for the developer
-            const devPaymentMessage = cashuService.createPaymentMessage(
-              devTransportInfo.id,
-              mintUrl,
-              devTransportInfo.unit,
-              developerProofs
-            );
-            
-            // Send payment to developer using NIP-17 DM
-            await nostrService.sendNip17Dm(
-              devTransportInfo.pubkey,
-              devPaymentMessage,
-              devTransportInfo.relays
-            );
-            
-            console.log(`Developer payment sent to ${devTransportInfo.pubkey} using relays: ${devTransportInfo.relays.join(', ')}`);
-          } catch (error) {
-            console.error("Error sending payment to developer:", error);
-            // Fallback to old method
-            await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
-          }
-        } else {
-          // Fallback to old method if transport info can't be extracted
-          await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
-        }
-      } else {
-        // Fallback to old method if DEV_CASHU_REQ is not available
+        // Send payment to developer using NIP-17 DM
+        await nostrService.sendNip17Dm(
+          devTransportInfo.pubkey,
+          devPaymentMessage,
+          devTransportInfo.relays
+        );
+        
+        console.log(`Developer payment sent to ${devTransportInfo.pubkey} using relays: ${devTransportInfo.relays.join(', ')}`);
+      } catch (error) {
+        console.error("Error sending payment to developer:", error);
+        // Fallback to old method
         await nostrService.sendNip04Dm(DEV_PUBKEY, developerToken);
       }
+      
+      // Mark payer and developer proofs as spent after successful payments
+      updateProofStatus(currentTransactionId.value, 'payer', 'spent');
+      updateProofStatus(currentTransactionId.value, 'developer', 'spent');
       
       // Set payment success to true when payment is processed successfully
       paymentSuccess.value = true;
@@ -321,6 +348,7 @@ export default function usePaymentProcessing(options) {
     lightningInvoice,
     showLightningModal,
     showCashuModal,
+    currentTransactionId,
 
     // Computed
     selectedItems,
