@@ -179,6 +179,74 @@
             </div>
           </div>
           
+          <!-- Debug Console Section -->
+          <div class="pt-4 border-t border-gray-200">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Debug Console</h4>
+              <div class="flex items-center space-x-2">
+                <button
+                  v-if="!debugEnabled"
+                  @click="enableDebugLogging"
+                  class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                >
+                  Enable
+                </button>
+                <button
+                  v-else
+                  @click="disableDebugLogging"
+                  class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
+                >
+                  Disable
+                </button>
+                <button
+                  @click="clearLogs"
+                  class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded hover:bg-gray-200"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            
+            <div v-if="debugEnabled">
+              <div class="bg-gray-800 text-white p-2 rounded text-xs mb-2 flex justify-between items-center">
+                <span>Console logs are being captured</span>
+                <span class="text-gray-400">{{ debugLogs.length }} entries</span>
+              </div>
+              
+              <div v-if="debugLogs.length > 0" class="max-h-60 overflow-y-auto border border-gray-300 rounded bg-gray-900 p-2">
+                <div v-for="(log, index) in debugLogs" :key="index" class="mb-1 text-xs font-mono whitespace-pre-wrap break-all">
+                  <div :class="{
+                    'text-white': log.level === 'log',
+                    'text-red-400': log.level === 'error',
+                    'text-yellow-400': log.level === 'warn',
+                    'text-blue-400': log.level === 'info'
+                  }">
+                    <span class="text-gray-500">{{ formatLogTimestamp(log.timestamp) }}</span>
+                    <span class="mx-1">[{{ log.level.toUpperCase() }}]</span>
+                    <span>{{ log.message }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-else class="text-sm text-gray-500 italic mb-2">
+                No logs captured yet
+              </div>
+              
+              <div class="flex justify-end">
+                <button
+                  @click="copyLogs"
+                  class="text-xs bg-gray-800 text-white px-2 py-1 rounded hover:bg-gray-700 mt-2"
+                >
+                  Copy All Logs
+                </button>
+              </div>
+            </div>
+            
+            <div v-else class="text-sm text-gray-600 mb-3">
+              Enable debug logging to capture console output and assist with troubleshooting.
+            </div>
+          </div>
+          
           <!-- Action Buttons -->
           <div class="pt-4 border-t border-gray-200">
             <button
@@ -207,6 +275,7 @@ import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, get
          getPendingProofs, clearProofs } from '../utils/storage';
 import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
+import debugLogger from '../utils/debugLogger';
 
 export default {
   name: 'SettingsMenu',
@@ -236,6 +305,10 @@ export default {
     const copiedProofs = ref({}); // Track which proofs have been copied
     const showConfirmationModal = ref(false); // Control confirmation modal visibility
     const pendingRecoveryItem = ref({ txId: '', category: '' }); // Store item pending recovery
+    
+    // Debug console state
+    const debugEnabled = ref(debugLogger.isCapturingLogsEnabled());
+    const debugLogs = ref([]);
 
     // Load settings and proofs from storage when component mounts
     onMounted(() => {
@@ -385,6 +458,56 @@ export default {
       copiedProofs.value = {}; // Clear copied state too
       showNotification('All pending proofs cleared', 'success');
     };
+    
+    // Debug logging functions
+    const enableDebugLogging = () => {
+      debugLogger.startCapturingLogs();
+      debugEnabled.value = true;
+      refreshDebugLogs();
+      showNotification('Debug logging enabled', 'success');
+    };
+    
+    const disableDebugLogging = () => {
+      debugLogger.stopCapturingLogs();
+      debugEnabled.value = false;
+      showNotification('Debug logging disabled', 'info');
+    };
+    
+    const clearLogs = () => {
+      debugLogger.clearCapturedLogs();
+      refreshDebugLogs();
+      showNotification('Debug logs cleared', 'info');
+    };
+    
+    const refreshDebugLogs = () => {
+      debugLogs.value = debugLogger.getCapturedLogs();
+    };
+    
+    const formatLogTimestamp = (timestamp) => {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString();
+    };
+    
+    const copyLogs = async () => {
+      try {
+        const logsText = debugLogs.value.map(log =>
+          `${new Date(log.timestamp).toISOString()} [${log.level.toUpperCase()}] ${log.message}`
+        ).join('\n');
+        
+        await navigator.clipboard.writeText(logsText);
+        showNotification('Logs copied to clipboard', 'success');
+      } catch (error) {
+        console.error('Error copying logs:', error);
+        showNotification('Failed to copy logs', 'error');
+      }
+    };
+    
+    // Refresh logs when the menu is opened
+    watch(() => props.isOpen, (newVal) => {
+      if (newVal && debugEnabled.value) {
+        refreshDebugLogs();
+      }
+    });
 
     return {
       settings,
@@ -401,7 +524,15 @@ export default {
       cancelRecovery,
       confirmRecovery,
       showConfirmationModal,
-      pendingRecoveryItem
+      pendingRecoveryItem,
+      // Debug console properties and methods
+      debugEnabled,
+      debugLogs,
+      enableDebugLogging,
+      disableDebugLogging,
+      clearLogs,
+      formatLogTimestamp,
+      copyLogs
     };
   }
 }
