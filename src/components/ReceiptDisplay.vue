@@ -53,15 +53,38 @@
         <div class="bg-white rounded-lg shadow p-4">
           <div class="font-medium mb-2">Create Payment Request</div>
           <div class="flex gap-2 mb-4">
-            <input 
-              v-model="paymentRequest" 
-              placeholder="Enter NUT-18 Cashu payment request"
+            <input
+              v-model="paymentRequest"
+              placeholder="NUT-18 Cashu request"
               class="flex-1 p-2 border rounded"
             />
             <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
               Paste
             </button>
           </div>
+          
+          <div class="mb-4">
+            <div class="flex justify-between items-center mb-1">
+              <label for="developerSplit" class="text-sm font-medium text-gray-700">
+                Developer Split: {{ displayDevSplit }}%
+              </label>
+            </div>
+            <input
+              id="developerSplit"
+              v-model="sliderValue"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              @input="updateDevSplit"
+            />
+            <div class="flex justify-between text-xs text-gray-500 mt-1">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
+          </div>
+          
           <button @click="createRequest" class="btn-primary w-full">
             Create Request
           </button>
@@ -73,7 +96,7 @@
           <div class="font-medium mb-2">Share this QR code</div>
           <div class="qr-container mb-4">
             <QRCodeVue 
-              :value="`${hostUrl}?receipt=${eventId}`"
+              :value="receiptLink"
               :size="256"
               level="H"
               render-as="svg"
@@ -140,18 +163,26 @@ export default {
       required: true
     }
   },
-  setup(props) {
+  emits: ['select-all'],
+  setup(props, { emit }) {
     const receipt = computed(() => props.receiptData);
     const step = ref('payment-request');
     const paymentRequest = ref('');
     const eventId = ref('');
+    const eventEncryptionPrivateKey = ref('');
     const showSaveDialog = ref(false);
     const newPaymentRequest = ref('');
     
+    // Developer split using logarithmic scale
+    const developerSplit = ref(2); // The actual percentage value (default 2%)
+    const displayDevSplit = ref('2'); // Display value as string
+    const sliderValue = ref(calculateSliderFromPercentage(2)); // Slider position value (0-100)
+    
     const hostUrl = computed(() => `https://${location.host}`);
+    const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(() => {
-      // Try to load the last used payment request
+      // Try to load the last used payment request (could be a lightning address, nostr npub, or NUT-18 request)
       const lastRequest = getLastPaymentRequest();
       if (lastRequest) {
         paymentRequest.value = lastRequest;
@@ -168,15 +199,16 @@ export default {
       }, 0);
     };
     
-    const nextStep = () => {
-      if (step.value === 'receipt-display') {
-        step.value = 'payment-request';
-      }
-    };
     
     const createRequest = async () => {
       if (!paymentRequest.value) {
-        alert('Please enter a payment request');
+        showNotification('Please enter a payment request', 'error');
+        return;
+      }
+      
+      // Validate that it's not a Lightning address
+      if (paymentRequest.value.includes('@')) {
+        showNotification('Lightning addresses are not supported (yet!). Please enter a NUT-18 Cashu request.', 'error');
         return;
       }
       
@@ -196,23 +228,71 @@ export default {
           receipt: receipt.value,
           paymentRequest: paymentRequest.value
         });
-        alert(`Failed to create payment request: ${error.message}`);
+        showNotification(`Failed to create payment request`, 'error');
+        console.error(`Failed to create payment request: ${error.message}`)
       }
     };
     
+    // Function to convert slider position (0-100) to actual percentage (0-100)
+    function calculatePercentageFromSlider(sliderPos) {
+      // Logarithmic transformation
+      // For slider at 0, we want 0%
+      // For slider at 100, we want 100%
+      // Use exponential function to create logarithmic scale
+      if (sliderPos === 0) return 0;
+      
+      // Exponential scaling factor (higher values make curve more pronounced)
+      const scaleFactor = 0.05;
+      
+      // Calculate percentage with exponential curve
+      const percentage = Math.round((Math.exp(scaleFactor * sliderPos) - 1) / (Math.exp(5) - 1) * 100);
+      
+      return Math.min(100, Math.max(0, percentage));
+    }
+    
+    // Function to convert percentage (0-100) to slider position (0-100)
+    function calculateSliderFromPercentage(percentage) {
+      if (percentage === 0) return 0;
+      if (percentage === 100) return 100;
+      
+      // Inverse of the calculatePercentageFromSlider function
+      const scaleFactor = 0.05;
+      const sliderPos = Math.round(Math.log(percentage / 100 * (Math.exp(5) - 1) + 1) / scaleFactor);
+      
+      return Math.min(100, Math.max(0, sliderPos));
+    }
+    
+    // Update developer split based on slider position
+    const updateDevSplit = () => {
+      // Calculate actual percentage from slider position
+      const percentage = calculatePercentageFromSlider(sliderValue.value);
+      
+      // Update values
+      developerSplit.value = percentage;
+      displayDevSplit.value = percentage.toString();
+    };
+
+
     const proceedWithRequest = async () => {
       try {
+        // Prepare receipt with developer split
+        const receiptWithDevSplit = {
+          ...receipt.value,
+          devPercentage: parseInt(developerSplit.value)
+        };
+        
         // Publish receipt event to Nostr
-        const id = await nostrService.publishReceiptEvent(
-          receipt.value,
+        const publishedReceiptEvent = await nostrService.publishReceiptEvent(
+          receiptWithDevSplit,
           paymentRequest.value
         );
         
-        eventId.value = id;
+        eventId.value = publishedReceiptEvent.id;
+        eventEncryptionPrivateKey.value = publishedReceiptEvent.encryptionPrivateKey;
         step.value = 'qr-display';
       } catch (error) {
         console.error('Error creating payment request:', error);
-        alert(`Failed to create payment request: ${error.message}`);
+        showNotification(`Failed to create payment request`, 'error');
       }
     };
     
@@ -229,12 +309,13 @@ export default {
     };
     
     const copyLink = () => {
-      const link = `${hostUrl.value}?receipt=${eventId.value}`;
+      const link = receiptLink.value;
       navigator.clipboard.writeText(link)
         .then(() => {
-          console.log('Link copied to clipboard');
+          showNotification('Link copied to clipboard', 'success');
         })
         .catch(err => {
+          showNotification('Failed to copy link', 'error');
           console.error('Failed to copy link:', err);
         });
     };
@@ -244,6 +325,7 @@ export default {
       step.value = 'receipt-display';
       paymentRequest.value = '';
       eventId.value = '';
+      eventEncryptionPrivateKey.value = '';
     };
 
     const pasteFromClipboard = async () => {
@@ -251,8 +333,8 @@ export default {
         const text = await navigator.clipboard.readText();
         paymentRequest.value = text;
       } catch (err) {
+        showNotification('Failed to paste from clipboard!', 'error');
         console.error('Failed to paste from clipboard:', err);
-        alert('Failed to paste from clipboard. Please check your browser permissions.');
       }
     };
     
@@ -261,7 +343,7 @@ export default {
         const shareData = {
           title: 'Be my sugardad? 🥺',
           text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here:`,
-          url: `${hostUrl.value}?receipt=${eventId.value}`
+          url: receiptLink.value
         };
 
         if (navigator.share) {
@@ -289,12 +371,12 @@ export default {
       step,
       paymentRequest,
       eventId,
+      eventEncryptionPrivateKey,
       hostUrl,
       showSaveDialog,
       newPaymentRequest,
       calculateSubtotal,
       formatPrice,
-      nextStep,
       createRequest,
       copyLink,
       resetProcess,
@@ -302,7 +384,12 @@ export default {
       saveAndProceed,
       skipSaving,
       shareToSocial,
-      selectAllItems
+      selectAllItems,
+      receiptLink,
+      developerSplit,
+      displayDevSplit,
+      updateDevSplit,
+      sliderValue
     };
   }
 };

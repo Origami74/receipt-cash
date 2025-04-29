@@ -1,42 +1,53 @@
 <template>
   <div class="h-full">
-    <settlement-view v-if="receiptId" :event-id="receiptId" />
+    <settlement-view 
+      v-if="receiptId" 
+      :event-id="receiptId"
+      :decryption-key="decryptionKey"
+    />
     <template v-else>
       <div v-if="!capturedReceipt" class="camera-container">
         <video ref="videoElement" class="h-full w-full object-cover"></video>
         
         <div class="camera-overlay">
           <div class="p-4 bg-black/50">
-            <h1 class="text-white text-center text-xl font-bold">Sugardad.Cash</h1>
+            <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
           </div>
           
-          <Notification
-            v-if="notification"
-            :message="notification.message"
-            :type="notification.type"
-            @close="notification = null"
-          />
-          
           <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
-            <button 
-              @click="toggleFlash" 
+            <button
+              @click="toggleFlash"
               class="w-12 h-12 rounded-full bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors"
             >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="currentColor" 
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
                 class="w-6 h-6 text-white"
               >
                 <path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
               </svg>
             </button>
             
-            <button 
-              @click="captureReceipt" 
+            <button
+              @click="captureReceipt"
               class="w-20 h-20 rounded-full bg-red-500 border-4 border-white flex items-center justify-center hover:bg-red-600 active:bg-red-700 transition-colors"
             >
               <div class="w-16 h-16 rounded-full bg-red-500"></div>
+            </button>
+            
+            <button
+              @click="toggleSettings"
+              class="w-12 h-12 rounded-full bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                class="w-6 h-6 text-white"
+              >
+                <path fill-rule="evenodd" d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 00-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 00-2.282.819l-.922 1.597a1.875 1.875 0 00.432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 000 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 00-.432 2.385l.922 1.597a1.875 1.875 0 002.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 002.28-.819l.923-1.597a1.875 1.875 0 00-.432-2.385l-.84-.692c-.095-.078-.17-.229-.154-.43a7.614 7.614 0 000-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 00-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 00-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 00-1.85-1.567h-1.843zM12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z" clip-rule="evenodd" />
+              </svg>
             </button>
           </div>
         </div>
@@ -50,17 +61,25 @@
     </template>
     
     <Spinner v-if="isProcessing" message="Processing receipt..." />
+    
+    <SettingsMenu
+      :is-open="isSettingsOpen"
+      @close="isSettingsOpen = false"
+    />
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptDisplay from '../components/ReceiptDisplay.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import { showNotification, useNotification } from '../utils/notification';
+import receiptService from '../services/receipt';
 
 export default {
   name: 'HomeView',
@@ -68,7 +87,8 @@ export default {
     ReceiptDisplay,
     SettlementView,
     Notification,
-    Spinner
+    Spinner,
+    SettingsMenu
   },
   setup() {
     const route = useRoute();
@@ -76,13 +96,13 @@ export default {
     const qrScanner = ref(null);
     const capturedReceipt = ref(null);
     const hasPermission = ref(false);
-    const notification = ref(null);
     const receiptId = computed(() => route.query.receipt);
+    const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
+    const isSettingsOpen = ref(false);
     
-    const showNotification = (message, type = 'error') => {
-      notification.value = { message, type };
-    };
+    // Use the global notification system
+    const { notification, clearNotification } = useNotification();
     
     const requestCameraPermission = async () => {
       try {
@@ -104,6 +124,14 @@ export default {
       }
 
       try {
+        // Check if video element is available
+        if (!videoElement.value) {
+          console.warn('Video element not available yet, waiting for DOM update');
+          // Wait for the next tick to ensure video element is mounted
+          setTimeout(initializeCamera, 100);
+          return;
+        }
+
         qrScanner.value = new QrScanner(
           videoElement.value,
           (result) => {
@@ -142,6 +170,7 @@ export default {
 
       try {
         isProcessing.value = true;
+        
         // Create a canvas element
         const canvas = document.createElement('canvas');
         const video = videoElement.value;
@@ -166,89 +195,13 @@ export default {
         
         showNotification('Processing receipt...', 'info');
         
-        // Send to ppq.ai API
-        const response = await fetch('https://api.ppq.ai/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_PPQ_API_KEY ?? "sk-uh7yDIMONkvLmreJgw0bDA"}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Please analyze this receipt and extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
-{
-  "items": [
-    {
-      "name": "Item1",
-      "quantity": 3,
-      "price": 0.90,
-      "total": 2.70
-    }
-  ],
-  "tax": {
-    "amount": 0.85
-  },
-  "currency": "EUR",
-  "total_amount": 4.70
-}
-
-Here are some things to keep in mind:
-- The receipt can be in any language
-- The receipt can be blurry or have a low resolution
-- NEVER use a column indicating tax (tx) as the quantity of an item!
-- Some receipts don't show the price per item, only the total price for that line item
-`
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:image/jpeg;base64,${base64Image}`
-                    }
-                  }
-                ]
-              }
-            ]
-          })
-        });
+        // Use receipt service to process the image
+        const processedReceipt = await receiptService.processReceiptImage(base64Image);
         
-        if (!response.ok) {
-          throw new Error(`Failed to process receipt: ${response.status} ${response.statusText}`);
-        }
+        // Store the processed receipt data
+        capturedReceipt.value = processedReceipt;
         
-        const receiptData = await response.json();
-        const responseText = receiptData.choices[0].message.content;
-
-        try {
-          // Try to parse the response as JSON
-          const parsedData = JSON.parse(responseText);
-          
-          // Transform the data to match our component's format
-          capturedReceipt.value = {
-            merchant: "Store", // We'll get this from the API later
-            date: new Date().toISOString().split('T')[0],
-            items: parsedData.items.map(item => ({
-              name: item.name,
-              price: item.price,
-              quantity: item.quantity,
-              total: item.total
-            })),
-            tax: parsedData.tax.amount,
-            currency: parsedData.currency,
-            total: parsedData.total_amount
-          };
-
-          showNotification('Receipt processed successfully!', 'success');
-        } catch (error) {
-          console.log("Response:", responseText);
-          console.error('Error parsing receipt data:', error);
-          throw new Error('Failed to read receipt data. Please try again, make sure the receipt is in focus and not blurry.');
-        }
+        showNotification('Receipt processed successfully!', 'success');
         
         // Stop the camera since we don't need it anymore
         if (qrScanner.value) {
@@ -270,9 +223,25 @@ Here are some things to keep in mind:
         qrScanner.value.start();
       }
     };
+    
+    const toggleSettings = () => {
+      isSettingsOpen.value = !isSettingsOpen.value;
+    };
+
+    // Watch for changes to receiptId
+    watch(receiptId, (newValue, oldValue) => {
+      // If we're transitioning from having a receipt to no receipt,
+      // initialize the camera for scanning a new receipt
+      if (oldValue && !newValue) {
+        requestCameraPermission();
+      }
+    });
 
     onMounted(() => {
-      requestCameraPermission();
+      // Only initialize camera if we're not showing a receipt
+      if (!receiptId.value) {
+        requestCameraPermission();
+      }
     });
 
     onUnmounted(() => {
@@ -286,11 +255,15 @@ Here are some things to keep in mind:
       capturedReceipt,
       hasPermission,
       notification,
+      clearNotification,
       receiptId,
+      decryptionKey,
       isProcessing,
+      isSettingsOpen,
       toggleFlash,
       captureReceipt,
-      resetCapture
+      resetCapture,
+      toggleSettings
     };
   }
 };

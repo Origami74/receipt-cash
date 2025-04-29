@@ -5,6 +5,12 @@ certs/
 .env
 .DS_Store
 dist/
+.roo
+roo-code-settings.json
+cursor-tools.config.json
+.roomodes
+.cursorrules
+.clinerules
 
 node_modules/
 package-lock.json
