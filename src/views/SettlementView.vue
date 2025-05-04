@@ -185,7 +185,7 @@
       @cancel="cancelPayment"
       @retry="retryLightningPayment"
     />
-    
+  
     <CashuPaymentModal
       :show="showCashuModal"
       :payment-request="getPaymentRequest"
