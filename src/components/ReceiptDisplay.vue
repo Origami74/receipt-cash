@@ -24,10 +24,10 @@
           <div>
             <div>{{ item.name }}</div>
             <div class="text-sm text-gray-500">
-              {{ item.quantity }} × {{ formatPrice(item.price) }}
+              {{ item.quantity || 0 }} × {{ formatPrice(item.price || 0) }}
             </div>
           </div>
-          <div class="font-medium">{{ formatPrice(item.price * item.quantity) }}</div>
+          <div class="font-medium">{{ formatPrice((item.price || 0) * (item.quantity || 0)) }}</div>
         </div>
       </div>
       
@@ -41,11 +41,11 @@
         </div>
         <div class="p-3 flex justify-between items-center border-b border-gray-200">
           <div>Tax</div>
-          <div>{{ formatPrice(receipt.tax) }}</div>
+          <div>{{ formatPrice(receipt.tax || 0) }}</div>
         </div>
         <div class="p-3 flex justify-between items-center font-bold">
           <div>Total</div>
-          <div>{{ formatPrice(receipt.total) }}</div>
+          <div>{{ formatPrice(receipt.total || 0) }}</div>
         </div>
       </div>
       
@@ -238,7 +238,10 @@ export default {
     
     const calculateSubtotal = () => {
       return receipt.value.items.reduce((sum, item) => {
-        return sum + (item.price * item.quantity);
+        // Handle null or undefined values
+        const price = item.price || 0;
+        const quantity = item.quantity || 0;
+        return sum + (price * quantity);
       }, 0);
     };
     

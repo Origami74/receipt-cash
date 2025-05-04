@@ -136,7 +136,7 @@ export default {
           videoElement.value,
           (result) => {
             console.log('QR Code detected:', result);
-            // Handle QR code result
+            handleQrCodeResult(result);
           },
           {
             highlightScanRegion: false,
@@ -250,6 +250,46 @@ export default {
       }
     });
 
+    /**
+     * Handle QR code result by checking if it's a URL to the current domain
+     * and automatically redirecting if it is
+     */
+    const handleQrCodeResult = (result) => {
+      try {
+        // Extract the data from the QR code
+        const qrData = result.data;
+        
+        // Check if it's a URL
+        if (!qrData.startsWith('http://') && !qrData.startsWith('https://')) {
+          return; // Not a URL, ignore
+        }
+        
+        // Try to parse the URL
+        const qrUrl = new URL(qrData);
+        const currentDomain = window.location.hostname;
+        
+        // Check if this URL is for the current domain
+        if (qrUrl.hostname !== currentDomain) {
+          return;
+        }
+
+        console.log('Detected QR code with URL to current domain:', qrUrl.href);
+        
+        // Stop scanning before redirecting
+        if (qrScanner.value) {
+          qrScanner.value.stop();
+        }
+
+        // Get the path and query parameters from the URL
+        const urlParams = new URLSearchParams(qrUrl.search);
+        
+        // Redirect to the detected URL (this keeps us on the same tab)
+        window.location.href = qrUrl.href;
+      } catch (error) {
+        console.error('Error processing QR code URL:', error);
+      }
+    };
+
     return {
       videoElement,
       capturedReceipt,
@@ -263,7 +303,8 @@ export default {
       toggleFlash,
       captureReceipt,
       resetCapture,
-      toggleSettings
+      toggleSettings,
+      handleQrCodeResult
     };
   }
 };
