@@ -34,5 +34,11 @@ export function getCurrencySymbol(isoCode) {
 
 export function formatCurrency(amount, isoCode) {
   const symbol = getCurrencySymbol(isoCode);
+  
+  // Handle null, undefined, or NaN amounts
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    return `${symbol}0.00`;
+  }
+  
   return `${symbol}${amount.toFixed(2)}`;
-} 
+}
