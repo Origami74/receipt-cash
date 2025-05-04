@@ -175,6 +175,7 @@
     <LightningPaymentModal
       :show="showLightningModal"
       :invoice="lightningInvoice"
+      :invoice-error="invoiceError"
       :amount="toSats(selectedSubtotal)"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
@@ -182,6 +183,7 @@
       @close="showLightningModal = false"
       @open-wallet="openInLightningWallet"
       @cancel="cancelPayment"
+      @retry="retryLightningPayment"
     />
     
     <CashuPaymentModal
@@ -320,6 +322,8 @@ export default {
       paymentInProgress,
       paymentProcessingState,
       paymentErrorMessage,
+      invoiceError,
+      retryLightningPayment,
       cancelPayment
     } = paymentProcessing;
     
@@ -435,6 +439,8 @@ export default {
       paymentInProgress,
       paymentProcessingState,
       paymentErrorMessage,
+      invoiceError,
+      retryLightningPayment,
       showSettings,
       goToHome,
       cancelPayment
