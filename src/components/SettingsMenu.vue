@@ -38,13 +38,24 @@
                   id="paymentAddress"
                   v-model="settings.paymentAddress"
                   type="text"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md shadow-sm text-sm focus:outline-none',
+                    paymentAddressValid
+                      ? 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+                      : 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  ]"
                   placeholder="NUT-18 Cashu payment request"
                   @change="saveSettings"
+                  @input="validatePaymentAddress"
                 />
-                <p class="mt-1 text-xs text-gray-500">
-                  Used as default when creating new Cashu payment requests
-                </p>
+                <div class="mt-1">
+                  <p v-if="paymentAddressValid" class="text-xs text-gray-500">
+                    Used as default when creating new Cashu payment requests
+                  </p>
+                  <p v-else class="text-xs text-red-500">
+                    {{ paymentAddressError }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -154,7 +165,7 @@
               </div>
             </div>
             
-            <!-- Confirmation Modal -->
+            <!-- Confirmation Modal for Proof Recovery -->
             <div v-if="showConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div class="bg-white rounded-lg p-6 max-w-sm w-full">
                 <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
@@ -176,6 +187,114 @@
                   </button>
                 </div>
               </div>
+            </div>
+            
+            <!-- Confirmation Modal for Mint Quote Deletion -->
+            <div v-if="showMintQuoteConfirmation" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Confirm Deletion</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete this Lightning invoice? This action cannot be undone.
+                </p>
+                <div class="flex space-x-3 justify-end">
+                  <button
+                    @click="cancelMintQuoteDeletion"
+                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    @click="deletePendingMintQuote"
+                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete Permanently
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Unprocessed Mint Quotes Section (Collapsible) -->
+          <div class="pt-4 border-t border-gray-200">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Lightning Payments</h4>
+              <div class="flex space-x-2">
+                <button
+                  @click="toggleLightningSection"
+                  class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                >
+                  <span v-if="!showLightningSection">Show</span>
+                  <span v-else>Hide</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1"
+                       :class="{'transform rotate-180': showLightningSection}"
+                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <button
+                  v-if="showLightningSection"
+                  @click="loadUnprocessedMintQuotes"
+                  class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                  title="Refresh mint quotes list"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
+            </div>
+            
+            <!-- Only show content when expanded -->
+            <div v-if="showLightningSection" class="mt-2">
+              <p class="text-sm text-gray-600 mb-3">
+                Unprocessed Lightning payment requests in the ISSUED state (invoices were created but not paid).
+              </p>
+              
+              <div v-if="Object.keys(unprocessedMintQuotes).length === 0" class="text-sm text-gray-500 italic">
+                No unprocessed Lightning invoices found
+              </div>
+              
+              <div v-for="(quoteData, txId) in unprocessedMintQuotes" :key="txId" class="mb-4 p-3 bg-gray-50 rounded-lg">
+                <div class="flex justify-between mb-2">
+                  <span class="text-sm font-medium">Transaction: {{ formatTransactionId(txId) }}</span>
+                  <span class="text-xs text-gray-500">{{ formatDate(quoteData.timestamp) }}</span>
+                </div>
+                
+                <div class="text-sm mb-1">
+                  <span class="font-medium">Status:</span>
+                  <span class="text-amber-600 font-medium">ISSUED</span>
+                </div>
+                
+                <div class="text-sm mb-1">
+                  <span class="font-medium">Amount:</span> {{ formatSats(quoteData.satAmount) }}
+                </div>
+                
+                <div class="text-sm mb-1">
+                  <span class="font-medium">Mint:</span>
+                  <span class="text-xs break-all">{{ quoteData.mintUrl }}</span>
+                </div>
+                
+                <div class="flex justify-end mt-2 space-x-2">
+                  <button
+                    @click="copyMintQuoteInvoice(quoteData)"
+                    class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                    title="Copy Lightning invoice"
+                  >
+                    Copy Invoice
+                  </button>
+                  <button
+                    @click="confirmDeleteMintQuote(txId)"
+                    class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- When collapsed, show count if there are any quotes -->
+            <div v-else-if="Object.keys(unprocessedMintQuotes).length > 0" class="text-sm text-amber-600">
+              {{ Object.keys(unprocessedMintQuotes).length }} unprocessed Lightning invoice(s)
             </div>
           </div>
           
@@ -272,10 +391,11 @@
 <script>
 import { ref, onMounted, computed, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, getLastPaymentRequest,
-         getPendingProofs, clearProofs } from '../utils/storage';
+         getPendingProofs, clearProofs, getUnprocessedMintQuotes, deleteMintQuote } from '../utils/storage';
 import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../utils/debugLogger';
+import cashuService from '../services/cashu';
 
 export default {
   name: 'SettingsMenu',
@@ -301,10 +421,18 @@ export default {
       paymentAddress: ''
     });
     
+    // Payment address validation
+    const paymentAddressValid = ref(true);
+    const paymentAddressError = ref('');
+    
     const pendingProofs = ref({});
+    const unprocessedMintQuotes = ref({});
     const copiedProofs = ref({}); // Track which proofs have been copied
     const showConfirmationModal = ref(false); // Control confirmation modal visibility
     const pendingRecoveryItem = ref({ txId: '', category: '' }); // Store item pending recovery
+    const showLightningSection = ref(false); // Track if Lightning section is expanded
+    const pendingMintQuoteDeletion = ref(''); // Store mint quote ID pending deletion
+    const showMintQuoteConfirmation = ref(false); // Control mint quote deletion confirmation
     
     // Debug console state
     const debugEnabled = ref(debugLogger.isCapturingLogsEnabled());
@@ -327,8 +455,9 @@ export default {
         settings.value.paymentAddress = lastRequest;
       }
       
-      // Load pending proofs
+      // Load pending proofs and unprocessed mint quotes
       loadPendingProofs();
+      loadUnprocessedMintQuotes();
     });
     
     // Load pending proofs from storage
@@ -336,6 +465,82 @@ export default {
       pendingProofs.value = getPendingProofs();
     };
 
+    // Load unprocessed mint quotes from storage
+    const loadUnprocessedMintQuotes = () => {
+      unprocessedMintQuotes.value = getUnprocessedMintQuotes();
+    };
+    
+    // Show confirmation dialog before deleting a mint quote
+    const confirmDeleteMintQuote = (transactionId) => {
+      pendingMintQuoteDeletion.value = transactionId;
+      showMintQuoteConfirmation.value = true;
+    };
+    
+    // Cancel mint quote deletion
+    const cancelMintQuoteDeletion = () => {
+      pendingMintQuoteDeletion.value = '';
+      showMintQuoteConfirmation.value = false;
+    };
+    
+    // Delete a specific mint quote after confirmation
+    const deletePendingMintQuote = () => {
+      const transactionId = pendingMintQuoteDeletion.value;
+      if (!transactionId) return;
+      
+      deleteMintQuote(transactionId);
+      loadUnprocessedMintQuotes();
+      showNotification(`Mint quote ${formatTransactionId(transactionId)} deleted`, 'success');
+      
+      // Reset state
+      pendingMintQuoteDeletion.value = '';
+      showMintQuoteConfirmation.value = false;
+    };
+    
+    // Copy the Lightning invoice from a mint quote
+    const copyMintQuoteInvoice = (quoteData) => {
+      try {
+        if (quoteData && quoteData.mintQuote && quoteData.mintQuote.request) {
+          navigator.clipboard.writeText(quoteData.mintQuote.request);
+          showNotification('Lightning invoice copied to clipboard', 'success');
+        } else {
+          showNotification('No invoice found to copy', 'error');
+        }
+      } catch (error) {
+        console.error('Error copying Lightning invoice:', error);
+        showNotification('Failed to copy Lightning invoice', 'error');
+      }
+    };
+    
+    // Toggle the Lightning section visibility
+    const toggleLightningSection = () => {
+      showLightningSection.value = !showLightningSection.value;
+      // Load data if we're expanding the section
+      if (showLightningSection.value) {
+        loadUnprocessedMintQuotes();
+      }
+    };
+
+    // Validate payment address
+    const validatePaymentAddress = () => {
+      // Reset validation state
+      paymentAddressValid.value = true;
+      paymentAddressError.value = '';
+      
+      // Skip validation if empty
+      if (!settings.value.paymentAddress) {
+        return true;
+      }
+      
+      // Validate payment request
+      const result = cashuService.validatePaymentRequest(settings.value.paymentAddress);
+      
+      // Update validation state
+      paymentAddressValid.value = result.isValid;
+      paymentAddressError.value = result.error;
+      
+      return result.isValid;
+    };
+    
     // Save settings to storage
     const saveSettings = () => {
       // Save AI settings
@@ -345,9 +550,16 @@ export default {
         model: settings.value.model
       });
       
-      // Save payment address if entered
+      // Validate and save payment address if entered
       if (settings.value.paymentAddress) {
-        savePaymentRequest(settings.value.paymentAddress);
+        const isValid = validatePaymentAddress();
+        
+        if (isValid) {
+          savePaymentRequest(settings.value.paymentAddress);
+          showNotification('Payment address saved successfully', 'success');
+        } else {
+          showNotification(`Invalid payment address: ${paymentAddressError.value}`, 'error');
+        }
       }
     };
 
@@ -459,6 +671,11 @@ export default {
       showNotification('All pending proofs cleared', 'success');
     };
     
+    // Format satoshi amount for display
+    const formatSats = (amount) => {
+      return `${Number(amount).toLocaleString()} sats`;
+    };
+    
     // Debug logging functions
     const enableDebugLogging = () => {
       debugLogger.startCapturingLogs();
@@ -510,6 +727,19 @@ export default {
     });
 
     return {
+      unprocessedMintQuotes,
+      loadUnprocessedMintQuotes,
+      confirmDeleteMintQuote,
+      copyMintQuoteInvoice,
+      showMintQuoteConfirmation,
+      cancelMintQuoteDeletion,
+      deletePendingMintQuote,
+      validatePaymentAddress,
+      paymentAddressValid,
+      paymentAddressError,
+      formatSats,
+      showLightningSection,
+      toggleLightningSection,
       settings,
       pendingProofs,
       saveSettings,
@@ -525,6 +755,7 @@ export default {
       confirmRecovery,
       showConfirmationModal,
       pendingRecoveryItem,
+      
       // Debug console properties and methods
       debugEnabled,
       debugLogs,

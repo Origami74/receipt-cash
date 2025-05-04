@@ -43,6 +43,23 @@
           <div class="text-xs text-gray-500">Please do not close this window</div>
         </div>
         
+        <!-- Error state (invoice generation failed) -->
+        <div v-else-if="invoiceError" class="mb-4 flex flex-col items-center justify-center py-6">
+          <div class="text-red-500 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="text-xl font-bold text-red-600 mb-2">Network Error</div>
+          <div class="text-gray-600 mb-4">Failed to generate Lightning invoice. Please check your connection and try again.</div>
+          <button
+            @click="$emit('retry')"
+            class="py-2 px-4 bg-amber-500 text-white rounded hover:bg-amber-600"
+          >
+            Try Again
+          </button>
+        </div>
+        
         <!-- Loading state (generating invoice) -->
         <div v-else-if="!invoice" class="mb-4">
           <div class="animate-spin rounded-full h-16 w-16 border-4 border-amber-500 border-t-transparent mx-auto mb-4"></div>
@@ -131,7 +148,11 @@ export default {
     },
     invoice: {
       type: String,
-      required: true
+      default: ''
+    },
+    invoiceError: {
+      type: Boolean,
+      default: false
     },
     amount: {
       type: [Number, String],
@@ -150,7 +171,7 @@ export default {
       default: ''
     }
   },
-  emits: ['close', 'open-wallet', 'cancel'],
+  emits: ['close', 'open-wallet', 'cancel', 'retry'],
   methods: {
     close() {
       this.$emit('close');

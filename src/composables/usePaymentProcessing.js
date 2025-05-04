@@ -60,6 +60,7 @@ export default function usePaymentProcessing(options) {
   // possible values: 'initial', 'minting', 'minted', 'sending', 'success', 'failed'
   const paymentProcessingState = ref('initial');
   const paymentErrorMessage = ref(''); // Store detailed error message when payment fails
+  const invoiceError = ref(false); // Track invoice generation errors specifically
 
   // Computed properties for selected items and calculations
   const selectedItems = computed(() => {
@@ -207,8 +208,23 @@ export default function usePaymentProcessing(options) {
       checkPayment();
     } catch (error) {
       console.error('Error generating Lightning invoice:', error);
-      showNotification('Error generating Lightning invoice: ' + error.message, 'error');
+      
+      // Set the invoice error state
+      invoiceError.value = true;
+      
+      // Show notification
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      showNotification('Error generating Lightning invoice: ' + errorMessage, 'error');
     }
+  };
+  
+  // Retry lightning payment after error
+  const retryLightningPayment = () => {
+    // Reset error state
+    invoiceError.value = false;
+    
+    // Retry payment
+    payWithLightning();
   };
 
   const executePayout = async (wallet, mintUrl, satAmount, mintQuote, recipientCashuDmInfo) => {
@@ -435,6 +451,7 @@ export default function usePaymentProcessing(options) {
     paymentInProgress,
     paymentProcessingState,
     paymentErrorMessage,
+    invoiceError,
 
     // Computed
     selectedItems,
@@ -455,6 +472,7 @@ export default function usePaymentProcessing(options) {
     selectAllItems,
     toSats,
     formatPrice,
-    cancelPayment
+    cancelPayment,
+    retryLightningPayment
   };
 }
