@@ -183,7 +183,7 @@
       @open-wallet="openInLightningWallet"
       @cancel="cancelPayment"
     />
-    
+  
     <CashuPaymentModal
       :show="showCashuModal"
       :payment-request="getPaymentRequest"
