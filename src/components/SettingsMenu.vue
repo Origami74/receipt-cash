@@ -38,13 +38,24 @@
                   id="paymentAddress"
                   v-model="settings.paymentAddress"
                   type="text"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  :class="[
+                    'w-full px-3 py-2 border rounded-md shadow-sm text-sm focus:outline-none',
+                    paymentAddressValid
+                      ? 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+                      : 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  ]"
                   placeholder="NUT-18 Cashu payment request"
                   @change="saveSettings"
+                  @input="validatePaymentAddress"
                 />
-                <p class="mt-1 text-xs text-gray-500">
-                  Used as default when creating new Cashu payment requests
-                </p>
+                <div class="mt-1">
+                  <p v-if="paymentAddressValid" class="text-xs text-gray-500">
+                    Used as default when creating new Cashu payment requests
+                  </p>
+                  <p v-else class="text-xs text-red-500">
+                    {{ paymentAddressError }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -384,6 +395,7 @@ import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, get
 import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../utils/debugLogger';
+import cashuService from '../services/cashu';
 
 export default {
   name: 'SettingsMenu',
@@ -408,6 +420,10 @@ export default {
       model: 'gpt-4.1-mini',
       paymentAddress: ''
     });
+    
+    // Payment address validation
+    const paymentAddressValid = ref(true);
+    const paymentAddressError = ref('');
     
     const pendingProofs = ref({});
     const unprocessedMintQuotes = ref({});
@@ -504,6 +520,27 @@ export default {
       }
     };
 
+    // Validate payment address
+    const validatePaymentAddress = () => {
+      // Reset validation state
+      paymentAddressValid.value = true;
+      paymentAddressError.value = '';
+      
+      // Skip validation if empty
+      if (!settings.value.paymentAddress) {
+        return true;
+      }
+      
+      // Validate payment request
+      const result = cashuService.validatePaymentRequest(settings.value.paymentAddress);
+      
+      // Update validation state
+      paymentAddressValid.value = result.isValid;
+      paymentAddressError.value = result.error;
+      
+      return result.isValid;
+    };
+    
     // Save settings to storage
     const saveSettings = () => {
       // Save AI settings
@@ -513,9 +550,16 @@ export default {
         model: settings.value.model
       });
       
-      // Save payment address if entered
+      // Validate and save payment address if entered
       if (settings.value.paymentAddress) {
-        savePaymentRequest(settings.value.paymentAddress);
+        const isValid = validatePaymentAddress();
+        
+        if (isValid) {
+          savePaymentRequest(settings.value.paymentAddress);
+          showNotification('Payment address saved successfully', 'success');
+        } else {
+          showNotification(`Invalid payment address: ${paymentAddressError.value}`, 'error');
+        }
       }
     };
 
@@ -690,6 +734,9 @@ export default {
       showMintQuoteConfirmation,
       cancelMintQuoteDeletion,
       deletePendingMintQuote,
+      validatePaymentAddress,
+      paymentAddressValid,
+      paymentAddressError,
       formatSats,
       showLightningSection,
       toggleLightningSection,

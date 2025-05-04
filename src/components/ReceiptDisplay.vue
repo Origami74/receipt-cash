@@ -56,11 +56,21 @@
             <input
               v-model="paymentRequest"
               placeholder="NUT-18 Cashu request"
-              class="flex-1 p-2 border rounded"
+              :class="[
+                'flex-1 p-2 border rounded',
+                paymentRequestValid
+                  ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  : 'border-red-300 focus:border-red-500 focus:ring-red-500'
+              ]"
+              @input="validatePaymentRequest"
             />
             <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
               Paste
             </button>
+          </div>
+          
+          <div v-if="!paymentRequestValid" class="text-sm text-red-500 mb-4">
+            {{ paymentRequestError }}
           </div>
           
           <div class="mb-4">
@@ -148,9 +158,11 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import nostrService from '../services/nostr';
+import cashuService from '../services/cashu';
 import QRCodeVue from 'qrcode.vue';
 import { formatCurrency } from '../utils/currency';
 import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
+import { showNotification } from '../utils/notification';
 
 export default {
   name: 'ReceiptDisplay',
@@ -168,6 +180,8 @@ export default {
     const receipt = computed(() => props.receiptData);
     const step = ref('payment-request');
     const paymentRequest = ref('');
+    const paymentRequestValid = ref(true);
+    const paymentRequestError = ref('');
     const eventId = ref('');
     const eventEncryptionPrivateKey = ref('');
     const showSaveDialog = ref(false);
@@ -186,8 +200,37 @@ export default {
       const lastRequest = getLastPaymentRequest();
       if (lastRequest) {
         paymentRequest.value = lastRequest;
+        validatePaymentRequest();
       }
     });
+    
+    // Validate payment request
+    const validatePaymentRequest = () => {
+      // Reset validation state
+      paymentRequestValid.value = true;
+      paymentRequestError.value = '';
+      
+      // Skip validation if empty
+      if (!paymentRequest.value) {
+        return true;
+      }
+      
+      // Quick check for Lightning address (keep the existing check)
+      if (paymentRequest.value.includes('@')) {
+        paymentRequestValid.value = false;
+        paymentRequestError.value = 'Lightning addresses are not supported. Please enter a NUT-18 Cashu request.';
+        return false;
+      }
+      
+      // Validate payment request using cashu service
+      const result = cashuService.validatePaymentRequest(paymentRequest.value);
+      
+      // Update validation state
+      paymentRequestValid.value = result.isValid;
+      paymentRequestError.value = result.error;
+      
+      return result.isValid;
+    };
     
     const formatPrice = (amount) => {
       return formatCurrency(amount, receipt.value.currency);
@@ -206,9 +249,9 @@ export default {
         return;
       }
       
-      // Validate that it's not a Lightning address
-      if (paymentRequest.value.includes('@')) {
-        showNotification('Lightning addresses are not supported (yet!). Please enter a NUT-18 Cashu request.', 'error');
+      // Validate the payment request
+      if (!validatePaymentRequest()) {
+        showNotification(paymentRequestError.value, 'error');
         return;
       }
       
@@ -370,6 +413,9 @@ export default {
       receipt,
       step,
       paymentRequest,
+      paymentRequestValid,
+      paymentRequestError,
+      validatePaymentRequest,
       eventId,
       eventEncryptionPrivateKey,
       hostUrl,

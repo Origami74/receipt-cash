@@ -113,9 +113,86 @@ const createPaymentMessage = (requestId, mintUrl, unit, proofs) => {
   return JSON.stringify(paymentMessage);
 };
 
+/**
+ * Validate a Cashu payment request
+ * @param {String} paymentRequest - The payment request string to validate
+ * @returns {Object} Validation result with isValid and error properties
+ */
+const validatePaymentRequest = (paymentRequest) => {
+  // Validation result object
+  const result = {
+    isValid: false,
+    error: null
+  };
+  
+  try {
+    // Check if payment request is empty
+    if (!paymentRequest || paymentRequest.trim() === '') {
+      result.error = 'Payment request is empty';
+      return result;
+    }
+    
+    // Try to decode the payment request (NUT-18)
+    let decodedRequest;
+    try {
+      decodedRequest = decodePaymentRequest(paymentRequest);
+    } catch (error) {
+      result.error = 'Invalid NUT-18 Cashu payment request format';
+      return result;
+    }
+    
+    // Check if it has transport information
+    if (!decodedRequest.transport ||
+        !Array.isArray(decodedRequest.transport) ||
+        decodedRequest.transport.length === 0) {
+      result.error = 'Payment request does not contain transport information';
+      return result;
+    }
+    
+    // Check for Nostr transport (NIP-17)
+    const nostrTransport = decodedRequest.transport.find(t => t.type === "nostr");
+    if (!nostrTransport) {
+      result.error = 'Payment request does not contain Nostr transport (NIP-17)';
+      return result;
+    }
+    
+    // Check if Nostr transport has a target
+    if (!nostrTransport.target) {
+      result.error = 'Nostr transport does not contain a target';
+      return result;
+    }
+    
+    // Validate the nprofile
+    try {
+      const { pubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
+      if (!pubkey) {
+        result.error = 'Invalid Nostr profile in transport target';
+        return result;
+      }
+      
+      // Check if it has at least one relay
+      if (!relays || relays.length === 0) {
+        result.error = 'No relays specified in Nostr transport';
+        return result;
+      }
+    } catch (error) {
+      result.error = 'Invalid Nostr profile format';
+      return result;
+    }
+    
+    // All checks passed
+    result.isValid = true;
+    return result;
+  } catch (error) {
+    result.error = `Validation error: ${error.message}`;
+    return result;
+  }
+};
+
 export default {
   extractNostrTransport,
   decodeRequest,
   updateRequestAmount,
-  createPaymentMessage
+  createPaymentMessage,
+  validatePaymentRequest
 };
