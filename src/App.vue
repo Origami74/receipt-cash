@@ -1,5 +1,8 @@
 <template>
   <div class="h-full">
+    <!-- Experimental warning banner -->
+    <ExperimentalBanner />
+    
     <!-- Global notification component -->
     <Notification
       v-if="notification"
@@ -16,12 +19,14 @@
 import { onMounted } from 'vue';
 import { showNotification, useNotification } from './utils/notification';
 import Notification from './components/Notification.vue';
+import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import recoveryService from './services/recovery';
 
 export default {
   name: 'App',
   components: {
-    Notification
+    Notification,
+    ExperimentalBanner
   },
   setup() {
     const { notification, clearNotification } = useNotification();
