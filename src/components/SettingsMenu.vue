@@ -323,6 +323,12 @@
                 >
                   Clear
                 </button>
+                <button
+                  @click="reportLogs"
+                  class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded hover:bg-orange-200"
+                >
+                  Report
+                </button>
               </div>
             </div>
             
@@ -719,6 +725,23 @@ export default {
       }
     };
     
+    // Function to report logs to developers
+    const reportLogs = () => {
+      // First refresh logs to make sure we have the latest
+      refreshDebugLogs();
+      
+      // Emit custom event that will be handled by App.vue
+      const event = new CustomEvent('report-logs', {
+        detail: {
+          logs: debugLogs.value
+        }
+      });
+      window.dispatchEvent(event);
+      
+      // Close settings menu
+      emit('close');
+    };
+    
     // Refresh logs when the menu is opened
     watch(() => props.isOpen, (newVal) => {
       if (newVal && debugEnabled.value) {
@@ -763,7 +786,8 @@ export default {
       disableDebugLogging,
       clearLogs,
       formatLogTimestamp,
-      copyLogs
+      copyLogs,
+      reportLogs
     };
   }
 }

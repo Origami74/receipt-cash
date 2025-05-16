@@ -36,8 +36,8 @@ cd receipt-cash
 # Install dependencies
 npm install
 
-# Start the development server
-npm run dev
+# Start the development server - https needed for access to camera on mobile
+env VITE_USE_HTTPS=true npm run dev
 ```
 
 ### Building for Production
