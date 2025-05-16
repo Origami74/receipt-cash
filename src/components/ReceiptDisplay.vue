@@ -388,7 +388,7 @@ export default {
       try {
         const shareData = {
           title: 'Be my sugardad? 🥺',
-          text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here:`,
+          text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here: `,
           url: receiptLink.value
         };
 
