@@ -32,6 +32,7 @@ import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
 import recoveryService from './services/recovery';
 import debugLogger from './utils/debugLogger';
+import { checkForVersionUpdate } from './utils/versionManager';
 
 export default {
   name: 'App',
@@ -46,7 +47,18 @@ export default {
     const currentErrorMessage = ref('');
     
     // Initialize debug logging by default
-    onMounted(() => {
+    onMounted(async () => {
+      // Check for version updates first
+      try {
+        const updatePerformed = await checkForVersionUpdate();
+        if (updatePerformed) {
+          // If update was performed, the app will reload
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking for version update:', error);
+      }
+      
       // Enable debug logging by default if not already set
       if (!debugLogger.isCapturingLogsEnabled()) {
         debugLogger.startCapturingLogs();
