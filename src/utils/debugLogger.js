@@ -77,6 +77,27 @@ export function stopCapturingLogs() {
  */
 function captureLog(level, args) {
   try {
+    // Check for Error objects to capture stack traces
+    let stackTrace = null;
+    const originalArgs = [...args]; // Keep original args
+    
+    // If this is an error log, check if any argument is an Error object
+    if (level === 'error') {
+      for (const arg of args) {
+        if (arg instanceof Error) {
+          stackTrace = arg.stack;
+          break;
+        }
+      }
+      
+      // If no Error object was found but we're logging an error,
+      // create a new Error to capture the current stack trace
+      if (!stackTrace) {
+        const err = new Error();
+        stackTrace = err.stack;
+      }
+    }
+    
     // Format the log message
     const formattedArgs = args.map(arg => {
       if (typeof arg === 'object') {
@@ -93,7 +114,8 @@ function captureLog(level, args) {
     const logEntry = {
       timestamp: new Date().toISOString(),
       level,
-      message: formattedArgs
+      message: formattedArgs,
+      stack: stackTrace
     };
     
     // Add to captured logs

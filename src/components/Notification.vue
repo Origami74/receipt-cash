@@ -9,7 +9,7 @@
   >
     <div 
       v-if="show"
-      class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md"
+      class="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md"
     >
       <div 
         class="bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 p-4"
@@ -19,30 +19,42 @@
           'bg-green-50': type === 'success'
         }"
       >
-        <div class="flex items-start">
-          <div class="flex-shrink-0">
-            <svg 
-              v-if="type === 'error'"
-              class="h-6 w-6 text-red-400" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke-width="1.5" 
-              stroke="currentColor"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
+        <div class="flex flex-col">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <svg
+                v-if="type === 'error'"
+                class="h-6 w-6 text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div class="ml-3 w-0 flex-1">
+              <p
+                class="text-sm font-medium"
+                :class="{
+                  'text-red-800': type === 'error',
+                  'text-yellow-800': type === 'warning',
+                  'text-green-800': type === 'success'
+                }"
+              >
+                {{ message }}
+              </p>
+            </div>
           </div>
-          <div class="ml-3 w-0 flex-1">
-            <p 
-              class="text-sm font-medium"
-              :class="{
-                'text-red-800': type === 'error',
-                'text-yellow-800': type === 'warning',
-                'text-green-800': type === 'success'
-              }"
+          
+          <!-- Report button for errors -->
+          <div v-if="type === 'error'" class="flex justify-end mt-2">
+            <button
+              @click="$emit('report')"
+              class="text-xs bg-red-100 hover:bg-red-200 text-red-800 font-medium py-1 px-2 rounded"
             >
-              {{ message }}
-            </p>
+              Report Issue
+            </button>
           </div>
         </div>
       </div>
@@ -51,7 +63,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 
 export default {
   name: 'Notification',
@@ -70,11 +82,16 @@ export default {
       default: 3000
     }
   },
-  emits: ['close'],
+  emits: ['close', 'report'],
   setup(props, { emit }) {
     const show = ref(true);
     let timeout;
     let closeTimeout;
+
+    // Use longer duration for error notifications to give time to report
+    const notificationDuration = computed(() => {
+      return props.type === 'error' ? 10000 : props.duration;
+    });
 
     const startTimer = () => {
       // Clear any existing timeouts
@@ -85,7 +102,7 @@ export default {
       timeout = setTimeout(() => {
         show.value = false;
         closeTimeout = setTimeout(() => emit('close'), 200); // Wait for leave animation
-      }, props.duration);
+      }, notificationDuration.value);
     };
 
     // Start timer on mount

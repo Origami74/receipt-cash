@@ -323,6 +323,12 @@
                 >
                   Clear
                 </button>
+                <button
+                  @click="reportLogs"
+                  class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded hover:bg-orange-200"
+                >
+                  Report
+                </button>
               </div>
             </div>
             
@@ -369,6 +375,13 @@
           <!-- Action Buttons -->
           <div class="pt-4 border-t border-gray-200">
             <button
+              @click="checkForUpdates"
+              class="w-full py-2 px-4 mb-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-colors"
+            >
+              Check for Updates
+            </button>
+            
+            <button
               @click="clearAllProofs"
               class="w-full py-2 px-4 mb-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium hover:bg-yellow-200 transition-colors"
             >
@@ -396,6 +409,7 @@ import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../utils/debugLogger';
 import cashuService from '../services/cashu';
+import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../utils/versionManager';
 
 export default {
   name: 'SettingsMenu',
@@ -719,6 +733,40 @@ export default {
       }
     };
     
+    // Function to report logs to developers
+    const reportLogs = () => {
+      // First refresh logs to make sure we have the latest
+      refreshDebugLogs();
+      
+      // Emit custom event that will be handled by App.vue
+      const event = new CustomEvent('report-logs', {
+        detail: {
+          logs: debugLogs.value
+        }
+      });
+      window.dispatchEvent(event);
+      
+      // Close settings menu
+      emit('close');
+    };
+    
+    // Check for updates manually
+    const checkForUpdates = async () => {
+      try {
+        const currentVersion = CURRENT_VERSION;
+        const storedVersion = getStoredVersion();
+        
+        if (storedVersion === currentVersion) {
+          showNotification(`Already on latest version (${currentVersion})`, 'info');
+        } else {
+          await triggerManualUpdate();
+        }
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+        showNotification('Failed to check for updates', 'error');
+      }
+    };
+    
     // Refresh logs when the menu is opened
     watch(() => props.isOpen, (newVal) => {
       if (newVal && debugEnabled.value) {
@@ -763,7 +811,11 @@ export default {
       disableDebugLogging,
       clearLogs,
       formatLogTimestamp,
-      copyLogs
+      copyLogs,
+      reportLogs,
+      
+      // Update management
+      checkForUpdates
     };
   }
 }
