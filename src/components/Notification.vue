@@ -9,7 +9,7 @@
   >
     <div 
       v-if="show"
-      class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md"
+      class="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md"
     >
       <div 
         class="bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 p-4"

@@ -138,11 +138,6 @@ export default {
     
     // Submit the report to the developer using Nostr
     const submitReport = async () => {
-      if (!description.value.trim()) {
-        showNotification('Please provide a description of the issue', 'error');
-        return;
-      }
-      
       isSubmitting.value = true;
       
       try {
@@ -188,8 +183,11 @@ export default {
         const privateKey = generateSecretKey();
         const plainContent = JSON.stringify(reportContent);
         
+        // Get developer's public key (hex to Uint8Array)
+        const recipientPubkey = Uint8Array.from(Buffer.from(DEVELOPER_PUBKEY, 'hex'));
+        
         // Encrypt the content using NIP-44
-        const encryptedContent = await nip44.encrypt(plainContent, DEVELOPER_PUBKEY);
+        const encryptedContent = await nip44.encrypt(plainContent, recipientPubkey);
         
         event.content = encryptedContent;
         event.tags = [
