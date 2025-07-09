@@ -1,6 +1,6 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'; // Import NDKEvent directly
+import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'; // Import NDKEvent directly
 import nostrService from './nostr'; // Import nostrService for access to NDK, keys, etc.
-import { nip44 } from 'nostr-tools';
+import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
 /**
@@ -16,6 +16,14 @@ import { Buffer } from 'buffer';
  */
 const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, relays = []) => {
   try {
+    console.log('publishSettlementEvent called with:', {
+      receiptEventId,
+      settledItems,
+      receiptEncryptionKey: receiptEncryptionKey ? 'present' : 'missing',
+      paymentType,
+      receiptAuthorPubkey,
+      mintQuoteId
+    });
     // Add any relays that were passed in
     if (relays && relays.length > 0) {
       await nostrService.addRelays(relays);
@@ -23,8 +31,7 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     
     // Get access to the ndk instance and ensure we're connected
     const ndk = await nostrService.getNdk();
-    const publicKey = await nostrService.getNostrPublicKey(); // Use renamed getter
-    
+    ndk.signer = new NDKPrivateKeySigner(generateSecretKey())
     // Create event content
     const content = JSON.stringify({ settledItems });
     
@@ -43,26 +50,22 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     
     // Add encrypted mint_quote tag only for lightning payments
     if (paymentType === 'lightning' && mintQuoteId) {
+      console.log("mintquoteId", mintQuoteId)
       // Encrypt mint quote ID to receipt author's pubkey
       const encryptedMintQuote = await nip44.encrypt(mintQuoteId, Uint8Array.from(Buffer.from(receiptAuthorPubkey, 'hex')));
       tags.push(['mint_quote', encryptedMintQuote]);
     }
 
     // Create the Nostr event
-    const event = {
-      kind: 9568,
-      pubkey: publicKey,
-      created_at: Math.floor(Date.now() / 1000),
-      content: encryptedContent,
-      tags: tags
-    };
+    const event = new NDKEvent(ndk);
+    event.kind = 9568; // DM
+    event.content = encryptedContent
+    event.tags = tags;
     
-    // Sign and publish
-    const signedEvent = await ndk.signer.sign(event);
-    const ndkEvent = new NDKEvent(ndk, signedEvent);
-    await ndkEvent.publish();
+    // Publish the settlement event
+    await event.publish();
     
-    return signedEvent.id;
+    return event.id;
   } catch (error) {
     console.error('Error publishing settlement event:', error);
     throw error;

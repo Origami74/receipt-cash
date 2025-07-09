@@ -118,19 +118,17 @@
           <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
             Summary
           </div>
-          <div class="p-3 border-t border-gray-200" v-if="devPercentage > 0">
-            <div class="text-sm text-gray-500">
-              Total includes {{ devPercentage }}% maintainer split set by receipt creator. 
+          <div class="p-3 border-t border-gray-200 text-xs text-gray-500" v-if="devPercentage > 0">
+            <div>
+              Receipt conversion rate: 1 BTC = {{ currency === 'USD' ? '$' : currency + ' ' }}{{ btcPrice.toLocaleString() }}
+            </div>
+            <div v-if="currentBtcPrice && currentBtcPrice !== btcPrice">
+              Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
+            </div>
+            <div class="">
+              Receipt creator shares {{ devPercentage }}% with the maintainer of this app. This does not affect any of your owed amounts. 
             </div>
           </div>
-          <div class="p-3 flex justify-between items-center">
-            <div>Subtotal</div>
-            <div class="text-right">
-              <div>{{ formatSats(selectedSubtotal) }} sats</div>
-              <div class="text-sm text-gray-500">{{ toFiat(selectedSubtotal) }}</div>
-            </div>
-          </div>
-         
           <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
             <div>Total</div>
             <div class="text-right">
@@ -138,14 +136,7 @@
               <div class="text-sm text-gray-500">{{ toFiat(selectedSubtotal) }}</div>
             </div>
           </div>
-          <div class="p-3 border-t border-gray-100 text-xs text-gray-500 text-center space-y-1">
-            <div>
-              Receipt conversion rate: 1 BTC = {{ currency === 'USD' ? '$' : currency + ' ' }}{{ btcPrice.toLocaleString() }}
-            </div>
-            <div v-if="currentBtcPrice && currentBtcPrice !== btcPrice">
-              Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
-            </div>
-          </div>
+          
         </div>
       </div>
       
@@ -156,16 +147,26 @@
             <button
               @click="payWithLightning"
               class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
-              :disabled="selectedItems.length === 0"
+              :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
             >
-              ⚡️ Pay with Lightning
+              <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
+                ⏳ Settlement request sent...
+              </span>
+              <span v-else>
+                ⚡️ Pay with Lightning
+              </span>
             </button>
             <button
               @click="payWithCashu"
               class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
-              :disabled="selectedItems.length === 0"
+              :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
             >
-              🥜 Pay with Cashu
+              <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
+                ⏳ Settlement request sent...
+              </span>
+              <span v-else>
+                🥜 Pay with Cashu
+              </span>
             </button>
           </template>
           
@@ -217,9 +218,10 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import receiptService from '../services/receipt';
+import settlementService from '../services/settlement';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
@@ -229,6 +231,8 @@ import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../utils/notification';
 import { formatSats, convertFromSats } from '../utils/pricing';
 import paymentService from '../services/payment';
+import cashuService from '../services/cashu';
+import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
 
 export default {
   name: 'SettlementView',
@@ -261,6 +265,7 @@ export default {
     const currency = ref('USD');
     const selectedCurrency = ref('USD');
     const currentBtcPrice = ref(0);
+    const receiptAuthorPubkey = ref('');
     const showSettings = ref(false);
     
     // Function to navigate back to home page
@@ -288,7 +293,15 @@ export default {
     };
     
     
-    // Initialize payment processing composable
+    // Payment state for reversed architecture
+    const paymentInProgress = ref(false);
+    const paymentSuccess = ref(false);
+    const lightningPaymentLocked = ref(false);
+    const cashuPaymentLocked = ref(false);
+    const currentPaymentType = ref('');
+    const settlementEventId = ref('');
+    
+    // Initialize payment processing composable (still needed for calculations)
     const paymentProcessing = usePaymentProcessing({
       items,
       currency,
@@ -298,18 +311,8 @@ export default {
       decryptionKey: props.decryptionKey,
       
       onPaymentSuccess: async (selectedItems) => {
-        // Publish settlement event
-        await receiptService.publishSettlement(
-          props.eventId,
-          selectedItems,
-          props.decryptionKey
-        );
-        
-        // Update UI to reflect settlement
-        selectedItems.forEach(item => {
-          item.settled = true;
-          item.selectedQuantity = 0;
-        });
+        // This is now handled by the reversed architecture
+        // The payer will publish confirmation events
       },
       updateSettledItems
     });
@@ -324,8 +327,6 @@ export default {
       devPercentage,
       formatPrice,
       selectAllItems,
-      payWithLightning,
-      payWithCashu,
       copyPaymentRequest,
       lightningInvoice,
       showLightningModal,
@@ -333,14 +334,14 @@ export default {
       openInLightningWallet,
       openInCashuWallet,
       getPaymentRequest,
-      paymentSuccess,
-      paymentInProgress,
       paymentProcessingState,
       paymentErrorMessage,
       invoiceError,
-      retryLightningPayment,
-      cancelPayment
+      retryLightningPayment
     } = paymentProcessing;
+    
+    // Get payment request from composable
+    const paymentRequest = computed(() => paymentProcessing.paymentRequest?.value || '');
     
     // Item quantity management
     
@@ -376,7 +377,9 @@ export default {
         selectedCurrency.value = receiptData.currency; // Set selected currency to receipt's currency
         btcPrice.value = receiptData.btcPrice;
         items.value = receiptData.items;
+        receiptAuthorPubkey.value = receiptData.authorPubkey
         
+
         // Fetch current BTC price for the selected currency
         try {
           currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
@@ -388,7 +391,7 @@ export default {
         
         // Extract developer percentage from receipt data
         // Update dev percentage in the payment composable
-        paymentProcessing.setDevPercentage(receiptData.devPercentage);
+        paymentProcessing.setDevPercentage(receiptData.splitPercentage);
         
         // Set payment request in the payment composable
         paymentProcessing.setPaymentRequest(receiptData.paymentRequest);
@@ -420,6 +423,126 @@ export default {
       return convertFromSats(satsAmount, currentBtcPrice.value, selectedCurrency.value);
     };
     
+    // Reversed Payment Architecture Implementation
+    
+    // New Lightning payment method following reversed architecture
+    const payWithLightningReversed = async () => {
+      if (selectedItems.value.length === 0) return;
+      
+      try {
+        // 1. Lock UI immediately
+        paymentInProgress.value = true;
+        lightningPaymentLocked.value = true;
+        currentPaymentType.value = 'lightning';
+        
+        // 2. Generate mint quote
+        const satAmount = Math.round(selectedSubtotal.value); // Already in sats
+        
+        // Get mint URL from receipt's payment request
+        const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
+        let mintUrl = 'https://mint.minibits.cash/Bitcoin'; // fallback
+        
+        if (recipientCashuDmInfo && recipientCashuDmInfo.mints && recipientCashuDmInfo.mints.length > 0) {
+          mintUrl = recipientCashuDmInfo.mints[0];
+        }
+        
+        const mint = new CashuMint(mintUrl);
+        const wallet = new CashuWallet(mint);
+        await wallet.loadMint();
+        
+        const mintQuote = await wallet.createMintQuote(satAmount);
+        
+        // 3. Publish settlement event immediately with encrypted mint quote ID
+        const settlementId = await settlementService.publishSettlementEvent(
+          props.eventId,
+          selectedItems.value,
+          props.decryptionKey,
+          'lightning',
+          receiptAuthorPubkey.value,
+          mintQuote.quote // This will be encrypted to receipt author's pubkey
+        );
+        
+        settlementEventId.value = settlementId;
+        
+        // 4. Get the Lightning invoice and show payment modal
+        const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
+        lightningInvoice.value = mintQuoteChecked.request;
+        showLightningModal.value = true;
+        
+        // 5. Show notification about the process
+        showNotification('Settlement request sent! Please pay the invoice. The payer will monitor the payment.', 'info');
+        
+        // 6. Subscribe to confirmation events
+        subscribeToConfirmations();
+        
+      } catch (error) {
+        console.error('Error initiating Lightning settlement:', error);
+        showNotification('Failed to initiate Lightning settlement: ' + error.message, 'error');
+        
+        // Reset state on error
+        paymentInProgress.value = false;
+        lightningPaymentLocked.value = false;
+        currentPaymentType.value = '';
+      }
+    };
+    
+    // New Cashu payment method following reversed architecture
+    const payWithCashuReversed = async () => {
+      if (selectedItems.value.length === 0) return;
+      
+      try {
+        // 1. Lock UI immediately
+        paymentInProgress.value = true;
+        cashuPaymentLocked.value = true;
+        currentPaymentType.value = 'cashu';
+        
+        // 2. Publish settlement event immediately (no mint quote for Cashu)
+        const settlementId = await settlementService.publishSettlementEvent(
+          props.eventId,
+          selectedItems.value,
+          props.decryptionKey,
+          'cashu',
+          receiptAuthorPubkey.value
+        );
+        
+        settlementEventId.value = settlementId;
+        
+        // 3. Show success message - payment now handled by payer
+        showNotification('Settlement request sent! The payer will handle payment processing.', 'info');
+        
+        // 4. Subscribe to confirmation events
+        subscribeToConfirmations();
+        
+      } catch (error) {
+        console.error('Error initiating Cashu settlement:', error);
+        showNotification('Failed to initiate Cashu settlement: ' + error.message, 'error');
+        
+        // Reset state on error
+        paymentInProgress.value = false;
+        cashuPaymentLocked.value = false;
+        currentPaymentType.value = '';
+      }
+    };
+    
+    // Subscribe to confirmation events from payer
+    const subscribeToConfirmations = () => {
+      // This will need to be implemented in the settlement service
+      // Subscribe to kind 9569 events that reference our settlement
+      console.log('Subscribing to confirmation events for settlement:', settlementEventId.value);
+      
+      // For now, just show a message
+      showNotification('Waiting for payer to process payment...', 'info');
+    };
+    
+    // Cancel payment (for UI reset)
+    const cancelPaymentReversed = () => {
+      paymentInProgress.value = false;
+      lightningPaymentLocked.value = false;
+      cashuPaymentLocked.value = false;
+      currentPaymentType.value = '';
+      settlementEventId.value = '';
+    };
+    
     // Subscription management
     let unsubscribe;
     
@@ -430,7 +553,7 @@ export default {
         props.decryptionKey,
         (settlement) => {
           // Update items with settlement data
-          updateSettledItems(settlement);
+          updateSettledItems(settlement.settledItems);
         }
       );
     };
@@ -465,8 +588,8 @@ export default {
       fetchReceiptData,
       incrementQuantity,
       decrementQuantity,
-      payWithLightning,
-      payWithCashu,
+      payWithLightning: payWithLightningReversed,
+      payWithCashu: payWithCashuReversed,
       copyPaymentRequest,
       selectAllItems,
       formatPrice,
@@ -484,14 +607,22 @@ export default {
       retryLightningPayment,
       showSettings,
       goToHome,
-      cancelPayment,
+      cancelPayment: cancelPaymentReversed,
       btcPrice,
       currency,
       selectedCurrency,
       currentBtcPrice,
       onCurrencyChange,
       toFiat,
-      formatSats
+      formatSats,
+      // New reversed architecture state
+      lightningPaymentLocked,
+      cashuPaymentLocked,
+      currentPaymentType,
+      settlementEventId,
+      // Lightning modal state
+      lightningInvoice,
+      showLightningModal
     };
   }
 };

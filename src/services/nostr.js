@@ -182,6 +182,9 @@ const fetchReceiptEvent = async (eventId, encryptionKey) => {
     // Parse the decrypted content
     const receiptData = JSON.parse(decryptedContent);
     
+    // Add the event author's pubkey to the receipt data
+    receiptData.authorPubkey = event.pubkey;
+    
     return receiptData;
   } catch (error) {
     console.error('Error fetching receipt event:', error);
