@@ -35,6 +35,12 @@
           <h1 class="text-xl font-bold">{{ merchant }}</h1>
           <div class="text-sm text-gray-500">{{ date }}</div>
         </div>
+        <div class="flex justify-end mt-2">
+          <CurrencySelector
+            v-model="selectedCurrency"
+            @update:modelValue="onCurrencyChange"
+          />
+        </div>
       </div>
       
       <div class="flex-1 overflow-y-auto p-4">
@@ -96,12 +102,14 @@
                   </span>
                 </div>
                 <div class="text-sm text-gray-500">
-                  {{ item.quantity }} × {{ formatPrice(item.price) }}
+                  {{ item.quantity }} × {{ formatSats(item.price) }} sats
+                  <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
                 </div>
               </div>
             </div>
             <div :class="{ 'font-medium': !item.settled, 'text-gray-400': item.settled }">
-              {{ formatPrice(item.price * item.selectedQuantity) }}
+              <div>{{ formatSats(item.price * item.selectedQuantity) }} sats</div>
+              <div class="text-xs text-gray-500">{{ toFiat(item.price * item.selectedQuantity) }}</div>
             </div>
           </div>
         </div>
@@ -118,22 +126,24 @@
           <div class="p-3 flex justify-between items-center">
             <div>Subtotal</div>
             <div class="text-right">
-              <div>{{ formatPrice(selectedSubtotal) }}</div>
-              <div class="text-sm text-gray-500">{{ toSats(selectedSubtotal) }} sats</div>
+              <div>{{ formatSats(selectedSubtotal) }} sats</div>
+              <div class="text-sm text-gray-500">{{ toFiat(selectedSubtotal) }}</div>
             </div>
           </div>
-          <div class="p-3 flex justify-between items-center">
-            <div>Tax (included)</div>
-            <div class="text-right">
-              <div>{{ formatPrice(calculatedTax) }}</div>
-              <div class="text-sm text-gray-500">{{ toSats(calculatedTax) }} sats</div>
-            </div>
-          </div>
+         
           <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
             <div>Total</div>
             <div class="text-right">
-              <div>{{ formatPrice(selectedSubtotal) }}</div>
-              <div class="text-sm text-gray-500">{{ toSats(selectedSubtotal) }} sats</div>
+              <div>{{ formatSats(selectedSubtotal) }} sats</div>
+              <div class="text-sm text-gray-500">{{ toFiat(selectedSubtotal) }}</div>
+            </div>
+          </div>
+          <div class="p-3 border-t border-gray-100 text-xs text-gray-500 text-center space-y-1">
+            <div>
+              Receipt conversion rate: 1 BTC = {{ currency === 'USD' ? '$' : currency + ' ' }}{{ btcPrice.toLocaleString() }}
+            </div>
+            <div v-if="currentBtcPrice && currentBtcPrice !== btcPrice">
+              Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
             </div>
           </div>
         </div>
@@ -176,7 +186,7 @@
       :show="showLightningModal"
       :invoice="lightningInvoice"
       :invoice-error="invoiceError"
-      :amount="toSats(selectedSubtotal)"
+      :amount="selectedSubtotal"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
@@ -189,7 +199,7 @@
     <CashuPaymentModal
       :show="showCashuModal"
       :payment-request="getPaymentRequest"
-      :amount="toSats(selectedSubtotal)"
+      :amount="selectedSubtotal"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
@@ -215,7 +225,10 @@ import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
+import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../utils/notification';
+import { formatSats, convertFromSats } from '../utils/pricing';
+import paymentService from '../services/payment';
 
 export default {
   name: 'SettlementView',
@@ -223,7 +236,8 @@ export default {
     CashuPaymentModal,
     LightningPaymentModal,
     Notification,
-    SettingsMenu
+    SettingsMenu,
+    CurrencySelector
   },
   props: {
     eventId: {
@@ -245,6 +259,8 @@ export default {
     const error = ref(null);
     const btcPrice = ref(0);
     const currency = ref('USD');
+    const selectedCurrency = ref('USD');
+    const currentBtcPrice = ref(0);
     const showSettings = ref(false);
     
     // Function to navigate back to home page
@@ -306,7 +322,6 @@ export default {
       developerFee,
       payerShare,
       devPercentage,
-      toSats,
       formatPrice,
       selectAllItems,
       payWithLightning,
@@ -358,8 +373,18 @@ export default {
         date.value = receiptData.date;
         tax.value = receiptData.tax;
         currency.value = receiptData.currency;
+        selectedCurrency.value = receiptData.currency; // Set selected currency to receipt's currency
         btcPrice.value = receiptData.btcPrice;
         items.value = receiptData.items;
+        
+        // Fetch current BTC price for the selected currency
+        try {
+          currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        } catch (error) {
+          console.error('Error fetching current BTC price:', error);
+          // Fall back to receipt's stored BTC price
+          currentBtcPrice.value = receiptData.btcPrice;
+        }
         
         // Extract developer percentage from receipt data
         // Update dev percentage in the payment composable
@@ -376,6 +401,23 @@ export default {
       } finally {
         loading.value = false;
       }
+    };
+    
+    // Currency handling
+    const onCurrencyChange = async () => {
+      try {
+        // Fetch new BTC price for the selected currency
+        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+      } catch (error) {
+        console.error('Error fetching BTC price for new currency:', error);
+        showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
+      }
+    };
+    
+    // Create toFiat function for converting sats to fiat
+    const toFiat = (satsAmount) => {
+      if (!currentBtcPrice.value) return selectedCurrency.value === 'USD' ? '$0.00' : selectedCurrency.value + ' 0.00';
+      return convertFromSats(satsAmount, currentBtcPrice.value, selectedCurrency.value);
     };
     
     // Subscription management
@@ -426,7 +468,6 @@ export default {
       payWithLightning,
       payWithCashu,
       copyPaymentRequest,
-      toSats,
       selectAllItems,
       formatPrice,
       lightningInvoice,
@@ -443,7 +484,14 @@ export default {
       retryLightningPayment,
       showSettings,
       goToHome,
-      cancelPayment
+      cancelPayment,
+      btcPrice,
+      currency,
+      selectedCurrency,
+      currentBtcPrice,
+      onCurrencyChange,
+      toFiat,
+      formatSats
     };
   }
 };
