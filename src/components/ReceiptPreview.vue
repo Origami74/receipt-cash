@@ -3,9 +3,30 @@
     <div class="bg-white shadow-sm p-4">
       <div class="flex justify-between items-center">
         <h1 class="text-xl font-bold">Receipt Preview</h1>
-        <div class="text-sm text-gray-500">{{ receipt.merchant }}</div>
       </div>
-      <div class="text-sm text-gray-500">{{ receipt.date }}</div>
+      <div class="flex justify-between items-center mt-2">
+        <div class="text-sm text-gray-500">{{ receipt.date }}</div>
+        <div class="flex items-center gap-2">
+          <label for="currency-select" class="text-xs text-gray-500">Currency:</label>
+          <select
+            id="currency-select"
+            v-model="selectedCurrency"
+            @change="onCurrencyChange"
+            class="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
+          >
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+            <option value="JPY">JPY (¥)</option>
+            <option value="CAD">CAD (C$)</option>
+            <option value="AUD">AUD (A$)</option>
+            <option value="CHF">CHF (Fr)</option>
+            <option value="SEK">SEK (kr)</option>
+            <option value="NOK">NOK (kr)</option>
+            <option value="DKK">DKK (kr)</option>
+          </select>
+        </div>
+      </div>
     </div>
     
     <div class="flex-1 overflow-y-auto p-4">
@@ -48,7 +69,7 @@
         </div>
         <div class="p-3 pt-2 text-xs text-gray-500 border-t border-gray-100">
           <div v-if="currentBtcPrice">
-            Live conversion rate: {{ formatCurrency(currentBtcPrice, receipt.currency) }}/BTC
+            Live conversion rate: {{ formatCurrency(currentBtcPrice, selectedCurrency) }}/BTC
           </div>
         </div>
       </div>
@@ -197,6 +218,7 @@ export default {
     const showSaveDialog = ref(false);
     const newPaymentRequest = ref('');
     const currentBtcPrice = ref(0);
+    const selectedCurrency = ref(receipt.value.currency || 'EUR');
     
     // Developer split using logarithmic scale
     const developerSplit = ref(2); // The actual percentage value (default 2%)
@@ -207,6 +229,9 @@ export default {
     const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(async () => {
+      // Set currency to receipt's currency
+      selectedCurrency.value = receipt.value.currency || 'EUR';
+      
       // Try to load the last used payment request
       const lastRequest = getLastPaymentRequest();
       if (lastRequest) {
@@ -216,7 +241,7 @@ export default {
       
       // Fetch current BTC price for live preview
       try {
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(receipt.value.currency);
+        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for preview:', error);
         showNotification('Failed to fetch BTC price for preview', 'error');
@@ -246,7 +271,17 @@ export default {
     };
     
     const formatPrice = (amount) => {
-      return formatCurrency(amount, receipt.value.currency);
+      return formatCurrency(amount, selectedCurrency.value);
+    };
+    
+    const onCurrencyChange = async () => {
+      try {
+        // Fetch new BTC price for the selected currency
+        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+      } catch (error) {
+        console.error('Error fetching BTC price for new currency:', error);
+        showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
+      }
     };
     
     const convertToSats = (amount) => {
@@ -315,10 +350,11 @@ export default {
       try {
         const receiptWithDevSplit = {
           ...receipt.value,
+          currency: selectedCurrency.value, // Use the selected currency
           devPercentage: parseInt(developerSplit.value)
         };
         
-        const btcPrice = await paymentService.fetchBtcPrice(receipt.value.currency);
+        const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
         
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receiptWithDevSplit,
@@ -458,6 +494,8 @@ export default {
       updateDevSplit,
       sliderValue,
       currentBtcPrice,
+      selectedCurrency,
+      onCurrencyChange,
       formatCurrency
     };
   }
