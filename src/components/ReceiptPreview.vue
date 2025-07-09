@@ -6,26 +6,10 @@
       </div>
       <div class="flex justify-between items-center mt-2">
         <div class="text-sm text-gray-500">{{ receipt.date }}</div>
-        <div class="flex items-center gap-2">
-          <label for="currency-select" class="text-xs text-gray-500">Currency:</label>
-          <select
-            id="currency-select"
-            v-model="selectedCurrency"
-            @change="onCurrencyChange"
-            class="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
-          >
-            <option value="USD">USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-            <option value="GBP">GBP (£)</option>
-            <option value="JPY">JPY (¥)</option>
-            <option value="CAD">CAD (C$)</option>
-            <option value="AUD">AUD (A$)</option>
-            <option value="CHF">CHF (Fr)</option>
-            <option value="SEK">SEK (kr)</option>
-            <option value="NOK">NOK (kr)</option>
-            <option value="DKK">DKK (kr)</option>
-          </select>
-        </div>
+        <CurrencySelector
+          v-model="selectedCurrency"
+          @update:modelValue="onCurrencyChange"
+        />
       </div>
     </div>
     
@@ -188,6 +172,7 @@ import paymentService from '../services/payment';
 import payerMonitor from '../services/payerMonitor';
 import receiptKeyManager from '../utils/receiptKeyManager';
 import QRCodeVue from 'qrcode.vue';
+import CurrencySelector from './CurrencySelector.vue';
 import { formatCurrency } from '../utils/currency';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricing';
 import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
@@ -198,7 +183,8 @@ import { Buffer } from 'buffer';
 export default {
   name: 'ReceiptPreview',
   components: {
-    QRCodeVue
+    QRCodeVue,
+    CurrencySelector
   },
   props: {
     receiptData: {
