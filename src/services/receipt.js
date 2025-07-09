@@ -78,8 +78,12 @@ Here are some things to keep in mind:
     const receiptData = await response.json();
     const responseText = receiptData.choices[0].message.content;
 
+    console.log('AI Response:', responseText);
+
     // Parse the response text as JSON
     const parsedData = JSON.parse(responseText);
+    
+    console.log('Parsed data:', parsedData);
     
     // Transform the data to our application format
     return {
@@ -147,14 +151,22 @@ export const fetchReceipt = async (eventId, decryptionKey) => {
  * @param {String} receiptEventId - The event ID of the receipt
  * @param {Array} settledItems - The items that were settled
  * @param {String} decryptionKey - The key to decrypt the receipt
+ * @param {String} paymentType - Payment type: 'lightning' or 'cashu'
+ * @param {String} receiptAuthorPubkey - The public key of the receipt author
+ * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
+ * @param {Array} relays - Additional relays to use
  * @returns {Promise<String>} The event ID of the settlement
  */
-export const publishSettlement = async (receiptEventId, settledItems, decryptionKey) => {
+export const publishSettlement = async (receiptEventId, settledItems, decryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, relays = []) => {
   try {
     return await settlementService.publishSettlementEvent(
       receiptEventId,
       settledItems,
-      decryptionKey
+      decryptionKey,
+      paymentType,
+      receiptAuthorPubkey,
+      mintQuoteId,
+      relays
     );
   } catch (error) {
     console.error('Error publishing settlement:', error);

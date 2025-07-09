@@ -23,8 +23,8 @@
         </div>
       </div>
       
-      <receipt-display 
-        v-if="capturedReceipt" 
+      <receipt-preview
+        v-if="capturedReceipt"
         :receipt-data="capturedReceipt"
         @back="resetCapture"
       />
@@ -43,7 +43,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import QrScanner from 'qr-scanner';
-import ReceiptDisplay from '../components/ReceiptDisplay.vue';
+import ReceiptPreview from '../components/ReceiptPreview.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
@@ -55,7 +55,7 @@ import receiptService from '../services/receipt';
 export default {
   name: 'HomeView',
   components: {
-    ReceiptDisplay,
+    ReceiptPreview,
     SettlementView,
     Notification,
     Spinner,

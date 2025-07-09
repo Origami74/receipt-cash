@@ -8,9 +8,13 @@ import { Buffer } from 'buffer';
  * @param {String} receiptEventId - The ID of the original receipt event
  * @param {Array} settledItems - The items that were settled
  * @param {String} receiptEncryptionKey - The encryption key from the original receipt
+ * @param {String} paymentType - Payment type: 'lightning' or 'cashu'
+ * @param {String} receiptAuthorPubkey - The public key of the receipt author
+ * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
+ * @param {Array} relays - Additional relays to use
  * @returns {String} The event ID
  */
-const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, relays = []) => {
+const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, relays = []) => {
   try {
     // Add any relays that were passed in
     if (relays && relays.length > 0) {
@@ -30,15 +34,27 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     // Encrypt the content using the same key as the receipt
     const encryptedContent = await nip44.encrypt(content, encryptionKey);
     
+    // Create basic tags
+    const tags = [
+      ['e', receiptEventId],
+      ['p', receiptAuthorPubkey],
+      ['payment', paymentType]
+    ];
+    
+    // Add encrypted mint_quote tag only for lightning payments
+    if (paymentType === 'lightning' && mintQuoteId) {
+      // Encrypt mint quote ID to receipt author's pubkey
+      const encryptedMintQuote = await nip44.encrypt(mintQuoteId, Uint8Array.from(Buffer.from(receiptAuthorPubkey, 'hex')));
+      tags.push(['mint_quote', encryptedMintQuote]);
+    }
+
     // Create the Nostr event
     const event = {
       kind: 9568,
       pubkey: publicKey,
       created_at: Math.floor(Date.now() / 1000),
       content: encryptedContent,
-      tags: [
-        ['e', receiptEventId]
-      ]
+      tags: tags
     };
     
     // Sign and publish
@@ -84,7 +100,8 @@ const subscribeToSettlements = async (receiptEventId, receiptEncryptionKey, call
       // Decrypt the content using the same key as the receipt
       const decryptedContent = await nip44.decrypt(event.content, decryptionKey);
       const { settledItems } = JSON.parse(decryptedContent);
-      callback(settledItems);
+      // Call callback with both settlementData and event for enhanced processing
+      callback({ settledItems }, event);
     } catch (error) {
       console.error('Error processing settlement event:', error);
     }

@@ -7,7 +7,6 @@ import nostrService from './services/nostr';
 import debugLogger from './utils/debugLogger';
 
 // Initialize Nostr
-nostrService.initializeKeys();
 nostrService.connect();
 
 // Initialize debug logging if it was previously enabled

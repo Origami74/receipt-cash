@@ -16,12 +16,6 @@ const ndk = new NDK({
 // Tracking which relays are connected
 let connectedRelays = new Set(DEFAULT_RELAYS);
 
-// Variables to store keys
-let privateKey;
-let publicKey;
-let encryptionPrivateKey; // Added for content encryption
-let encryptionPublicKey; // Added for content encryption
-
 /**
  * Add relays to the NDK instance
  * @param {Array} relayUrls - Array of relay URLs to add
@@ -56,13 +50,6 @@ const addRelays = async (relayUrls) => {
 // Connect to relays
 const connect = async (additionalRelays = []) => {
   try {
-    // Initialize keys if not already done
-    const { privateKey: pk } = initializeKeys();
-    
-    // Create a proper NDKPrivateKeySigner
-    const signer = new NDKPrivateKeySigner(privateKey);
-    ndk.signer = signer;
-    
     // Add any additional relays before connecting
     await addRelays(additionalRelays);
     
@@ -74,49 +61,53 @@ const connect = async (additionalRelays = []) => {
   }
 };
 
-// Helper to initialize keys
-const initializeKeys = ()  => {
-  if (!privateKey) {
-    privateKey = generateSecretKey();
-    console.log('Generated new private key');
-  }
-  if (!publicKey) {
-    publicKey = getPublicKey(privateKey);
-    console.log('Generated new public key');
-  }
-  if (!encryptionPrivateKey) {
-    encryptionPrivateKey = generateSecretKey();
-    console.log('Generated new encryption key');
-  }
-  if (!encryptionPublicKey) {
-    encryptionPublicKey = getPublicKey(encryptionPrivateKey);
-    console.log('Generated new encryption public key');
-  }
-
-  return { privateKey, publicKey, encryptionPrivateKey, encryptionPublicKey };
-};
-
 /**
 * Publish a receipt event (kind 9567)
 * @param {Object} receiptData - The receipt data in JSON format
 * @param {String} paymentRequest - The NUT-18 Cashu payment request
 * @param {Number} devFeePercent - Developer fee percentage
+* @param {Number} btcPrice - BTC price in receipt currency for conversion
 * @returns {Object} The event ID and encryption key
 */
-const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent) => {
+const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent, btcPrice) => {
   try {
-    // Initialize keys and connect if not already done
-    const { privateKey: pk, publicKey: pubKey, encryptionPrivateKey: encryptionPrivateKey, encryptionPublicKey: encryptionPublicKey } = initializeKeys();
-  
+    // Generate unique keys for this receipt
+    const receiptPrivateKey = generateSecretKey();
+    const receiptPublicKey = getPublicKey(receiptPrivateKey);
+    const encryptionPrivateKey = generateSecretKey();
+    const encryptionPublicKey = getPublicKey(encryptionPrivateKey);
+    
+    // Create a signer for this receipt
+    const receiptSigner = new NDKPrivateKeySigner(receiptPrivateKey);
+    
     if (!ndk.pool?.connectedRelays?.size) {
       await connect();
     }
 
-    // Add payment request to receipt data
+    console.log('Converting to sats - BTC Price:', btcPrice);
+    console.log('Original receipt data:', receiptData);
+    
+    // Convert all prices to sats and store only sats prices
+    const itemsInSats = receiptData.items.map(item => ({
+      name: item.name,
+      quantity: item.quantity || 0,
+      price: item.price ? Math.round((item.price * 100000000) / btcPrice) : 0, // Store only sats price
+      total: item.total ? Math.round((item.total * 100000000) / btcPrice) : 0  // Store only sats total
+    }));
+    
+    console.log('Items in sats:', itemsInSats);
+
+    // Create receipt with only sats prices and currency reference
     const fullReceiptData = {
-      ...receiptData,
+      merchant: receiptData.merchant,
+      date: receiptData.date,
+      items: itemsInSats,
+      tax: receiptData.tax?.amount ? Math.round((receiptData.tax.amount * 100000000) / btcPrice) : 0, // Store only sats tax
+      currency: receiptData.currency, // Keep currency for reference
+      total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0, // Store only sats total
       paymentRequest: paymentRequest,
-      splitPercentage: devFeePercent
+      splitPercentage: devFeePercent,
+      btcPrice: btcPrice // Store the BTC price used for conversion
     };
 
     // Create event content
@@ -127,22 +118,28 @@ const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent) =
     const encryptedContent = await nip44.encrypt(content, encryptionPrivateKey);
     
     // Create the Nostr event
-    const ndkEvent = new NDKEvent(ndk);
-    ndkEvent.kind = 9567;
-    ndkEvent.content = encryptedContent;
-    ndkEvent.tags = [
+    const receiptEvent = new NDKEvent(ndk);
+    receiptEvent.kind = 9567;
+    receiptEvent.content = encryptedContent;
+    receiptEvent.pubkey = receiptPublicKey; // Use receipt-specific public key
+    receiptEvent.created_at = Math.floor(Date.now() / 1000); // Set current timestamp
+    receiptEvent.tags = [
       ['expiration', Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString()]
     ];
     
-    // Sign and publish
-    await ndkEvent.publish();  
+    // Sign with receipt-specific private key and publish
+    await receiptEvent.sign(receiptSigner)
+    await receiptEvent.publish();
     
-    // Convert the encryption private key to hex string
+    // Convert keys to hex strings
     const encryptionPrivateKeyHex = Buffer.from(encryptionPrivateKey).toString('hex');
+    const receiptPrivateKeyHex = Buffer.from(receiptPrivateKey).toString('hex');
     
     return {
-      id: ndkEvent.id,
-      encryptionPrivateKey: encryptionPrivateKeyHex
+      id: receiptEvent.id,
+      encryptionPrivateKey: encryptionPrivateKeyHex,
+      receiptPrivateKey: receiptPrivateKeyHex, // Return receipt private key for monitoring
+      receiptPublicKey: receiptPublicKey
     };
   } catch (error) {
     console.error('Error publishing receipt event:', error);
@@ -297,7 +294,7 @@ const decodeNprofile = (nprofileStr) => {
   }
 };
 
-// Helper functions to expose NDK instance and keys for other services
+// Helper functions to expose NDK instance for other services
 const getNdk = async () => {
   if (!ndk.pool?.connectedRelays?.size) {
     await connect();
@@ -305,17 +302,9 @@ const getNdk = async () => {
   return ndk;
 };
 
-const getNostrPublicKey = async () => { // Renamed this getter
-  if (!publicKey) {
-    initializeKeys(); // Ensures publicKey is initialized
-  }
-  return publicKey;
-};
-
 // Export the service functions
 export default {
   connect,
-  initializeKeys,
   publishReceiptEvent,
   fetchReceiptEvent,
   sendNip04Dm,
@@ -324,6 +313,5 @@ export default {
   addRelays,
   
   // Expose these for other services that need access to NDK
-  getNdk,
-  getNostrPublicKey // Export renamed getter
+  getNdk
 };

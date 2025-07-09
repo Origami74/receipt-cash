@@ -176,11 +176,14 @@ export default {
         
         // Create and publish event
         const ndk = await nostrService.getNdk();
+        
+        // Generate a random secret key for this report
+        const reportPrivateKey = generateSecretKey();
+        const reportSigner = new NDKPrivateKeySigner(reportPrivateKey);
+        
         const event = new NDKEvent(ndk);
         event.kind = 1314; // kind for bug reports (infernal-insights)
         
-        // Generate a random secret key for encryption
-        const privateKey = generateSecretKey();
         const plainContent = JSON.stringify(reportContent);
         
         // Get developer's public key (hex to Uint8Array)
@@ -190,13 +193,16 @@ export default {
         const encryptedContent = await nip44.encrypt(plainContent, recipientPubkey);
         
         event.content = encryptedContent;
+        event.created_at = Math.floor(Date.now() / 1000);
         event.tags = [
           ['n', 'receipt-cash'],
           ['p', DEVELOPER_PUBKEY],
           ['encrypted']
         ];
         
-        await event.publish();
+        // Sign and publish with temporary signer
+        const signedEvent = await reportSigner.sign(event);
+        await signedEvent.publish();
         
         showNotification('Report submitted successfully. Thank you!', 'success');
         description.value = '';
