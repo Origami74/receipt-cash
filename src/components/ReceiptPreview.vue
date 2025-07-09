@@ -17,25 +17,89 @@
       <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
           <div>Items</div>
-          <button 
-            v-if="step === 'qr-display'"
-            @click="selectAllItems" 
-            class="text-sm text-blue-500 hover:text-blue-600"
-          >
-            Select All
-          </button>
+          <div class="flex gap-2">
+            <button
+              v-if="step === 'payment-request'"
+              @click="addNewItem"
+              class="text-sm text-blue-500 hover:text-blue-600"
+            >
+              Add Item
+            </button>
+            <button
+              v-if="step === 'qr-display'"
+              @click="selectAllItems"
+              class="text-sm text-blue-500 hover:text-blue-600"
+            >
+              Select All
+            </button>
+          </div>
         </div>
         <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
-          <div>
-            <div>{{ item.name }}</div>
-            <div class="text-sm text-gray-500">
-              {{ item.quantity || 0 }} × {{ formatPrice(item.price || 0) }}
-              <span class="text-xs text-gray-400 ml-1">({{ formatSats(convertToSats(item.price || 0)) }} sats)</span>
+          <div class="flex-1">
+            <div v-if="!item.editing" class="cursor-pointer" @click="startEditing(index)">
+              <div>{{ item.name }}</div>
+              <div class="text-sm text-gray-500">
+                {{ item.quantity || 0 }} × {{ formatPrice(item.price || 0) }}
+                <span class="text-xs text-gray-400 ml-1">({{ formatSats(convertToSats(item.price || 0)) }} sats)</span>
+              </div>
+            </div>
+            <div v-else class="space-y-2">
+              <input
+                v-model="item.name"
+                class="w-full p-1 border rounded text-sm"
+                placeholder="Item name"
+              />
+              <div class="flex gap-2">
+                <input
+                  v-model.number="item.quantity"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="w-20 p-1 border rounded text-sm"
+                  placeholder="Qty"
+                />
+                <span class="self-center text-sm">×</span>
+                <input
+                  v-model.number="item.price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="flex-1 p-1 border rounded text-sm"
+                  placeholder="Price"
+                />
+              </div>
+              <div class="flex gap-2">
+                <button @click="saveEdit(index)" class="text-xs text-green-600 hover:text-green-700">Save</button>
+                <button @click="cancelEdit(index)" class="text-xs text-gray-600 hover:text-gray-700">Cancel</button>
+              </div>
             </div>
           </div>
-          <div class="font-medium">
-            {{ formatPrice((item.price || 0) * (item.quantity || 0)) }}
-            <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }} sats</div>
+          <div class="flex items-center gap-2">
+            <div class="text-right">
+              <div class="font-medium">
+                {{ formatPrice((item.price || 0) * (item.quantity || 0)) }}
+              </div>
+              <div class="text-xs text-gray-500 font-normal">
+                {{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }} sats
+              </div>
+            </div>
+            <div v-if="step === 'payment-request'" class="flex flex-col gap-1">
+              <button
+                v-if="!item.editing"
+                @click="startEditing(index)"
+                class="text-xs text-blue-500 hover:text-blue-600"
+                title="Edit item"
+              >
+                ✏️
+              </button>
+              <button
+                @click="removeItem(index)"
+                class="text-xs text-red-500 hover:text-red-600"
+                title="Remove item"
+              >
+                🗑️
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -194,7 +258,14 @@ export default {
   },
   emits: ['select-all'],
   setup(props, { emit }) {
-    const receipt = computed(() => props.receiptData);
+    const receipt = ref({
+      ...props.receiptData,
+      items: props.receiptData.items.map(item => ({
+        ...item,
+        editing: false,
+        originalData: { ...item }
+      }))
+    });
     const step = ref('payment-request');
     const paymentRequest = ref('');
     const paymentRequestValid = ref(true);
@@ -278,6 +349,43 @@ export default {
       return calculateSubtotalUtil(receipt.value.items);
     };
     
+    // Editing functions
+    const startEditing = (index) => {
+      receipt.value.items[index].editing = true;
+    };
+    
+    const saveEdit = (index) => {
+      const item = receipt.value.items[index];
+      item.editing = false;
+      item.originalData = {
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price
+      };
+    };
+    
+    const cancelEdit = (index) => {
+      const item = receipt.value.items[index];
+      item.name = item.originalData.name;
+      item.quantity = item.originalData.quantity;
+      item.price = item.originalData.price;
+      item.editing = false;
+    };
+    
+    const removeItem = (index) => {
+      receipt.value.items.splice(index, 1);
+    };
+    
+    const addNewItem = () => {
+      receipt.value.items.push({
+        name: 'New Item',
+        quantity: 1,
+        price: 0,
+        editing: true,
+        originalData: { name: 'New Item', quantity: 1, price: 0 }
+      });
+    };
+    
     const createRequest = async () => {
       if (!paymentRequest.value) {
         showNotification('Please enter a payment request', 'error');
@@ -334,9 +442,19 @@ export default {
 
     const proceedWithRequest = async () => {
       try {
+        // Clean up items data for publishing (remove editing props)
+        const cleanedItems = receipt.value.items.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity
+        }));
+        
         const receiptWithDevSplit = {
           ...receipt.value,
+          items: cleanedItems,
           currency: selectedCurrency.value, // Use the selected currency
+          total_amount: cleanedItems.reduce((sum, item) => sum + item.total, 0),
           devPercentage: parseInt(developerSplit.value)
         };
         
@@ -482,7 +600,13 @@ export default {
       currentBtcPrice,
       selectedCurrency,
       onCurrencyChange,
-      formatCurrency
+      formatCurrency,
+      // Editing functions
+      startEditing,
+      saveEdit,
+      cancelEdit,
+      removeItem,
+      addNewItem
     };
   }
 };
