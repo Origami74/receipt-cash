@@ -2,6 +2,7 @@ const PAYMENT_REQUESTS_KEY = 'receipt-cash-payment-requests';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
 const PROOFS_KEY = 'receipt-cash-proofs';
 const MINT_QUOTES_KEY = 'receipt-cash-mint-quotes';
+const RECEIPT_HISTORY_KEY = 'receipt-cash-receipt-history';
 
 // Default AI settings
 const DEFAULT_AI_SETTINGS = {

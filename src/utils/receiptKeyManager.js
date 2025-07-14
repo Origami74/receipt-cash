@@ -23,13 +23,15 @@ class ReceiptKeyManager {
   }
   
   /**
-   * Store a receipt private key with timestamp
+   * Store receipt keys (both publisher and encryption keys) with timestamp
    * @param {String} receiptEventId - The receipt event ID
-   * @param {Uint8Array} privateKey - The private key to store
+   * @param {Uint8Array} receiptPrivateKey - The receipt publisher private key
+   * @param {String} encryptionPrivateKey - The encryption private key (hex string)
    */
-  storeReceiptKey(receiptEventId, privateKey) {
+  storeReceiptKey(receiptEventId, receiptPrivateKey, encryptionPrivateKey) {
     this.receiptKeys.set(receiptEventId, {
-      privateKey: Buffer.from(privateKey).toString('hex'),
+      receiptPrivateKey: Buffer.from(receiptPrivateKey).toString('hex'),
+      encryptionPrivateKey: encryptionPrivateKey,
       timestamp: Date.now()
     });
     
@@ -37,13 +39,23 @@ class ReceiptKeyManager {
   }
   
   /**
-   * Retrieve a receipt private key
+   * Retrieve a receipt private key (publisher key)
    * @param {String} receiptEventId - The receipt event ID
    * @returns {Uint8Array|null} The private key or null if not found
    */
   getReceiptKey(receiptEventId) {
     const keyData = this.receiptKeys.get(receiptEventId);
-    return keyData ? Uint8Array.from(Buffer.from(keyData.privateKey, 'hex')) : null;
+    return keyData ? Uint8Array.from(Buffer.from(keyData.receiptPrivateKey, 'hex')) : null;
+  }
+  
+  /**
+   * Retrieve the encryption private key for a receipt
+   * @param {String} receiptEventId - The receipt event ID
+   * @returns {String|null} The encryption private key (hex string) or null if not found
+   */
+  getEncryptionKey(receiptEventId) {
+    const keyData = this.receiptKeys.get(receiptEventId);
+    return keyData ? keyData.encryptionPrivateKey : null;
   }
   
   /**
@@ -60,7 +72,7 @@ class ReceiptKeyManager {
    */
   loadPersistedKeys() {
     try {
-      const stored = localStorage.getItem('receiptKeys');
+      const stored = localStorage.getItem('receipt-cash-receipt-keys');
       if (stored) {
         const data = JSON.parse(stored);
         return new Map(Object.entries(data));
@@ -77,7 +89,7 @@ class ReceiptKeyManager {
   persistKeys() {
     try {
       const data = Object.fromEntries(this.receiptKeys);
-      localStorage.setItem('receiptKeys', JSON.stringify(data));
+      localStorage.setItem('receipt-cash-receipt-keys', JSON.stringify(data));
     } catch (error) {
       console.error('Error persisting keys:', error);
     }

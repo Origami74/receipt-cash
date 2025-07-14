@@ -363,7 +363,7 @@ class ReceiptKeyManager {
   
   loadPersistedKeys() {
     try {
-      const stored = localStorage.getItem('receiptKeys');
+      const stored = localStorage.getItem('receipt-cash-receipt-keys');
       if (stored) {
         const data = JSON.parse(stored);
         return new Map(Object.entries(data));
@@ -377,7 +377,7 @@ class ReceiptKeyManager {
   persistKeys() {
     try {
       const data = Object.fromEntries(this.receiptKeys);
-      localStorage.setItem('receiptKeys', JSON.stringify(data));
+      localStorage.setItem('receipt-cash-receipt-keys', JSON.stringify(data));
     } catch (error) {
       console.error('Error persisting keys:', error);
     }

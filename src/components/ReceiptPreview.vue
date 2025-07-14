@@ -233,7 +233,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import nostrService from '../services/nostr';
 import cashuService from '../services/cashu';
 import paymentService from '../services/payment';
-import payerMonitor from '../services/payerMonitor';
+import receiptMonitoringService from '../services/receiptMonitoringService';
 import receiptKeyManager from '../utils/receiptKeyManager';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
@@ -471,9 +471,13 @@ export default {
         eventEncryptionPrivateKey.value = publishedReceiptEvent.encryptionPrivateKey;
         
         const receiptPrivateKey = new Uint8Array(Buffer.from(publishedReceiptEvent.receiptPrivateKey, 'hex'));
-        receiptKeyManager.storeReceiptKey(publishedReceiptEvent.id, receiptPrivateKey);
+        receiptKeyManager.storeReceiptKey(
+          publishedReceiptEvent.id,
+          receiptPrivateKey,
+          publishedReceiptEvent.encryptionPrivateKey
+        );
         
-        await payerMonitor.startMonitoring(
+        await receiptMonitoringService.addReceiptToMonitoring(
           publishedReceiptEvent.id,
           receiptPrivateKey,
           publishedReceiptEvent.encryptionPrivateKey,

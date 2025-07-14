@@ -94,13 +94,34 @@
                   >+</button>
                 </template>
               </div>
-              <div class="ml-4">
-                <div :class="{ 'line-through text-gray-400': item.settled }">
-                  {{ item.name }}
-                  <span v-if="item.settled" class="text-xs text-green-500 ml-1">
-                    (Settled)
-                  </span>
+              <div class="ml-4 flex-1">
+                <div class="flex items-center justify-between">
+                  <div :class="{ 'line-through text-gray-400': item.settled }">
+                    {{ item.name }}
+                    <span v-if="item.settled" class="text-xs text-green-500 ml-1">
+                      (Settled)
+                    </span>
+                  </div>
                 </div>
+                
+                <!-- Settlement Progress Bar -->
+                <div class="w-full bg-gray-200 rounded-full h-1.5 my-1">
+                  <div class="flex h-full rounded-full overflow-hidden">
+                    <!-- Confirmed settlements (green) -->
+                    <div
+                      v-if="item.confirmedQuantity > 0"
+                      :style="{ width: (item.confirmedQuantity / item.quantity * 100) + '%' }"
+                      class="bg-green-500 transition-all duration-300"
+                    ></div>
+                    <!-- Pending settlements (orange) -->
+                    <div
+                      v-if="item.pendingQuantity > 0"
+                      :style="{ width: (item.pendingQuantity / item.quantity * 100) + '%' }"
+                      class="bg-orange-500 transition-all duration-300"
+                    ></div>
+                  </div>
+                </div>
+                
                 <div class="text-sm text-gray-500">
                   {{ item.quantity }} × {{ formatSats(item.price) }} sats
                   <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
@@ -278,7 +299,9 @@ export default {
     
     // Function to update items based on settlement data
     const updateSettledItems = (settledItems) => {
-      // Mark items as settled based on settlement data
+      // This function is called when settlement events are received
+      // For the reversed architecture, we handle confirmations differently
+      // Settlement events from other users should move from pending to confirmed
       settledItems.forEach(settledItem => {
         const item = items.value.find(i =>
           i.name === settledItem.name &&
@@ -286,8 +309,17 @@ export default {
         );
         
         if (item) {
-          // Mark as settled (disable checkbox)
-          item.settled = true;
+          // Move from pending to confirmed (orange to green)
+          const settledQty = Math.min(settledItem.selectedQuantity || settledItem.quantity, item.pendingQuantity);
+          if (settledQty > 0) {
+            item.pendingQuantity -= settledQty;
+            item.confirmedQuantity += settledQty;
+            
+            // If all quantities are confirmed, mark as fully settled
+            if (item.confirmedQuantity >= item.quantity) {
+              item.settled = true;
+            }
+          }
         }
       });
     };
@@ -376,7 +408,11 @@ export default {
         currency.value = receiptData.currency;
         selectedCurrency.value = receiptData.currency; // Set selected currency to receipt's currency
         btcPrice.value = receiptData.btcPrice;
-        items.value = receiptData.items;
+        items.value = receiptData.items.map(item => ({
+          ...item,
+          confirmedQuantity: 0,    // Confirmed settlements (green)
+          pendingQuantity: 0       // Pending settlements (orange)
+        }));
         receiptAuthorPubkey.value = receiptData.authorPubkey
         
 
@@ -472,7 +508,19 @@ export default {
         // 5. Show notification about the process
         showNotification('Settlement request sent! Please pay the invoice. The payer will monitor the payment.', 'info');
         
-        // 6. Subscribe to confirmation events
+        // 6. Mark selected items as pending settlements (orange)
+        selectedItems.value.forEach(selectedItem => {
+          const item = items.value.find(i =>
+            i.name === selectedItem.name && i.price === selectedItem.price
+          );
+          if (item) {
+            item.pendingQuantity += selectedItem.selectedQuantity;
+            // Reset selected quantity since it's now pending
+            item.selectedQuantity = 0;
+          }
+        });
+        
+        // 7. Subscribe to confirmation events
         subscribeToConfirmations();
         
       } catch (error) {
@@ -510,7 +558,19 @@ export default {
         // 3. Show success message - payment now handled by payer
         showNotification('Settlement request sent! The payer will handle payment processing.', 'info');
         
-        // 4. Subscribe to confirmation events
+        // 4. Mark selected items as pending settlements (orange)
+        selectedItems.value.forEach(selectedItem => {
+          const item = items.value.find(i =>
+            i.name === selectedItem.name && i.price === selectedItem.price
+          );
+          if (item) {
+            item.pendingQuantity += selectedItem.selectedQuantity;
+            // Reset selected quantity since it's now pending
+            item.selectedQuantity = 0;
+          }
+        });
+        
+        // 5. Subscribe to confirmation events
         subscribeToConfirmations();
         
       } catch (error) {
@@ -532,6 +592,11 @@ export default {
       
       // For now, just show a message
       showNotification('Waiting for payer to process payment...', 'info');
+      
+      // TODO: When confirmation events (kind 9569) are received:
+      // 1. Find the settlement that was confirmed
+      // 2. Move items from pendingQuantity to confirmedQuantity
+      // 3. Update progress bars to show green segments
     };
     
     // Cancel payment (for UI reset)
@@ -541,6 +606,7 @@ export default {
       cashuPaymentLocked.value = false;
       currentPaymentType.value = '';
       settlementEventId.value = '';
+      // Note: We don't reset pending quantities as they may come from other users
     };
     
     // Subscription management
@@ -619,10 +685,7 @@ export default {
       lightningPaymentLocked,
       cashuPaymentLocked,
       currentPaymentType,
-      settlementEventId,
-      // Lightning modal state
-      lightningInvoice,
-      showLightningModal
+      settlementEventId
     };
   }
 };

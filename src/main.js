@@ -4,10 +4,12 @@ import App from './App.vue';
 import router from './router';
 import './style.css';
 import nostrService from './services/nostr';
+import receiptMonitoringService from './services/receiptMonitoringService';
 import debugLogger from './utils/debugLogger';
 
 // Initialize Nostr
 nostrService.connect();
+receiptMonitoringService.initialize();
 
 // Initialize debug logging if it was previously enabled
 if (localStorage.getItem('debug-logging-enabled') === 'true') {

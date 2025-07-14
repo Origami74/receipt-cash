@@ -19,6 +19,7 @@
             @capture-receipt="captureReceipt"
             @toggle-settings="toggleSettings"
             @image-uploaded="handleImageUpload"
+            @view-history="viewHistory"
           />
         </div>
       </div>
@@ -41,7 +42,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptPreview from '../components/ReceiptPreview.vue';
 import SettlementView from './SettlementView.vue';
@@ -64,6 +65,7 @@ export default {
   },
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const videoElement = ref(null);
     const qrScanner = ref(null);
     const capturedReceipt = ref(null);
@@ -272,6 +274,11 @@ export default {
       }
     };
 
+    const viewHistory = () => {
+      // Navigate to the historical receipts view
+      router.push('/history');
+    };
+
     return {
       videoElement,
       capturedReceipt,
@@ -287,7 +294,8 @@ export default {
       resetCapture,
       toggleSettings,
       handleQrCodeResult,
-      handleImageUpload
+      handleImageUpload,
+      viewHistory
     };
   }
 };

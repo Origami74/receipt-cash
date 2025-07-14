@@ -158,10 +158,18 @@ class PayerMonitor {
         return;
       }
       
-      // Decrypt mint quote ID using the receipt publishing private key
+      // Decrypt mint quote ID using conversation key
       let mintQuoteId;
       try {
-        mintQuoteId = await nip44.decrypt(encryptedMintQuote, receiptInfo.publishingPrivateKey);
+        // Get the settler's pubkey from the settlement event
+        const settlerPubkey = event.pubkey;
+        
+        // Create conversation key for NIP-44 decryption
+        console.log("publishingPrivateKey", receiptInfo.publishingPrivateKey)
+        const conversationKey = nip44.getConversationKey(receiptInfo.publishingPrivateKey, settlerPubkey);
+        
+        // Decrypt the mint quote ID
+        mintQuoteId = await nip44.decrypt(encryptedMintQuote, conversationKey);
       } catch (error) {
         console.error('Error decrypting mint quote:', error);
         return;
@@ -287,9 +295,12 @@ class PayerMonitor {
    * @param {CashuWallet} wallet - The Cashu wallet instance
    */
   async claimAndForwardPayment(mintQuoteId, event, settlementData, wallet) {
+    const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
+    const transactionId = `${receiptEventId}-${Date.now()}`;
+    
     try {
       // Calculate amount in sats from settlement data (prices already in sats)
-      const satAmount = settlementData.settledItems.reduce((sum, item) => 
+      const satAmount = settlementData.settledItems.reduce((sum, item) =>
         sum + (item.price * item.selectedQuantity), 0);
       
       console.log('Processing payment for amount:', satAmount, 'sats');
@@ -298,8 +309,13 @@ class PayerMonitor {
       const proofs = await wallet.mintProofs(satAmount, mintQuoteId);
       console.log('Claimed ecash proofs:', proofs.length);
       
-      // Get dev split percentage from receipt data
-      const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
+      // STEP 1: Store proofs temporarily for recovery
+      await this.storeProofsForRecovery(transactionId, proofs, wallet.mint.mintUrl, 'claimed');
+      
+      // STEP 2: Publish confirmation event immediately after claiming
+      await this.publishConfirmation(event);
+      
+      // STEP 3: Split and forward payments
       const receiptInfo = this.activeReceipts.get(receiptEventId);
       const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
       
@@ -312,17 +328,64 @@ class PayerMonitor {
       
       console.log(`Split payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
       
+      // Store split proofs for recovery
+      await this.storeProofsForRecovery(transactionId, payerProofs, wallet.mint.mintUrl, 'payer');
+      await this.storeProofsForRecovery(transactionId, devProofs, wallet.mint.mintUrl, 'developer');
+      
       // Forward payments
       await this.forwardPayments(payerProofs, devProofs, receiptInfo.receiptData);
       
-      // Publish confirmation event
-      await this.publishConfirmation(event);
+      // Clean up stored proofs after successful forwarding
+      await this.clearStoredProofs(transactionId);
       
       showNotification('Payment processed successfully!', 'success');
       
     } catch (error) {
       console.error('Error processing payment:', error);
       showNotification('Error processing payment: ' + error.message, 'error');
+      
+      // Don't clean up proofs on error - they remain for recovery
+      console.log(`Proofs stored for recovery under transaction: ${transactionId}`);
+    }
+  }
+  
+  /**
+   * Store proofs temporarily for recovery
+   * @param {String} transactionId - Transaction identifier
+   * @param {Array} proofs - Cashu proofs to store
+   * @param {String} mintUrl - Mint URL
+   * @param {String} category - Category (claimed, payer, developer)
+   */
+  async storeProofsForRecovery(transactionId, proofs, mintUrl, category) {
+    try {
+      const { storePendingProofs } = await import('../utils/storage');
+      
+      storePendingProofs(transactionId, {
+        [category]: {
+          proofs: proofs,
+          mintUrl: mintUrl
+        }
+      });
+      
+      console.log(`Stored ${proofs.length} ${category} proofs for recovery`);
+      
+    } catch (error) {
+      console.error('Error storing proofs for recovery:', error);
+    }
+  }
+  
+  /**
+   * Clear stored proofs after successful processing
+   * @param {String} transactionId - Transaction identifier
+   */
+  async clearStoredProofs(transactionId) {
+    try {
+      const { clearProofs } = await import('../utils/storage');
+      clearProofs(transactionId);
+      console.log(`Cleared stored proofs for transaction: ${transactionId}`);
+      
+    } catch (error) {
+      console.error('Error clearing stored proofs:', error);
     }
   }
   
@@ -333,53 +396,75 @@ class PayerMonitor {
    * @param {Object} receiptData - The receipt data
    */
   async forwardPayments(payerProofs, devProofs, receiptData) {
+    const errors = [];
+    
     try {
       // Forward to payer (using their payment request from receipt data)
       if (receiptData.paymentRequest && payerProofs.length > 0) {
-        const payerTransport = cashuService.extractNostrTransport(receiptData.paymentRequest);
-        if (payerTransport && payerTransport.pubkey) {
-          const payerMessage = cashuService.createPaymentMessage(
-            payerTransport.id,
-            'https://mint.minibits.cash/Bitcoin', // Default mint URL
-            payerTransport.unit,
-            payerProofs
-          );
-          
-          await nostrService.sendNip17Dm(
-            payerTransport.pubkey,
-            payerMessage,
-            payerTransport.relays
-          );
-          
-          console.log('Payment forwarded to payer');
+        try {
+          const payerTransport = cashuService.extractNostrTransport(receiptData.paymentRequest);
+          if (payerTransport && payerTransport.pubkey) {
+            const payerMessage = cashuService.createPaymentMessage(
+              payerTransport.id,
+              'https://mint.minibits.cash/Bitcoin', // Default mint URL
+              payerTransport.unit,
+              payerProofs
+            );
+            
+            await nostrService.sendNip17Dm(
+              payerTransport.pubkey,
+              payerMessage,
+              payerTransport.relays
+            );
+            
+            console.log('Payment forwarded to payer');
+          } else {
+            errors.push('Invalid payer transport information');
+          }
+        } catch (payerError) {
+          console.error('Error forwarding to payer:', payerError);
+          errors.push(`Payer payment failed: ${payerError.message}`);
         }
       }
       
       // Forward to developer
       if (devProofs.length > 0) {
-        const DEV_CASHU_REQ = "creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWd4djZ6ZHVqMmFmcmZwZzI3bjQzMDhsN2Fna3NrdWY4c3Q0ZzY2Z2EwNzN5YTVodTN0cmNjdmVnNXMwYWeBgmFuYjE3YWloMDgyYmI4NTJhdWNzYXQ=";
-        
-        const devTransport = cashuService.extractNostrTransport(DEV_CASHU_REQ);
-        if (devTransport && devTransport.pubkey) {
-          const devMessage = cashuService.createPaymentMessage(
-            devTransport.id,
-            'https://mint.minibits.cash/Bitcoin', // Default mint URL
-            devTransport.unit,
-            devProofs
-          );
+        try {
+          const DEV_CASHU_REQ = "creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWd4djZ6ZHVqMmFmcmZwZzI3bjQzMDhsN2Fna3NrdWY4c3Q0ZzY2Z2EwNzN5YTVodTN0cmNjdmVnNXMwYWeBgmFuYjE3YWloMDgyYmI4NTJhdWNzYXQ=";
           
-          await nostrService.sendNip17Dm(
-            devTransport.pubkey,
-            devMessage,
-            devTransport.relays
-          );
-          
-          console.log('Payment forwarded to developer');
+          const devTransport = cashuService.extractNostrTransport(DEV_CASHU_REQ);
+          if (devTransport && devTransport.pubkey) {
+            const devMessage = cashuService.createPaymentMessage(
+              devTransport.id,
+              'https://mint.minibits.cash/Bitcoin', // Default mint URL
+              devTransport.unit,
+              devProofs
+            );
+            
+            await nostrService.sendNip17Dm(
+              devTransport.pubkey,
+              devMessage,
+              devTransport.relays
+            );
+            
+            console.log('Payment forwarded to developer');
+          } else {
+            errors.push('Invalid developer transport information');
+          }
+        } catch (devError) {
+          console.error('Error forwarding to developer:', devError);
+          errors.push(`Developer payment failed: ${devError.message}`);
         }
+      }
+      
+      // If there were any errors, throw them for the caller to handle
+      if (errors.length > 0) {
+        throw new Error(errors.join('; '));
       }
       
     } catch (error) {
       console.error('Error forwarding payments:', error);
+      throw error; // Re-throw for caller to handle
     }
   }
   
@@ -392,25 +477,38 @@ class PayerMonitor {
       const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
       const settlerPubkey = event.tags.find(tag => tag[0] === 'p')?.[1];
       
+      // Get the receipt private key for signing confirmation
+      const receiptInfo = this.activeReceipts.get(receiptEventId);
+      if (!receiptInfo || !receiptInfo.publishingPrivateKey) {
+        console.error('No receipt private key found for publishing confirmation');
+        return;
+      }
+      
       // Mark this settlement as confirmed to prevent duplicate processing
       this.publishedConfirmations.add(event.id);
       
-      const confirmationEvent = {
-        kind: 9569,
-        pubkey: await nostrService.getNostrPublicKey(),
-        created_at: Math.floor(Date.now() / 1000),
-        content: "",
-        tags: [
-          ['e', receiptEventId],
-          ['e', event.id],
-          ['p', settlerPubkey]
-        ]
-      };
+      // Create a signer with the receipt private key
+      const { NDKPrivateKeySigner } = await import('@nostr-dev-kit/ndk');
+      const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
       
       const ndk = await nostrService.getNdk();
-      const signedEvent = await ndk.signer.sign(confirmationEvent);
-      const ndkEvent = new NDKEvent(ndk, signedEvent);
-      await ndkEvent.publish();
+      
+      // Create NDK event for confirmation
+      const confirmationEvent = new NDKEvent(ndk);
+      confirmationEvent.kind = 9569;
+      confirmationEvent.created_at = Math.floor(Date.now() / 1000);
+      confirmationEvent.content = "";
+      confirmationEvent.tags = [
+        ['e', receiptEventId],
+        ['e', event.id],
+        ['p', settlerPubkey]
+      ];
+      
+      // Sign with the receipt private key
+      await confirmationEvent.sign(receiptSigner);
+      
+      // Publish the event
+      await confirmationEvent.publish();
       
       console.log('Published confirmation for settlement:', event.id);
       
