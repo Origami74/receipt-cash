@@ -109,6 +109,81 @@ export default {
       router.push('/');
     };
 
+    const calculateSettledAmount = async (receiptEventId, receiptEvent) => {
+      try {
+        // Get NDK instance
+        const ndk = await nostrService.getNdk();
+        
+        // Get the receipt author's public key from the receipt event
+        const receiptAuthorPubkey = receiptEvent.authorPubkey;
+        if (!receiptAuthorPubkey) {
+          console.warn('No author pubkey found in receipt event');
+          return 0;
+        }
+        
+        // Query for confirmation events (kind 9569) for this receipt
+        const confirmationEvents = await ndk.fetchEvents({
+          kinds: [9569],
+          authors: [receiptAuthorPubkey],
+          '#e': [receiptEventId],
+          limit: 100
+        });
+        
+        console.log(`Found ${confirmationEvents.size} confirmations for receipt ${receiptEventId}`);
+        
+        // For each confirmation, get the settlement event it references
+        let totalSettledAmount = 0;
+        const processedSettlements = new Set();
+        
+        for (const confirmationEvent of confirmationEvents) {
+          const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
+          if (eTags.length >= 2) {
+            const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
+            
+            // Skip if we've already processed this settlement
+            if (processedSettlements.has(settlementEventId)) {
+              continue;
+            }
+            processedSettlements.add(settlementEventId);
+            
+            try {
+              // Fetch the settlement event to get the settled items
+              const settlementEvent = await ndk.fetchEvent(settlementEventId);
+              if (settlementEvent) {
+                // We need the receipt encryption key to decrypt the settlement
+                const encryptionKey = receiptKeyManager.getEncryptionKey(receiptEventId);
+                if (encryptionKey) {
+                  const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
+                  const { nip44 } = await import('nostr-tools');
+                  
+                  const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
+                  const { settledItems } = JSON.parse(decryptedContent);
+                  
+                  // Calculate the total amount for this settlement
+                  const settlementAmount = settledItems.reduce((sum, item) => {
+                    const quantity = item.selectedQuantity || item.quantity || 0;
+                    const price = item.price || 0;
+                    return sum + (quantity * price);
+                  }, 0);
+                  
+                  totalSettledAmount += settlementAmount;
+                  console.log(`Added ${settlementAmount} sats from settlement ${settlementEventId}`);
+                }
+              }
+            } catch (error) {
+              console.error('Error processing settlement event:', error);
+            }
+          }
+        }
+        
+        return totalSettledAmount;
+        
+      } catch (error) {
+        console.error('Error calculating settled amount:', error);
+        return 0;
+      }
+    };
+
     const loadReceipts = async () => {
       try {
         loading.value = true;
@@ -131,8 +206,8 @@ export default {
             // Fetch the receipt event from Nostr
             const receiptEvent = await nostrService.fetchReceiptEvent(eventId, encryptionKey);
             
-            // Calculate settlement progress (for now set to 0, will be updated by settlement monitoring)
-            const settledAmount = 0;
+            // Calculate settlement progress by checking confirmations
+            const settledAmount = await calculateSettledAmount(eventId, receiptEvent);
             
             // Add receipt to list with metadata
             receiptData.push({
