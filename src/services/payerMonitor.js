@@ -39,6 +39,9 @@ class PayerMonitor {
         startTime: Date.now()
       });
       
+      // Load existing confirmations to avoid duplicate processing
+      await this.loadExistingConfirmations(receiptEventId);
+      
       // Subscribe to settlement events using the encryption key
       const subscription = await settlementService.subscribeToSettlements(
         receiptEventId,
@@ -193,6 +196,12 @@ class PayerMonitor {
    */
   async monitorMintQuote(mintQuoteId, event, settlementData) {
     const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
+    
+    // Check if we already published a confirmation for this settlement
+    if (this.publishedConfirmations.has(event.id)) {
+      console.log('Skipping monitoring - confirmation already published for settlement:', event.id);
+      return;
+    }
     
     // Get mint URL from settlement data or use default
     const mintUrl = settlementData.mintUrl || 'https://mint.minibits.cash/Bitcoin';
@@ -509,6 +518,51 @@ class PayerMonitor {
       
     } catch (error) {
       console.error('Error publishing confirmation:', error);
+    }
+  }
+  
+  /**
+   * Load existing confirmations for a receipt to avoid duplicate processing
+   * @param {String} receiptEventId - The receipt event ID
+   */
+  async loadExistingConfirmations(receiptEventId) {
+    try {
+      const ndk = await nostrService.getNdk();
+      
+      // Get the receipt info to get the public key
+      const receiptInfo = this.activeReceipts.get(receiptEventId);
+      if (!receiptInfo?.publishingPrivateKey) {
+        console.error('No receipt private key found for loading confirmations');
+        return;
+      }
+      
+      // Get the public key from the private key
+      const { getPublicKey } = await import('nostr-tools');
+      const receiptPubkey = getPublicKey(receiptInfo.publishingPrivateKey);
+      
+      // Query for existing confirmation events (kind 9569) that reference this receipt
+      const confirmationEvents = await ndk.fetchEvents({
+        kinds: [9569],
+        authors: [receiptPubkey],
+        '#e': [receiptEventId],
+        limit: 100
+      });
+      
+      // Extract settlement event IDs from confirmation events
+      for (const confirmationEvent of confirmationEvents) {
+        // Find the settlement event ID (second 'e' tag)
+        const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
+        if (eTags.length >= 2) {
+          const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
+          this.publishedConfirmations.add(settlementEventId);
+          console.log('Found existing confirmation for settlement:', settlementEventId);
+        }
+      }
+      
+      console.log(`Loaded ${this.publishedConfirmations.size} existing confirmations for receipt ${receiptEventId}`);
+      
+    } catch (error) {
+      console.error('Error loading existing confirmations:', error);
     }
   }
   

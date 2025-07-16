@@ -246,17 +246,24 @@ const sendNip17Dm = async (recipientPubkey, message, relays = []) => {
       await connect();
     }
     
+
+    
+    // Create a signer for this dm
+    const randomKey = generateSecretKey();
+    const randomKeySigner = new NDKPrivateKeySigner(randomKey);
+
     // 1. Create the unsigned kind:14 chat message
     const event = new NDKEvent(ndk);
     event.kind = 14; // DM
+    event.pubkey = getPublicKey(randomKey)
     event.content = message
     event.tags = [
       ['p', recipientPubkey]
     ];
     event.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800) // Random time up to 2 days in past
-    event.sign(ndk.signer)
+    event.sign(randomKeySigner)
 
-    const giftWrapped = await giftWrap(event, new NDKUser({pubkey: recipientPubkey}), ndk.signer, {scheme: "nip44"})
+    const giftWrapped = await giftWrap(event, new NDKUser({pubkey: recipientPubkey}), randomKeySigner, {scheme: "nip44"})
     await giftWrapped.publish()
 
     console.log('NIP-17 message sent successfully');

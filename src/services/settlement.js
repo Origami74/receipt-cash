@@ -120,7 +120,50 @@ const subscribeToSettlements = async (receiptEventId, receiptEncryptionKey, call
   return () => subscription.stop();
 };
 
+/**
+ * Subscribe to confirmation events for a receipt
+ * @param {String} receiptEventId - The ID of the receipt event
+ * @param {String} receiptAuthorPubkey - The public key of the receipt author
+ * @param {Function} callback - Callback function when confirmations arrive
+ * @param {Array} relays - Additional relays to use
+ * @returns {Function} Unsubscribe function
+ */
+const subscribeToConfirmations = async (receiptEventId, receiptAuthorPubkey, callback, relays = []) => {
+  // Add any relays that were passed in
+  if (relays && relays.length > 0) {
+    await nostrService.addRelays(relays);
+  }
+  
+  // Get access to the ndk instance
+  const ndk = await nostrService.getNdk();
+  
+  const filter = {
+    kinds: [9569], // Confirmation events
+    authors: [receiptAuthorPubkey], // Only from the receipt author (payer)
+    '#e': [receiptEventId] // Referencing this receipt
+  };
+  
+  const subscription = ndk.subscribe(filter);
+  
+  subscription.on('event', async (confirmationEvent) => {
+    try {
+      // Extract the settlement event ID from the confirmation event
+      // The confirmation event has two 'e' tags: [receiptEventId, settlementEventId]
+      const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
+      if (eTags.length >= 2) {
+        const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
+        callback(confirmationEvent, settlementEventId);
+      }
+    } catch (error) {
+      console.error('Error processing confirmation event:', error);
+    }
+  });
+  
+  return () => subscription.stop();
+};
+
 export default {
   publishSettlementEvent,
-  subscribeToSettlements
+  subscribeToSettlements,
+  subscribeToConfirmations
 };

@@ -107,11 +107,12 @@
                 <!-- Settlement Progress Bar -->
                 <div class="w-full bg-gray-200 rounded-full h-1.5 my-1">
                   <div class="flex h-full rounded-full overflow-hidden">
-                    <!-- Confirmed settlements (green) -->
+                    <!-- Confirmed settlements (green) - full width when confirmed >= quantity -->
                     <div
                       v-if="item.confirmedQuantity > 0"
-                      :style="{ width: (item.confirmedQuantity / item.quantity * 100) + '%' }"
-                      class="bg-green-500 transition-all duration-300"
+                      :style="{ width: (Math.min(item.confirmedQuantity, item.quantity) / item.quantity * 100) + '%' }"
+                      :class="item.confirmedQuantity >= item.quantity ? 'bg-green-500' : 'bg-green-400'"
+                      class="transition-all duration-300"
                     ></div>
                     <!-- Pending settlements (orange) -->
                     <div
@@ -123,7 +124,13 @@
                 </div>
                 
                 <div class="text-sm text-gray-500">
-                  {{ item.quantity }} × {{ formatSats(item.price) }} sats
+                  <!-- Always show confirmation counter format -->
+                  <span
+                    :class="item.confirmedQuantity >= item.quantity ? 'text-green-600 font-medium' : 'text-gray-500'"
+                  >
+                    ({{ item.confirmedQuantity }}/{{ item.quantity }})
+                  </span>
+                  × {{ formatSats(item.price) }} sats
                   <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
                 </div>
               </div>
@@ -243,6 +250,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import receiptService from '../services/receipt';
 import settlementService from '../services/settlement';
+import nostrService from '../services/nostr';
 import usePaymentProcessing from '../composables/usePaymentProcessing';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
@@ -254,6 +262,8 @@ import { formatSats, convertFromSats } from '../utils/pricing';
 import paymentService from '../services/payment';
 import cashuService from '../services/cashu';
 import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
+import { nip44 } from 'nostr-tools';
+import { Buffer } from 'buffer';
 
 export default {
   name: 'SettlementView',
@@ -332,6 +342,9 @@ export default {
     const cashuPaymentLocked = ref(false);
     const currentPaymentType = ref('');
     const settlementEventId = ref('');
+    
+    // Track processed confirmations to prevent duplicates
+    const processedConfirmations = ref(new Set());
     
     // Initialize payment processing composable (still needed for calculations)
     const paymentProcessing = usePaymentProcessing({
@@ -434,6 +447,12 @@ export default {
         
         // Subscribe to settlement updates
         subscribeToUpdates();
+        
+        // Load existing confirmations to show already confirmed items
+        await loadExistingConfirmations();
+        
+        // Subscribe to confirmation events to show new confirmations
+        subscribeToConfirmations();
       } catch (err) {
         console.error('Error fetching receipt data:', err);
         error.value = 'Failed to load receipt data. Please try again.';
@@ -520,9 +539,6 @@ export default {
           }
         });
         
-        // 7. Subscribe to confirmation events
-        subscribeToConfirmations();
-        
       } catch (error) {
         console.error('Error initiating Lightning settlement:', error);
         showNotification('Failed to initiate Lightning settlement: ' + error.message, 'error');
@@ -570,8 +586,7 @@ export default {
           }
         });
         
-        // 5. Subscribe to confirmation events
-        subscribeToConfirmations();
+        // Note: We're already subscribed to confirmations globally, no need to subscribe again
         
       } catch (error) {
         console.error('Error initiating Cashu settlement:', error);
@@ -585,18 +600,136 @@ export default {
     };
     
     // Subscribe to confirmation events from payer
-    const subscribeToConfirmations = () => {
-      // This will need to be implemented in the settlement service
-      // Subscribe to kind 9569 events that reference our settlement
-      console.log('Subscribing to confirmation events for settlement:', settlementEventId.value);
+    const subscribeToConfirmations = async () => {
+      try {
+        console.log('Subscribing to confirmation events for receipt:', props.eventId);
+        
+        // Subscribe to confirmation events using the settlement service
+        const unsubscribe = await settlementService.subscribeToConfirmations(
+          props.eventId,
+          receiptAuthorPubkey.value,
+          (confirmationEvent, confirmedSettlementId) => {
+            console.log('Received confirmation for settlement:', confirmedSettlementId);
+            
+            // Process the confirmation by updating item quantities
+            processConfirmation(confirmedSettlementId);
+          }
+        );
+        
+        // Store the unsubscribe function for cleanup
+        return unsubscribe;
+        
+      } catch (error) {
+        console.error('Error subscribing to confirmations:', error);
+      }
+    };
+    
+    // Process a confirmation event
+    const processConfirmation = async (confirmedSettlementId) => {
+      console.log('Processing confirmation for settlement:', confirmedSettlementId);
       
-      // For now, just show a message
-      showNotification('Waiting for payer to process payment...', 'info');
+      // Check if we've already processed this settlement
+      if (processedConfirmations.value.has(confirmedSettlementId)) {
+        console.log('Skipping duplicate confirmation for settlement:', confirmedSettlementId);
+        return;
+      }
       
-      // TODO: When confirmation events (kind 9569) are received:
-      // 1. Find the settlement that was confirmed
-      // 2. Move items from pendingQuantity to confirmedQuantity
-      // 3. Update progress bars to show green segments
+      // Mark as processed
+      processedConfirmations.value.add(confirmedSettlementId);
+      
+      try {
+        // Get NDK instance to fetch the settlement event
+        const ndk = await nostrService.getNdk();
+        
+        // Fetch the settlement event to see which items were settled
+        const settlementEvent = await ndk.fetchEvent(confirmedSettlementId);
+        
+        if (settlementEvent) {
+          // Decrypt the settlement content to see which items were settled
+          const decryptionKey = Uint8Array.from(Buffer.from(props.decryptionKey, 'hex'));
+          const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
+          const { settledItems } = JSON.parse(decryptedContent);
+          
+          console.log('Settled items from confirmation:', settledItems);
+          
+          // Update confirmed quantities for the settled items
+          settledItems.forEach(settledItem => {
+            const item = items.value.find(i =>
+              i.name === settledItem.name && i.price === settledItem.price
+            );
+            
+            if (item) {
+              // Add the settled quantity to confirmed quantity
+              item.confirmedQuantity += settledItem.selectedQuantity;
+              
+              // Reduce pending quantity by the confirmed amount (if there was any pending)
+              const pendingToReduce = Math.min(settledItem.selectedQuantity, item.pendingQuantity);
+              item.pendingQuantity -= pendingToReduce;
+              
+              console.log(`Updated ${item.name}: +${settledItem.selectedQuantity} confirmed (total: ${item.confirmedQuantity}), -${pendingToReduce} pending (remaining: ${item.pendingQuantity})`);
+            }
+          });
+          
+          // If this is the current settlement, also update payment state
+          if (confirmedSettlementId === settlementEventId.value) {
+            paymentSuccess.value = true;
+            paymentInProgress.value = false;
+            showNotification('Payment confirmed! Items have been settled.', 'success');
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error processing confirmation:', error);
+        
+        // Fallback: if we can't decrypt the settlement, at least handle current settlement
+        if (confirmedSettlementId === settlementEventId.value) {
+          items.value.forEach(item => {
+            if (item.pendingQuantity > 0) {
+              item.confirmedQuantity += item.pendingQuantity;
+              item.pendingQuantity = 0;
+            }
+          });
+          
+          paymentSuccess.value = true;
+          paymentInProgress.value = false;
+          showNotification('Payment confirmed! Items have been settled.', 'success');
+        }
+      }
+    };
+    
+    // Load existing confirmations to populate confirmed quantities
+    const loadExistingConfirmations = async () => {
+      try {
+        // Get NDK instance to query for existing confirmations
+        const ndk = await nostrService.getNdk();
+        
+        // Query for existing confirmation events (kind 9569) for this receipt
+        const confirmationEvents = await ndk.fetchEvents({
+          kinds: [9569],
+          authors: [receiptAuthorPubkey.value],
+          '#e': [props.eventId],
+          limit: 100
+        });
+        
+        console.log(`Found ${confirmationEvents.size} existing confirmations`);
+        
+        // TODO: To properly implement this, we need to:
+        // 1. For each confirmation, get the settlement event it references
+        // 2. Fetch the settlement event to see which items were settled
+        // 3. Update the confirmedQuantity for those specific items
+        //
+        // For now, we'll just log the confirmations without creating fake data
+        for (const confirmationEvent of confirmationEvents) {
+          const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
+          if (eTags.length >= 2) {
+            const settlementEventId = eTags[1][1];
+            console.log('Found existing confirmation for settlement:', settlementEventId);
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error loading existing confirmations:', error);
+      }
     };
     
     // Cancel payment (for UI reset)
