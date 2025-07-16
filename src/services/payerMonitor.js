@@ -358,14 +358,9 @@ class PayerMonitor {
    */
   async storeProofsForRecovery(transactionId, proofs, mintUrl, category) {
     try {
-      const { storePendingProofs } = await import('../utils/storage');
+      const { saveProofs } = await import('../utils/storage');
       
-      storePendingProofs(transactionId, {
-        [category]: {
-          proofs: proofs,
-          mintUrl: mintUrl
-        }
-      });
+      saveProofs(transactionId, category, proofs, 'pending', mintUrl);
       
       console.log(`Stored ${proofs.length} ${category} proofs for recovery`);
       
