@@ -308,10 +308,9 @@ export default {
     const { notification, clearNotification } = useNotification();
     
     // Function to update items based on settlement data
-    const updateSettledItems = (settledItems) => {
+    const updateSettledItems = (settledItems, status = 'confirmed') => {
       // This function is called when settlement events are received
-      // For the reversed architecture, we handle confirmations differently
-      // Settlement events from other users should move from pending to confirmed
+      // status can be 'pending' (for new settlements) or 'confirmed' (for confirmations)
       settledItems.forEach(settledItem => {
         const item = items.value.find(i =>
           i.name === settledItem.name &&
@@ -319,15 +318,23 @@ export default {
         );
         
         if (item) {
-          // Move from pending to confirmed (orange to green)
-          const settledQty = Math.min(settledItem.selectedQuantity || settledItem.quantity, item.pendingQuantity);
-          if (settledQty > 0) {
-            item.pendingQuantity -= settledQty;
-            item.confirmedQuantity += settledQty;
-            
-            // If all quantities are confirmed, mark as fully settled
-            if (item.confirmedQuantity >= item.quantity) {
-              item.settled = true;
+          const settledQty = settledItem.selectedQuantity || settledItem.quantity;
+          
+          if (status === 'pending') {
+            // Add to pending quantity (orange bars)
+            item.pendingQuantity += settledQty;
+            console.log(`Added ${settledQty} pending to ${item.name} (total pending: ${item.pendingQuantity})`);
+          } else if (status === 'confirmed') {
+            // Move from pending to confirmed (orange to green)
+            const pendingToConfirm = Math.min(settledQty, item.pendingQuantity);
+            if (pendingToConfirm > 0) {
+              item.pendingQuantity -= pendingToConfirm;
+              item.confirmedQuantity += pendingToConfirm;
+              
+              // If all quantities are confirmed, mark as fully settled
+              if (item.confirmedQuantity >= item.quantity) {
+                item.settled = true;
+              }
             }
           }
         }
@@ -745,14 +752,14 @@ export default {
     // Subscription management
     let unsubscribe;
     
-    const subscribeToUpdates = () => {
+    const subscribeToUpdates = async () => {
       // Subscribe to settlement events for this receipt
-      unsubscribe = receiptService.subscribeToSettlementUpdates(
+      unsubscribe = await settlementService.subscribeToSettlements(
         props.eventId,
         props.decryptionKey,
-        (settlement) => {
-          // Update items with settlement data
-          updateSettledItems(settlement.settledItems);
+        (settlementData, event) => {
+          // Update items with settlement data - mark as pending (orange) since not confirmed yet
+          updateSettledItems(settlementData.settledItems, 'pending');
         }
       );
     };
