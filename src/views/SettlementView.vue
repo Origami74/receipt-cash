@@ -215,7 +215,7 @@
       :show="showLightningModal"
       :invoice="lightningInvoice"
       :invoice-error="invoiceError"
-      :amount="selectedSubtotal"
+      :amount="calculatedPaymentAmount"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
@@ -228,7 +228,7 @@
     <CashuPaymentModal
       :show="showCashuModal"
       :payment-request="getPaymentRequest"
-      :amount="selectedSubtotal"
+      :amount="calculatedPaymentAmount"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
@@ -349,6 +349,7 @@ export default {
     const cashuPaymentLocked = ref(false);
     const currentPaymentType = ref('');
     const settlementEventId = ref('');
+    const calculatedPaymentAmount = ref(0); // Store the calculated amount for modal display
     
     // Track processed confirmations to prevent duplicates
     const processedConfirmations = ref(new Set());
@@ -430,6 +431,7 @@ export default {
         btcPrice.value = receiptData.btcPrice;
         items.value = receiptData.items.map(item => ({
           ...item,
+          selectedQuantity: 0,     // Initialize selectedQuantity to 0 for user selection
           confirmedQuantity: 0,    // Confirmed settlements (green)
           pendingQuantity: 0       // Pending settlements (orange)
         }));
@@ -487,6 +489,21 @@ export default {
     
     // Reversed Payment Architecture Implementation
     
+    // Helper function to calculate payment amount from selected items
+    const calculatePaymentAmount = () => {
+      const directAmount = selectedItems.value.reduce((sum, item) =>
+        sum + (item.price * item.selectedQuantity), 0);
+      const satAmount = Math.round(directAmount);
+      
+      // Store the calculated amount for modal display
+      calculatedPaymentAmount.value = satAmount;
+      
+      console.log('Selected items:', selectedItems.value);
+      console.log('Calculated amount:', satAmount);
+      
+      return satAmount;
+    };
+    
     // New Lightning payment method following reversed architecture
     const payWithLightningReversed = async () => {
       if (selectedItems.value.length === 0) return;
@@ -497,8 +514,8 @@ export default {
         lightningPaymentLocked.value = true;
         currentPaymentType.value = 'lightning';
         
-        // 2. Generate mint quote
-        const satAmount = Math.round(selectedSubtotal.value); // Already in sats
+        // 2. Calculate payment amount using shared helper
+        const satAmount = calculatePaymentAmount();
         
         // Get mint URL from receipt's payment request
         const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
@@ -567,7 +584,10 @@ export default {
         cashuPaymentLocked.value = true;
         currentPaymentType.value = 'cashu';
         
-        // 2. Publish settlement event immediately (no mint quote for Cashu)
+        // 2. Calculate payment amount using shared helper
+        const satAmount = calculatePaymentAmount();
+        
+        // 3. Publish settlement event immediately (no mint quote for Cashu)
         const settlementId = await settlementService.publishSettlementEvent(
           props.eventId,
           selectedItems.value,
@@ -578,10 +598,24 @@ export default {
         
         settlementEventId.value = settlementId;
         
-        // 3. Show success message - payment now handled by payer
-        showNotification('Settlement request sent! The payer will handle payment processing.', 'info');
+        // 5. Create Cashu payment request to receipt author's pubkey
+        const newPaymentRequest = cashuService.createPaymentRequest(
+          receiptAuthorPubkey.value,
+          satAmount,
+          props.eventId,
+          settlementId
+        );
         
-        // 4. Mark selected items as pending settlements (orange)
+        // 6. Update the payment request for the modal
+        paymentProcessing.setPaymentRequest(newPaymentRequest);
+        
+        // 7. Show the Cashu modal
+        showCashuModal.value = true;
+        
+        // 8. Show notification about the process
+        showNotification('Settlement request sent! Please pay the Cashu request. The payer will monitor for payment.', 'info');
+        
+        // 9. Mark selected items as pending settlements (orange)
         selectedItems.value.forEach(selectedItem => {
           const item = items.value.find(i =>
             i.name === selectedItem.name && i.price === selectedItem.price
@@ -825,7 +859,8 @@ export default {
       lightningPaymentLocked,
       cashuPaymentLocked,
       currentPaymentType,
-      settlementEventId
+      settlementEventId,
+      calculatedPaymentAmount
     };
   }
 };

@@ -100,17 +100,9 @@ export default function usePaymentProcessing(options) {
     return paymentService.formatPrice(amount, currency.value);
   };
 
-  // Process payment request
+  // Process payment request - for reversed architecture, just return the current payment request
   const getCashuPaymentRequest = computed(() => {
-    if (!paymentRequest.value) return '';
-    
-    // Use the cashu service to update the amount
-    const updatedRequest = cashuService.updateRequestAmount(
-      paymentRequest.value,
-      Math.round(toSats(selectedSubtotal.value))
-    );
-    
-    return updatedRequest || paymentRequest.value; // Fallback to original if update fails
+    return paymentRequest.value || '';
   });
 
   // Update payment information from receipt data

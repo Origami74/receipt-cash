@@ -109,7 +109,8 @@ class SettlerPayment {
       const paymentRequest = cashuService.createPaymentRequest(
         receiptAuthorPubkey,
         totalAmount,
-        settlementEventId // Use settlement event ID as memo
+        receiptEventId,
+        settlementEventId
       );
       
       // Store settlement info

@@ -12,19 +12,60 @@ export const toSats = (amount, btcPrice) => {
   return Math.round((amount * 100000000) / btcPrice);
 };
 
+// Cache for Bitcoin prices with 5-minute expiry
+const priceCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 /**
- * Fetches the current Bitcoin price in the specified currency
+ * Fetches the current Bitcoin price in the specified currency with caching
  * @param {String} currency - Currency code (default: 'usd')
  * @returns {Promise<Number>} - Current BTC price
  */
 export const fetchBtcPrice = async (currency = 'usd') => {
+  const cacheKey = currency.toLowerCase();
+  const now = Date.now();
+  
+  // Check if we have a cached price that's still valid
+  if (priceCache.has(cacheKey)) {
+    const cached = priceCache.get(cacheKey);
+    if (now - cached.timestamp < CACHE_DURATION) {
+      console.log(`Using cached BTC price for ${currency}: ${cached.price}`);
+      return cached.price;
+    } else {
+      // Remove expired cache entry
+      priceCache.delete(cacheKey);
+    }
+  }
+  
   try {
     const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
     const data = await response.json();
-    return data.bitcoin[currency.toLowerCase()];
+    const price = data.bitcoin[currency.toLowerCase()];
+    
+    // Cache the new price
+    priceCache.set(cacheKey, {
+      price: price,
+      timestamp: now
+    });
+    
+    console.log(`Fetched and cached new BTC price for ${currency}: ${price}`);
+    return price;
   } catch (err) {
     console.error('Error fetching BTC price:', err);
-    throw new Error('Failed to fetch Bitcoin price');
+    
+    // If we have an expired cached price, use it as fallback
+    if (priceCache.has(cacheKey)) {
+      const fallback = priceCache.get(cacheKey);
+      console.warn(`Using expired cached price as fallback for ${currency}: ${fallback.price}`);
+      return fallback.price;
+    }
+    
+    throw new Error('Failed to fetch Bitcoin price and no cached fallback available');
   }
 };
 

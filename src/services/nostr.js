@@ -303,6 +303,27 @@ const decodeNprofile = (nprofileStr) => {
   }
 };
 
+/**
+ * Create a Nostr NIP-19 nprofile identifier from a pubkey and optional relays
+ * @param {String} pubkey - The public key in hex format
+ * @param {Array} relays - Optional array of relay URLs
+ * @returns {String} The encoded nprofile string
+ */
+const createNprofile = (pubkey, relays = DEFAULT_RELAYS) => {
+  try {
+    // Use nip19 from nostr-tools to encode
+    const nprofile = nip19.nprofileEncode({
+      pubkey: pubkey,
+      relays: relays
+    });
+    
+    return nprofile;
+  } catch (error) {
+    console.error('Error creating nprofile:', error);
+    throw error;
+  }
+};
+
 // Helper functions to expose NDK instance for other services
 const getNdk = async () => {
   if (!ndk.pool?.connectedRelays?.size) {
@@ -319,6 +340,7 @@ export default {
   sendNip04Dm,
   sendNip17Dm,
   decodeNprofile,
+  createNprofile,
   addRelays,
   
   // Expose these for other services that need access to NDK
