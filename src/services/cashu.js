@@ -197,8 +197,8 @@ const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, 
       amount,
       unit,
       mints,
-      // `Payment for settlement ${settlementId} of receipt ${receiptId}`,
-      // true
+      `Payment for settlement ${settlementId} of receipt ${receiptId}`,
+      true
     );
     
     console.log(request)

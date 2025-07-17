@@ -1,4 +1,4 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKKind, NDKUser } from '@nostr-dev-kit/ndk';
 import { nip44 } from 'nostr-tools';
 import { CashuMint, CashuWallet, MintQuoteState } from '@cashu/cashu-ts';
 import nostrService from './nostr';
@@ -268,6 +268,24 @@ class PayerMonitor {
    * @param {Object} settlementData - The settlement data
    */
   async monitorCashuPayments(settlementEventId, receiptEventId, event, settlementData) {
+    const receiptInfo = this.activeReceipts.get(receiptEventId);
+    if (!receiptInfo) {
+      console.error('No receipt info found for Cashu monitoring');
+      return;
+    }
+    
+    // Get the receipt public key that should receive payments
+    const { getPublicKey } = await import('nostr-tools');
+    const receiptPubkey = getPublicKey(receiptInfo.publishingPrivateKey);
+    
+    // Calculate 'since' time: settlement event creation time minus 1 day for safety
+    const settlementCreatedAt = event.created_at || Math.floor(Date.now() / 1000);
+    const oneDayBefore = settlementCreatedAt - (24 * 60 * 60); // 24 hours before
+    
+    console.log('Monitoring Cashu payments to receipt pubkey:', receiptPubkey);
+    console.log('Expected payment memo:', `${receiptEventId}-${settlementEventId}`);
+    console.log('Monitoring since:', new Date(oneDayBefore * 1000).toISOString());
+    
     const monitorCashuPayments = async () => {
       try {
         // Stop monitoring if we already published a confirmation
@@ -276,15 +294,63 @@ class PayerMonitor {
           return;
         }
         
-        // TODO: Implement actual Cashu payment monitoring
-        // This would involve:
-        // 1. Monitoring incoming Cashu payments to the receipt pubkey
-        // 2. Checking for payments with memo matching settlementEventId
-        // 3. When found, forward payment and publish confirmation
+        // Monitor incoming NIP-17 DMs to the receipt pubkey
+        // These would contain Cashu token payments with the settlement memo
+        const ndk = await nostrService.getNdk();
         
-        console.log('Monitoring Cashu payments for settlement:', settlementEventId);
+        // Subscribe to incoming DMs (kind 14 - gift wraps)
+        const dmFilter = {
+          kinds: [NDKKind.GiftWrap], // Gift wrapped messages (NIP-17)
+          '#p': [receiptPubkey], // Messages to our receipt pubkey
+          since: oneDayBefore // Settlement time minus 1 day for safety
+        };
         
-        // Continue monitoring if no confirmation published
+        const dmEvents = await ndk.fetchEvents(dmFilter);
+        
+        for (const dmEvent of dmEvents) {
+          console.log("dm event@@")
+          try {
+            // Try to decrypt the gift wrap using NDK's unwrapping
+            const { NDKPrivateKeySigner, giftUnwrap } = await import('@nostr-dev-kit/ndk');
+            const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
+            
+            // Unwrap the gift to get the inner rumor
+            const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
+            
+            if (rumor && rumor.kind === 14) {
+              console.log('Successfully unwrapped gift wrap, found kind 14 DM');
+              
+              // Parse the message content
+              try {
+                const messageContent = JSON.parse(rumor.content);
+                
+                // Check if this is a Cashu payment message
+                if (messageContent.id && messageContent.proofs && messageContent.mint) {
+                  const expectedMemo = `${receiptEventId}-${settlementEventId}`;
+                  
+                  console.log('Found Cashu payment message, ID:', messageContent.id);
+                  console.log('Expected memo:', expectedMemo);
+                  
+                  // Check if the payment ID matches our expected memo format
+                  if (messageContent.id === expectedMemo) {
+                    console.log('Found matching Cashu payment! Processing...');
+                    
+                    // Process the received Cashu tokens
+                    await this.processCashuTokens(messageContent, event, settlementData);
+                    return; // Stop monitoring after successful processing
+                  }
+                }
+              } catch (parseError) {
+                // Not a JSON message or not a Cashu payment, continue
+                console.log('Message not a Cashu payment:', parseError.message);
+              }
+            }
+          } catch (decryptError) {
+            // Failed to decrypt, might not be for us or different format
+            console.log('Failed to unwrap gift:', decryptError.message);
+          }
+        }
+        // Continue monitoring if no matching payment found
         setTimeout(monitorCashuPayments, 2000);
         
       } catch (error) {
@@ -293,7 +359,81 @@ class PayerMonitor {
       }
     };
     
-    monitorCashuPayments();
+    monitorCashuPayments()
+  }
+  
+  /**
+   * Process received Cashu tokens and forward payments
+   * @param {Object} cashuMessage - The Cashu payment message
+   * @param {Object} event - The settlement event
+   * @param {Object} settlementData - The settlement data
+   */
+  async processCashuTokens(cashuMessage, event, settlementData) {
+    const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
+    const transactionId = `${receiptEventId}-cashu-${Date.now()}`;
+    
+    try {
+      console.log('Processing received Cashu tokens:', cashuMessage.proofs.length, 'proofs');
+      
+      // Calculate expected amount from settlement data
+      const expectedAmount = settlementData.settledItems.reduce((sum, item) =>
+        sum + (item.price * item.selectedQuantity), 0);
+      
+      // Verify the received amount matches expectation
+      const receivedAmount = cashuMessage.proofs.reduce((sum, proof) => sum + proof.amount, 0);
+      
+      console.log('Expected amount:', expectedAmount, 'sats');
+      console.log('Received amount:', receivedAmount, 'sats');
+      
+      if (receivedAmount !== expectedAmount) {
+        console.warn('Amount mismatch - Expected:', expectedAmount, 'Received:', receivedAmount);
+        // Continue processing anyway, but log the discrepancy
+      }
+      
+      // Store received proofs for recovery
+      await this.storeProofsForRecovery(transactionId, cashuMessage.proofs, cashuMessage.mint, 'received');
+      
+      // Publish confirmation event immediately after receiving tokens
+      await this.publishConfirmation(event);
+      
+      // Get receipt info for dev percentage
+      const receiptInfo = this.activeReceipts.get(receiptEventId);
+      const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
+      
+      // Calculate split amounts
+      const devAmount = Math.round(receivedAmount * (devPercentage / 100));
+      const payerAmount = receivedAmount - devAmount;
+      
+      console.log(`Splitting Cashu payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
+      
+      // Create wallet instance to handle token operations
+      const { CashuMint, CashuWallet } = await import('@cashu/cashu-ts');
+      const mint = new CashuMint(cashuMessage.mint);
+      const wallet = new CashuWallet(mint);
+      await wallet.loadMint();
+      
+      // Split tokens between developer and payer
+      const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, cashuMessage.proofs);
+      
+      // Store split proofs for recovery
+      await this.storeProofsForRecovery(transactionId, payerProofs, cashuMessage.mint, 'payer');
+      await this.storeProofsForRecovery(transactionId, devProofs, cashuMessage.mint, 'developer');
+      
+      // Forward payments
+      await this.forwardPayments(payerProofs, devProofs, receiptInfo.receiptData);
+      
+      // Mark proofs as forwarded
+      await this.markProofsAsForwarded(transactionId);
+      
+      showNotification('Cashu payment processed successfully!', 'success');
+      
+    } catch (error) {
+      console.error('Error processing Cashu tokens:', error);
+      showNotification('Error processing Cashu payment: ' + error.message, 'error');
+      
+      // Keep proofs stored for recovery
+      console.log(`Cashu proofs stored for recovery under transaction: ${transactionId}`);
+    }
   }
   
   /**
