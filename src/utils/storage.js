@@ -243,7 +243,7 @@ export function getPendingProofs() {
       
       Object.keys(transaction.categories || {}).forEach(category => {
         const categoryData = transaction.categories[category];
-        if (categoryData.status === 'pending') {
+        if (categoryData.status === 'pending' || categoryData.status === 'forwarded') {
           pendingCategories[category] = categoryData;
         }
       });

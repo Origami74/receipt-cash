@@ -344,8 +344,8 @@ class PayerMonitor {
       // Forward payments
       await this.forwardPayments(payerProofs, devProofs, receiptInfo.receiptData);
       
-      // Clean up stored proofs after successful forwarding
-      await this.clearStoredProofs(transactionId);
+      // Mark proofs as 'forwarded' instead of deleting them
+      await this.markProofsAsForwarded(transactionId);
       
       showNotification('Payment processed successfully!', 'success');
       
@@ -379,6 +379,28 @@ class PayerMonitor {
   }
   
   /**
+   * Mark proofs as forwarded (but don't delete them yet)
+   * @param {String} transactionId - Transaction identifier
+   */
+  async markProofsAsForwarded(transactionId) {
+    try {
+      const { updateProofStatus } = await import('../utils/storage');
+      
+      // Mark all categories as 'forwarded' instead of deleting
+      const categories = ['claimed', 'payer', 'developer'];
+      for (const category of categories) {
+        const success = updateProofStatus(transactionId, category, 'forwarded');
+        if (success) {
+          console.log(`Marked ${category} proofs as forwarded for transaction: ${transactionId}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error marking proofs as forwarded:', error);
+    }
+  }
+  
+  /**
    * Clear stored proofs after successful processing
    * @param {String} transactionId - Transaction identifier
    */
@@ -404,10 +426,18 @@ class PayerMonitor {
     
     try {
       // Forward to payer (using their payment request from receipt data)
+      console.log('Attempting to forward payment to payer...');
+      console.log('Receipt data paymentRequest:', receiptData.paymentRequest ? 'present' : 'missing');
+      console.log('Payer proofs length:', payerProofs.length);
+      
       if (receiptData.paymentRequest && payerProofs.length > 0) {
         try {
+          console.log('Extracting payer transport from payment request...');
           const payerTransport = cashuService.extractNostrTransport(receiptData.paymentRequest);
+          console.log('Payer transport extracted:', payerTransport ? 'success' : 'failed');
+          
           if (payerTransport && payerTransport.pubkey) {
+            console.log('Creating payment message for payer...');
             const payerMessage = cashuService.createPaymentMessage(
               payerTransport.id,
               'https://mint.minibits.cash/Bitcoin', // Default mint URL
@@ -415,6 +445,7 @@ class PayerMonitor {
               payerProofs
             );
             
+            console.log('Sending NIP-17 DM to payer...');
             await nostrService.sendNip17Dm(
               payerTransport.pubkey,
               payerMessage,
@@ -423,12 +454,17 @@ class PayerMonitor {
             
             console.log('Payment forwarded to payer');
           } else {
+            console.error('Invalid payer transport information:', payerTransport);
             errors.push('Invalid payer transport information');
           }
         } catch (payerError) {
           console.error('Error forwarding to payer:', payerError);
           errors.push(`Payer payment failed: ${payerError.message}`);
         }
+      } else {
+        console.warn('Skipping payer payment: paymentRequest missing or no payer proofs');
+        if (!receiptData.paymentRequest) errors.push('No payment request in receipt data');
+        if (payerProofs.length === 0) errors.push('No payer proofs to send');
       }
       
       // Forward to developer
@@ -463,8 +499,11 @@ class PayerMonitor {
       
       // If there were any errors, throw them for the caller to handle
       if (errors.length > 0) {
+        console.error('Payment forwarding errors:', errors);
         throw new Error(errors.join('; '));
       }
+      
+      console.log('All payments forwarded successfully');
       
     } catch (error) {
       console.error('Error forwarding payments:', error);
