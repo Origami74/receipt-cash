@@ -286,80 +286,92 @@ class PayerMonitor {
     console.log('Expected payment memo:', `${receiptEventId}-${settlementEventId}`);
     console.log('Monitoring since:', new Date(oneDayBefore * 1000).toISOString());
     
-    const monitorCashuPayments = async () => {
-      try {
-        // Stop monitoring if we already published a confirmation
-        if (this.publishedConfirmations.has(event.id)) {
-          console.log('Stopping monitoring - confirmation already published for:', event.id);
-          return;
-        }
-        
-        // Monitor incoming NIP-17 DMs to the receipt pubkey
-        // These would contain Cashu token payments with the settlement memo
-        const ndk = await nostrService.getNdk();
-        
-        // Subscribe to incoming DMs (kind 14 - gift wraps)
-        const dmFilter = {
-          kinds: [NDKKind.GiftWrap], // Gift wrapped messages (NIP-17)
-          '#p': [receiptPubkey], // Messages to our receipt pubkey
-          since: oneDayBefore // Settlement time minus 1 day for safety
-        };
-        
-        const dmEvents = await ndk.fetchEvents(dmFilter);
-        
-        for (const dmEvent of dmEvents) {
-          console.log("dm event@@")
-          try {
-            // Try to decrypt the gift wrap using NDK's unwrapping
-            const { NDKPrivateKeySigner, giftUnwrap } = await import('@nostr-dev-kit/ndk');
-            const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
-            
-            // Unwrap the gift to get the inner rumor
-            const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
-            
-            if (rumor && rumor.kind === 14) {
-              console.log('Successfully unwrapped gift wrap, found kind 14 DM');
-              
-              // Parse the message content
-              try {
-                const messageContent = JSON.parse(rumor.content);
-                
-                // Check if this is a Cashu payment message
-                if (messageContent.id && messageContent.proofs && messageContent.mint) {
-                  const expectedMemo = `${receiptEventId}-${settlementEventId}`;
-                  
-                  console.log('Found Cashu payment message, ID:', messageContent.id);
-                  console.log('Expected memo:', expectedMemo);
-                  
-                  // Check if the payment ID matches our expected memo format
-                  if (messageContent.id === expectedMemo) {
-                    console.log('Found matching Cashu payment! Processing...');
-                    
-                    // Process the received Cashu tokens
-                    await this.processCashuTokens(messageContent, event, settlementData);
-                    return; // Stop monitoring after successful processing
-                  }
-                }
-              } catch (parseError) {
-                // Not a JSON message or not a Cashu payment, continue
-                console.log('Message not a Cashu payment:', parseError.message);
-              }
-            }
-          } catch (decryptError) {
-            // Failed to decrypt, might not be for us or different format
-            console.log('Failed to unwrap gift:', decryptError.message);
-          }
-        }
-        // Continue monitoring if no matching payment found
-        setTimeout(monitorCashuPayments, 2000);
-        
-      } catch (error) {
-        console.error('Error monitoring Cashu payments:', error);
-        setTimeout(monitorCashuPayments, 5000);
-      }
-    };
+    // Don't even start monitoring if we already have a confirmation
+    if (this.publishedConfirmations.has(event.id)) {
+      console.log('Confirmation already exists for settlement:', event.id, '- skipping Cashu monitoring');
+      return;
+    }
     
-    monitorCashuPayments()
+    try {
+      const ndk = await nostrService.getNdk();
+      
+      // Create subscription for incoming DMs (kind 14 - gift wraps)
+      const dmFilter = {
+        kinds: [1059], // Gift wrapped messages (NIP-17) - using kind 1059 which is correct
+        '#p': [receiptPubkey], // Messages to our receipt pubkey
+        since: oneDayBefore // Settlement time minus 1 day for safety
+      };
+      
+      console.log('Setting up Cashu payment subscription with filter:', dmFilter);
+      const subscription = ndk.subscribe(dmFilter);
+      
+      // Handle incoming events
+      subscription.on('event', async (dmEvent) => {
+        try {
+          // Stop processing if we already published a confirmation
+          if (this.publishedConfirmations.has(event.id)) {
+            console.log('Confirmation already published for settlement:', event.id);
+            subscription.stop();
+            return;
+          }
+          
+          console.log('Received potential Cashu payment DM, kind:', dmEvent.kind);
+          
+          // Try to decrypt the gift wrap using NDK's unwrapping
+          const { NDKPrivateKeySigner, giftUnwrap, NDKUser } = await import('@nostr-dev-kit/ndk');
+          const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
+          
+          // Unwrap the gift to get the inner rumor
+          const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
+          
+          if (rumor && rumor.kind === 14) {
+            console.log('Successfully unwrapped gift wrap, found kind 14 DM');
+            
+            // Parse the message content
+            try {
+              const messageContent = JSON.parse(rumor.content);
+              
+              // Check if this is a Cashu payment message
+              if (messageContent.id && messageContent.proofs && messageContent.mint) {
+                const expectedMemo = `${receiptEventId}-${settlementEventId}`;
+                
+                console.log('Found Cashu payment message, ID:', messageContent.id);
+                console.log('Expected memo:', expectedMemo);
+                
+                // Check if the payment ID matches our expected memo format
+                if (messageContent.id === expectedMemo) {
+                  console.log('Found matching Cashu payment! Processing...');
+                  
+                  // Stop the subscription since we found our payment
+                  subscription.stop();
+                  
+                  // Process the received Cashu tokens
+                  await this.processCashuTokens(messageContent, event, settlementData);
+                  return;
+                }
+              }
+            } catch (parseError) {
+              // Not a JSON message or not a Cashu payment, continue
+              console.log('Message not a Cashu payment:', parseError.message);
+            }
+          }
+        } catch (decryptError) {
+          // Failed to decrypt, might not be for us or different format
+          console.log('Failed to unwrap gift:', decryptError.message);
+        }
+      });
+      
+      // Store subscription for cleanup
+      if (!this.monitoringIntervals.has(receiptEventId)) {
+        this.monitoringIntervals.set(receiptEventId, []);
+      }
+      this.monitoringIntervals.get(receiptEventId).push(subscription);
+      
+      console.log('Cashu payment subscription started for settlement:', settlementEventId);
+      
+    } catch (error) {
+      console.error('Error setting up Cashu payment subscription:', error);
+    }
   }
   
   /**
