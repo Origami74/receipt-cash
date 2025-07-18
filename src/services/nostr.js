@@ -124,7 +124,6 @@ const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent, b
     receiptEvent.pubkey = receiptPublicKey; // Use receipt-specific public key
     receiptEvent.created_at = Math.floor(Date.now() / 1000); // Set current timestamp
     receiptEvent.tags = [
-      ['expiration', Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString()]
     ];
     
     // Sign with receipt-specific private key and publish
