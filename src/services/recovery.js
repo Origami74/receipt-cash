@@ -1,7 +1,7 @@
 import { 
-  getUnprocessedMintQuotes,
+  getUnclaimedMintQuotes,
   saveProofs,
-  markMintQuoteProcessed
+  markMintQuoteClaimed
 } from '../utils/storage';
 import { showNotification } from '../utils/notification';
 import { CashuMint, CashuWallet, MintQuoteState } from '@cashu/cashu-ts';
@@ -24,7 +24,7 @@ export async function checkPendingLightningPayments(showNotifications = true) {
       return [];
     }
     
-    const unprocessedQuotes = getUnprocessedMintQuotes();
+    const unprocessedQuotes = getUnclaimedMintQuotes();
     const quoteIds = Object.keys(unprocessedQuotes);
     
     if (quoteIds.length === 0) {
@@ -57,7 +57,7 @@ export async function checkPendingLightningPayments(showNotifications = true) {
       
       if (quoteAge > MAX_QUOTE_AGE) {
         console.log(`Quote ${transactionId} is too old (${Math.floor(quoteAge / (24 * 60 * 60 * 1000))} days). Marking as processed.`);
-        markMintQuoteProcessed(transactionId);
+        markMintQuoteClaimed(transactionId);
         processingQuotes.delete(transactionId);
         continue;
       }
@@ -100,7 +100,7 @@ export async function checkPendingLightningPayments(showNotifications = true) {
             );
             
             // Only mark as processed if we successfully minted and stored the proofs
-            markMintQuoteProcessed(transactionId);
+            markMintQuoteClaimed(transactionId);
             
             // Add to recovered IDs
             recoveredIds.push(transactionId);

@@ -1,8 +1,9 @@
 const PAYMENT_REQUESTS_KEY = 'receipt-cash-payment-requests';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
 const PROOFS_KEY = 'receipt-cash-proofs';
-const MINT_QUOTES_KEY = 'receipt-cash-mint-quotes';
+const MINT_QUOTES_KEY = 'receipt-cash-mint-quotes'; // TODO: remove
 const RECEIPT_HISTORY_KEY = 'receipt-cash-receipt-history';
+const MINT_QUOTE_RECOVERY_KEY = 'receipt-cash-mint-quote-recovery';
 
 // Default AI settings
 const DEFAULT_AI_SETTINGS = {
@@ -264,146 +265,152 @@ export function getPendingProofs() {
 }
 
 /**
- * Save a mint quote to localStorage
- * @param {string} transactionId - Unique identifier for the transaction
- * @param {Object} mintQuote - The mint quote object from cashu-ts
- * @param {number} satAmount - The amount in sats
+ * Save a mint quote for settler recovery
+ * @param {string} receiptEventId - The receipt event ID
+ * @param {string} settlementEventId - The settlement event ID
  * @param {string} mintUrl - The mint URL
- * @param {Object} metadata - Additional metadata about the transaction (receiptId, items, etc.)
+ * @param {Object} mintQuote - The mint quote object from cashu-ts
  * @returns {boolean} True if saving was successful
  */
-export function saveMintQuote(transactionId, mintQuote, satAmount, mintUrl, metadata = {}) {
+export function saveMintQuote(receiptEventId, settlementEventId, mintUrl, mintQuote) {
   try {
     const mintQuotes = getMintQuotes();
     
-    mintQuotes[transactionId] = {
-      timestamp: Date.now(),
-      mintQuote,
-      satAmount,
+    // Include mint quote ID in recovery ID to handle multiple quotes per settlement
+    const recoveryId = `${receiptEventId}-${settlementEventId}-${mintQuote.quote}`;
+    mintQuotes[recoveryId] = {
+      receiptEventId,
+      settlementEventId,
       mintUrl,
-      processed: false,
-      metadata
+      mintQuote,
+      timestamp: Date.now(),
+      claimed: false
     };
     
-    localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
-    console.log(`Saved mint quote for transaction ${transactionId}`);
+    localStorage.setItem(MINT_QUOTE_RECOVERY_KEY, JSON.stringify(mintQuotes));
+    console.log(`Saved settler recovery quote for ${recoveryId}`);
     return true;
   } catch (error) {
-    console.error('Error saving mint quote:', error);
+    console.error('Error saving settler recovery quote:', error);
     return false;
   }
 }
 
 /**
- * Get all mint quotes from localStorage
- * @returns {Object} Object containing all mint quotes
+ * Get all settler recovery quotes
+ * @returns {Object} Object containing all settler recovery quotes
  */
 export function getMintQuotes() {
   try {
-    const stored = localStorage.getItem(MINT_QUOTES_KEY);
+    const stored = localStorage.getItem(MINT_QUOTE_RECOVERY_KEY);
     return stored ? JSON.parse(stored) : {};
   } catch (error) {
-    console.error('Error retrieving mint quotes:', error);
+    console.error('Error retrieving settler recovery quotes:', error);
     return {};
   }
 }
 
 /**
- * Get a specific mint quote by transaction ID
- * @param {string} transactionId - The transaction ID
- * @returns {Object|null} The mint quote or null if not found
+ * Get unclaimed settler recovery quotes (for display in settings)
+ * @returns {Object} Object containing unclaimed recovery quotes
  */
-export function getMintQuote(transactionId) {
+export function getUnclaimedMintQuotes() {
   try {
     const mintQuotes = getMintQuotes();
-    return mintQuotes[transactionId] || null;
+    const unclaimed = {};
+    
+    Object.keys(mintQuotes).forEach(recoveryId => {
+      const quote = mintQuotes[recoveryId];
+      if (!quote.claimed) {
+        unclaimed[recoveryId] = quote;
+      }
+    });
+    
+    return unclaimed;
   } catch (error) {
-    console.error(`Error retrieving mint quote for transaction ${transactionId}:`, error);
-    return null;
+    console.error('Error retrieving unclaimed recovery quotes:', error);
+    return {};
   }
 }
 
 /**
- * Mark a mint quote as processed
- * @param {string} transactionId - The transaction ID
+ * Mark a recovery quote as claimed
+ * @param {string} recoveryId - The recovery ID (receiptEventId-settlementEventId-mintQuoteId)
  * @returns {boolean} True if update was successful
  */
-export function markMintQuoteProcessed(transactionId) {
+export function markMintQuoteClaimed(recoveryId) {
   try {
     const mintQuotes = getMintQuotes();
     
-    if (mintQuotes[transactionId]) {
-      mintQuotes[transactionId].processed = true;
-      mintQuotes[transactionId].processedTimestamp = Date.now();
+    if (mintQuotes[recoveryId]) {
+      mintQuotes[recoveryId].claimed = true;
+      mintQuotes[recoveryId].claimedTimestamp = Date.now();
       
-      localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
-      console.log(`Marked mint quote for transaction ${transactionId} as processed`);
+      localStorage.setItem(MINT_QUOTE_RECOVERY_KEY, JSON.stringify(mintQuotes));
+      console.log(`Marked recovery quote ${recoveryId} as claimed`);
       return true;
     }
     
     return false;
   } catch (error) {
-    console.error(`Error marking mint quote as processed for transaction ${transactionId}:`, error);
+    console.error(`Error marking recovery quote as claimed for ${recoveryId}:`, error);
     return false;
-  }
-}
-
-/**
- * Get all unprocessed mint quotes
- * @returns {Object} Object containing all unprocessed mint quotes
- */
-export function getUnprocessedMintQuotes() {
-  try {
-    const mintQuotes = getMintQuotes();
-    const unprocessed = {};
-    
-    Object.keys(mintQuotes).forEach(transactionId => {
-      if (!mintQuotes[transactionId].processed) {
-        unprocessed[transactionId] = mintQuotes[transactionId];
-      }
-    });
-    
-    return unprocessed;
-  } catch (error) {
-    console.error('Error retrieving unprocessed mint quotes:', error);
-    return {};
   }
 }
 
 /**
  * Delete a mint quote
- * @param {string} transactionId - The transaction ID
+ * @param {string} recoveryId - The recovery ID
  * @returns {boolean} True if deletion was successful
  */
-export function deleteMintQuote(transactionId) {
+export function deleteMintQuote(recoveryId) {
   try {
     const mintQuotes = getMintQuotes();
     
-    if (mintQuotes[transactionId]) {
-      delete mintQuotes[transactionId];
-      localStorage.setItem(MINT_QUOTES_KEY, JSON.stringify(mintQuotes));
-      console.log(`Deleted mint quote for transaction ${transactionId}`);
+    if (mintQuotes[recoveryId]) {
+      delete mintQuotes[recoveryId];
+      localStorage.setItem(MINT_QUOTE_RECOVERY_KEY, JSON.stringify(mintQuotes));
+      console.log(`Deleted mint quote ${recoveryId}`);
       return true;
     }
     
     return false;
   } catch (error) {
-    console.error(`Error deleting mint quote for transaction ${transactionId}:`, error);
+    console.error(`Error deleting mint quote ${recoveryId}:`, error);
     return false;
   }
 }
 
 /**
- * Clear all mint quotes
- * @returns {boolean} True if clearing was successful
+ * Clean up old or claimed recovery quotes
+ * @param {number} maxAgeMs - Maximum age in milliseconds (default: 1 week)
+ * @returns {number} Number of quotes cleaned up
  */
-export function clearMintQuotes() {
+export function cleanupMintQuotes(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
   try {
-    localStorage.removeItem(MINT_QUOTES_KEY);
-    console.log('Cleared all mint quotes');
-    return true;
+    const mintQuotes = getMintQuotes();
+    const now = Date.now();
+    let cleanedCount = 0;
+    
+    Object.keys(mintQuotes).forEach(recoveryId => {
+      const quote = mintQuotes[recoveryId];
+      const age = now - quote.timestamp;
+      
+      // Delete if claimed or older than max age
+      if (quote.claimed || age > maxAgeMs) {
+        delete mintQuotes[recoveryId];
+        cleanedCount++;
+      }
+    });
+    
+    if (cleanedCount > 0) {
+      localStorage.setItem(MINT_QUOTE_RECOVERY_KEY, JSON.stringify(mintQuotes));
+      console.log(`Cleaned up ${cleanedCount} recovery quotes`);
+    }
+    
+    return cleanedCount;
   } catch (error) {
-    console.error('Error clearing mint quotes:', error);
-    return false;
+    console.error('Error cleaning up recovery quotes:', error);
+    return 0;
   }
 }

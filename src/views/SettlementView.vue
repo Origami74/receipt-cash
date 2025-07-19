@@ -220,20 +220,19 @@
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
       @close="showLightningModal = false"
-      @open-wallet="openInLightningWallet"
+      @open-wallet="openInLightningWalletReversed"
       @cancel="cancelPayment"
-      @retry="retryLightningPayment"
     />
   
     <CashuPaymentModal
       :show="showCashuModal"
-      :payment-request="getPaymentRequest"
+      :payment-request="cashuPaymentRequest"
       :amount="calculatedPaymentAmount"
       :payment-success="paymentSuccess"
       :payment-processing-state="paymentProcessingState"
       :payment-error-message="paymentErrorMessage"
       @close="showCashuModal = false"
-      @open-wallet="openInCashuWallet"
+      @open-wallet="openInCashuWalletReversed"
       @cancel="cancelPayment"
     />
     
@@ -251,7 +250,6 @@ import { useRouter } from 'vue-router';
 import receiptService from '../services/receipt';
 import settlementService from '../services/settlement';
 import nostrService from '../services/nostr';
-import usePaymentProcessing from '../composables/usePaymentProcessing';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
@@ -288,7 +286,6 @@ export default {
     const router = useRouter();
     const merchant = ref('');
     const date = ref('');
-    const tax = ref(0);
     const items = ref([]);
     const loading = ref(true);
     const error = ref(null);
@@ -350,51 +347,47 @@ export default {
     const currentPaymentType = ref('');
     const settlementEventId = ref('');
     const calculatedPaymentAmount = ref(0); // Store the calculated amount for modal display
+    const cashuPaymentRequest = ref(''); // Store the generated Cashu payment request
+    
+    // Local modal and Lightning payment state (moved from composable)
+    const lightningInvoice = ref('');
+    const showLightningModal = ref(false);
+    const showCashuModal = ref(false);
     
     // Track processed confirmations to prevent duplicates
     const processedConfirmations = ref(new Set());
     
-    // Initialize payment processing composable (still needed for calculations)
-    const paymentProcessing = usePaymentProcessing({
-      items,
-      currency,
-      btcPrice,
-      tax,
-      receiptEventId: props.eventId,
-      decryptionKey: props.decryptionKey,
-      
-      onPaymentSuccess: async (selectedItems) => {
-        // This is now handled by the reversed architecture
-        // The payer will publish confirmation events
-      },
-      updateSettledItems
+    // Local computed properties and methods (replacing usePaymentProcessing)
+    const selectedItems = computed(() => {
+      return items.value.filter(item => item.selectedQuantity > 0);
     });
+
+    const selectedSubtotal = computed(() => {
+      return paymentService.calculateSelectedSubtotal(selectedItems.value);
+    });
+
+    const formatPrice = (amount) => {
+      return paymentService.formatPrice(amount, currency.value);
+    };
+
+    const selectAllItems = () => {
+      const allUnsettled = items.value.filter(item => !item.settled);
+      if (allUnsettled.length === 0) return;
+      
+      const allMaxed = allUnsettled.every(item => item.selectedQuantity === item.quantity);
+      allUnsettled.forEach(item => {
+        item.selectedQuantity = allMaxed ? 0 : item.quantity;
+      });
+    };
+
+    const devPercentage = ref(-1); // Default dev percentage (will be overridden from receipt)
     
-    // Destructure values and methods from composable
-    const {
-      selectedItems,
-      selectedSubtotal,
-      calculatedTax,
-      developerFee,
-      payerShare,
-      devPercentage,
-      formatPrice,
-      selectAllItems,
-      copyPaymentRequest,
-      lightningInvoice,
-      showLightningModal,
-      showCashuModal,
-      openInLightningWallet,
-      openInCashuWallet,
-      getPaymentRequest,
-      paymentProcessingState,
-      paymentErrorMessage,
-      invoiceError,
-      retryLightningPayment
-    } = paymentProcessing;
+    // Add missing variables that are used in the template but no longer needed
+    const paymentProcessingState = ref('initial');
+    const paymentErrorMessage = ref('');
+    const invoiceError = ref(false);
+
     
-    // Get payment request from composable
-    const paymentRequest = computed(() => paymentProcessing.paymentRequest?.value || '');
     
     // Item quantity management
     
@@ -425,7 +418,6 @@ export default {
         // Update component state with the fetched data
         merchant.value = receiptData.merchant;
         date.value = receiptData.date;
-        tax.value = receiptData.tax;
         currency.value = receiptData.currency;
         selectedCurrency.value = receiptData.currency; // Set selected currency to receipt's currency
         btcPrice.value = receiptData.btcPrice;
@@ -446,13 +438,6 @@ export default {
           // Fall back to receipt's stored BTC price
           currentBtcPrice.value = receiptData.btcPrice;
         }
-        
-        // Extract developer percentage from receipt data
-        // Update dev percentage in the payment composable
-        paymentProcessing.setDevPercentage(receiptData.splitPercentage);
-        
-        // Set payment request in the payment composable
-        paymentProcessing.setPaymentRequest(receiptData.paymentRequest);
         
         // Subscribe to settlement updates
         subscribeToUpdates();
@@ -518,12 +503,8 @@ export default {
         const satAmount = calculatePaymentAmount();
         
         // Get mint URL from receipt's payment request
-        const recipientCashuDmInfo = cashuService.extractNostrTransport(paymentRequest.value);
+        // TODO: get accepted mints from receipt
         let mintUrl = 'https://mint.minibits.cash/Bitcoin'; // fallback
-        
-        if (recipientCashuDmInfo && recipientCashuDmInfo.mints && recipientCashuDmInfo.mints.length > 0) {
-          mintUrl = recipientCashuDmInfo.mints[0];
-        }
         
         const mint = new CashuMint(mintUrl);
         const wallet = new CashuWallet(mint);
@@ -606,8 +587,8 @@ export default {
           settlementId
         );
         
-        // 6. Update the payment request for the modal
-        paymentProcessing.setPaymentRequest(newPaymentRequest);
+        // 6. Store the payment request for the modal
+        cashuPaymentRequest.value = newPaymentRequest;
         
         // 7. Show the Cashu modal
         showCashuModal.value = true;
@@ -780,7 +761,25 @@ export default {
       cashuPaymentLocked.value = false;
       currentPaymentType.value = '';
       settlementEventId.value = '';
+      cashuPaymentRequest.value = ''; // Clear the payment request
+      showLightningModal.value = false;
+      showCashuModal.value = false;
+      lightningInvoice.value = '';
       // Note: We don't reset pending quantities as they may come from other users
+    };
+    
+    // Open Cashu wallet with the generated payment request
+    const openInCashuWalletReversed = () => {
+      if (cashuPaymentRequest.value) {
+        window.open(`cashu:${cashuPaymentRequest.value}`, '_blank');
+      }
+    };
+    
+    // Open Lightning wallet with the generated invoice
+    const openInLightningWalletReversed = () => {
+      if (lightningInvoice.value) {
+        window.open(`lightning:${lightningInvoice.value}`, '_blank');
+      }
     };
     
     // Subscription management
@@ -817,9 +816,6 @@ export default {
       items,
       selectedItems,
       selectedSubtotal,
-      calculatedTax,
-      developerFee,
-      payerShare,
       devPercentage,
       loading,
       error,
@@ -830,21 +826,18 @@ export default {
       decrementQuantity,
       payWithLightning: payWithLightningReversed,
       payWithCashu: payWithCashuReversed,
-      copyPaymentRequest,
       selectAllItems,
       formatPrice,
       lightningInvoice,
       showLightningModal,
       showCashuModal,
-      openInLightningWallet,
-      openInCashuWallet,
-      getPaymentRequest,
+      openInLightningWalletReversed,
+      openInCashuWalletReversed,
       paymentSuccess,
       paymentInProgress,
       paymentProcessingState,
       paymentErrorMessage,
       invoiceError,
-      retryLightningPayment,
       showSettings,
       goToHome,
       cancelPayment: cancelPaymentReversed,
@@ -860,7 +853,8 @@ export default {
       cashuPaymentLocked,
       currentPaymentType,
       settlementEventId,
-      calculatedPaymentAmount
+      calculatedPaymentAmount,
+      cashuPaymentRequest
     };
   }
 };

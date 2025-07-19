@@ -50,7 +50,6 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     
     // Add encrypted mint_quote tag only for lightning payments
     if (paymentType === 'lightning' && mintQuoteId) {
-      console.log("mintquoteId", mintQuoteId)
       // Get the current user's private key for NIP-44 encryption
       const ndk = await nostrService.getNdk();
       const senderPrivateKey = ndk.signer.privateKey;
