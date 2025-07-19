@@ -508,7 +508,6 @@ export default {
         
         const mint = new CashuMint(mintUrl);
         const wallet = new CashuWallet(mint);
-        await wallet.loadMint();
         
         const mintQuote = await wallet.createMintQuote(satAmount);
         

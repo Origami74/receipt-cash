@@ -22,6 +22,7 @@ class MintQuoteRecoveryService {
 
     try {
       const mint = new CashuMint(mintUrl);
+      mint.connectWebSocket();
       const wallet = new CashuWallet(mint);
       
       this.activeWallets.set(mintUrl, wallet);

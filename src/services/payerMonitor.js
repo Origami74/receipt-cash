@@ -215,12 +215,12 @@ class PayerMonitor {
         }
         
         const mint = new CashuMint(mintUrl);
+        mint.connectWebSocket();
         const wallet = new CashuWallet(mint);
-        await wallet.loadMint();
         
         const currentStatus = await wallet.checkMintQuote(mintQuoteId);
         console.log('Mint quote status:', currentStatus.state);
-        
+                
         if (currentStatus.state === MintQuoteState.PAID) {
           console.log('Lightning payment detected! Processing...');
           await this.claimAndForwardPayment(mintQuoteId, event, settlementData, wallet);
@@ -424,8 +424,8 @@ class PayerMonitor {
       // Create wallet instance to handle token operations
       const { CashuMint, CashuWallet } = await import('@cashu/cashu-ts');
       const mint = new CashuMint(cashuMessage.mint);
+      mint.connectWebSocket();
       const wallet = new CashuWallet(mint);
-      await wallet.loadMint();
       
       // Split tokens between developer and payer
       const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, cashuMessage.proofs);
