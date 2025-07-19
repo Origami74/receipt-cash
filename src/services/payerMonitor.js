@@ -224,9 +224,12 @@ class PayerMonitor {
         if (currentStatus.state === MintQuoteState.PAID) {
           console.log('Lightning payment detected! Processing...');
           await this.claimAndForwardPayment(mintQuoteId, event, settlementData, wallet);
-        } else {
+        } else if(currentStatus.state === MintQuoteState.ISSUED){
+          console.log('Lightning payment was already issued (claimed), cannot process...');
+        }
+        else {
           // Continue monitoring
-          setTimeout(checkPayment, 2000);
+          setTimeout(checkPayment, 5000);
         }
         
       } catch (error) {

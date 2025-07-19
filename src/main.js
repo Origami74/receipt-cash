@@ -6,7 +6,6 @@ import './style.css';
 import nostrService from './services/nostr';
 import receiptMonitoringService from './services/receiptMonitoringService';
 import proofCleanup from './services/proofCleanup';
-import mintQuoteRecoveryService from './services/mintQuoteRecovery';
 import debugLogger from './utils/debugLogger';
 
 // Initialize Nostr
@@ -15,7 +14,7 @@ receiptMonitoringService.initialize();
 
 // Start cleanup services
 proofCleanup.start();
-mintQuoteRecoveryService.start();
+
 
 // Initialize debug logging if it was previously enabled
 if (localStorage.getItem('debug-logging-enabled') === 'true') {

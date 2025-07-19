@@ -262,6 +262,7 @@ import cashuService from '../services/cashu';
 import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
+import { saveMintQuote } from '../utils/storage';
 
 export default {
   name: 'SettlementView',
@@ -357,7 +358,6 @@ export default {
     // Track processed confirmations to prevent duplicates
     const processedConfirmations = ref(new Set());
     
-    // Local computed properties and methods (replacing usePaymentProcessing)
     const selectedItems = computed(() => {
       return items.value.filter(item => item.selectedQuantity > 0);
     });
@@ -523,7 +523,13 @@ export default {
         );
         
         settlementEventId.value = settlementId;
-        
+
+        const saveMintQuoteResult = await saveMintQuote(props.eventId, settlementEventId.value, mintUrl, mintQuote)
+        if(!saveMintQuoteResult){
+          console.error('Error saving mint quote for potential recovery later:', error);
+          showNotification('Error saving mint quote for potential recovery later: ' + error.message, 'error');
+        }
+
         // 4. Get the Lightning invoice and show payment modal
         const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
         lightningInvoice.value = mintQuoteChecked.request;

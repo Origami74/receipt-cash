@@ -30,7 +30,7 @@ import { showNotification, useNotification } from './utils/notification';
 import Notification from './components/Notification.vue';
 import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
-import recoveryService from './services/recovery';
+import mintQuoteRecoveryService from './services/mintQuoteRecovery';
 import debugLogger from './utils/debugLogger';
 import { checkForVersionUpdate } from './utils/versionManager';
 
@@ -72,15 +72,8 @@ export default {
       
       // Run recovery service after a short delay to ensure app is fully initialized
       setTimeout(async () => {
-        try {
-          const recovered = await recoveryService.checkPendingLightningPayments();
-          if (recovered && recovered.length > 0) {
-            console.log(`Successfully recovered ${recovered.length} payments`);
-            showNotification(`Successfully recovered ${recovered.length} payments`, "success")
-          }
-        } catch (error) {
-          console.error('Error running recovery service:', error);
-        }
+        // TODO recovery loop
+        mintQuoteRecoveryService.start();
       }, 1000);
     });
     

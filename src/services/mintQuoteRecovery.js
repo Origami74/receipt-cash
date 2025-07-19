@@ -38,13 +38,30 @@ class MintQuoteRecoveryService {
    * @param {string} mintQuoteId - The mint quote ID
    * @returns {Promise<boolean>} True if the quote has been paid
    */
-  async isQuotePaid(mintUrl, mintQuoteId) {
+  async IsQuotePaid(mintUrl, mintQuoteId) {
     try {
       const wallet = await this.getWallet(mintUrl);
       const quoteStatus = await wallet.checkMintQuote(mintQuoteId);
       return quoteStatus.state === MintQuoteState.PAID;
     } catch (error) {
       console.error(`Error checking quote status for ${mintQuoteId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if a mint quote has been issued (claimed)
+   * @param {string} mintUrl - The mint URL
+   * @param {string} mintQuoteId - The mint quote ID
+   * @returns {Promise<boolean>} True if the quote has been issued/claimed
+   */
+  async IsQuoteIssued(mintUrl, mintQuoteId) {
+    try {
+      const wallet = await this.getWallet(mintUrl);
+      const quoteStatus = await wallet.checkMintQuote(mintQuoteId);
+      return quoteStatus.state === MintQuoteState.ISSUED;
+    } catch (error) {
+      console.error(`Error checking quote issued status for ${mintQuoteId}:`, error);
       return false;
     }
   }
@@ -66,7 +83,7 @@ class MintQuoteRecoveryService {
       console.log(`Starting recovery for ${recoveryId}:`, mintQuote);
 
       // Check if the mint quote has been paid
-      const isPaid = await this.isQuotePaid(mintQuote.mintUrl, mintQuote.mintQuote.quote);
+      const isPaid = await this.IsQuotePaid(mintQuote.mintUrl, mintQuote.mintQuote.quote);
       
       if (!isPaid) {
         throw new Error('Lightning invoice has not been paid yet');
@@ -108,7 +125,7 @@ class MintQuoteRecoveryService {
 
     for (const [recoveryId, quote] of Object.entries(mintQuotes)) {
       try {
-        const isPaid = await this.isQuotePaid(quote.mintUrl, quote.mintQuote.quote);
+        const isPaid = await this.IsQuotePaid(quote.mintUrl, quote.mintQuote.quote);
         statuses[recoveryId] = {
           isPaid,
           amount: quote.mintQuote.amount,
@@ -157,12 +174,12 @@ class MintQuoteRecoveryService {
       
       for (const [recoveryId, quote] of Object.entries(mintQuotes)) {
         try {
-          // Check if the quote has been paid (which means it was claimed by the payer)
-          const isPaid = await this.isQuotePaid(quote.mintUrl, quote.mintQuote.quote);
+          // Check if the quote has been issued (which means the ecash has been claimed)
+          const isIssued = await this.IsQuoteIssued(quote.mintUrl, quote.mintQuote.quote);
           
-          if (isPaid) {
-            // Quote was paid, so it was claimed by the payer - we can delete it
-            console.log(`Auto-deleting claimed quote: ${recoveryId}`);
+          if (isIssued) {
+            // Quote was issued, so the ecash has been claimed - we can delete it
+            console.log(`Auto-deleting issued quote: ${recoveryId}`);
             markMintQuoteClaimed(recoveryId);
             autoDeletedCount++;
           }

@@ -194,7 +194,7 @@
               <div class="bg-white rounded-lg p-6 max-w-sm w-full">
                 <h3 class="text-lg font-medium mb-2">Confirm Deletion</h3>
                 <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to delete this Lightning invoice? This action cannot be undone.
+                  Are you sure you want to delete this Lightning mint quote? This action cannot be undone.
                 </p>
                 <div class="flex space-x-3 justify-end">
                   <button
@@ -219,6 +219,9 @@
                 <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
                 <p class="text-sm text-gray-600 mb-4">
                   Are you sure you want to recover this Lightning payment? The ecash will be claimed and stored in your proof recovery section for manual recovery.
+                  <br>
+                  <br>
+                  The payer (receipt creator) will no longer be able to confirm your payment.
                 </p>
                 <div class="flex space-x-3 justify-end">
                   <button
