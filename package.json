@@ -5,7 +5,7 @@
   "description": "A mobile-first receipt settlement PWA using Nostr and Cashu",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "env VITE_USE_HTTPS=true vite",
     "build": "vite build",
     "publish": "vite build && npx nsite-cli upload dist",
     "preview": "vite preview"
