@@ -8,6 +8,7 @@ import cashuService from '../services/cashu';
 import receiptKeyManager from '../utils/receiptKeyManager';
 import { showNotification } from '../utils/notification';
 import { Buffer } from 'buffer';
+import { validateReceiveAddress } from './addressValidation';
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -230,7 +231,7 @@ class PayerMonitor {
                 
         if (currentStatus.state === MintQuoteState.PAID) {
           console.log('Lightning payment detected! Processing...');
-          await this.claimAndForwardPayment(mintQuoteId, event, settlementData, wallet);
+          await this.processSettlementInLightning(mintQuoteId, event, settlementData, wallet);
         } else if(currentStatus.state === MintQuoteState.ISSUED){
           console.log('Lightning payment was already issued (claimed), cannot process...');
         }
@@ -356,7 +357,7 @@ class PayerMonitor {
                   subscription.stop();
                   
                   // Process the received Cashu tokens
-                  await this.processCashuTokens(messageContent, event, settlementData);
+                  await this.processSettlementInCashu(messageContent, event, settlementData);
                   return;
                 }
               }
@@ -387,12 +388,11 @@ class PayerMonitor {
   /**
    * Process received Cashu tokens and forward payments
    * @param {Object} cashuMessage - The Cashu payment message
-   * @param {Object} event - The settlement event
+   * @param {Object} settlementEvent - The settlement event
    * @param {Object} settlementData - The settlement data
    */
-  async processCashuTokens(cashuMessage, event, settlementData) {
-    const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
-    const transactionId = `${receiptEventId}-cashu-${Date.now()}`;
+  async processSettlementInCashu(cashuMessage, settlementEvent, settlementData) {
+    const receiptEventId = settlementEvent.tags.find(tag => tag[0] === 'e')?.[1];
     
     try {
       console.log('Processing received Cashu tokens:', cashuMessage.proofs.length, 'proofs');
@@ -411,43 +411,17 @@ class PayerMonitor {
         console.warn('Amount mismatch - Expected:', expectedAmount, 'Received:', receivedAmount);
         // Continue processing anyway, but log the discrepancy
       }
-      
+
       // Store received proofs for recovery
+      const transactionId = `${receiptEventId}-cashu-${Date.now()}`;
       await this.storeProofsForRecovery(transactionId, cashuMessage.proofs, cashuMessage.mint, 'received');
       
       // Publish confirmation event immediately after receiving tokens
-      await this.publishConfirmation(event);
+      await this.publishConfirmation(settlementEvent);
       
-      // Get receipt info for dev percentage
-      const receiptInfo = this.activeReceipts.get(receiptEventId);
-      const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
-      
-      // Calculate split amounts
-      const devAmount = Math.round(receivedAmount * (devPercentage / 100));
-      const payerAmount = receivedAmount - devAmount;
-      
-      console.log(`Splitting Cashu payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
-      
-      // Create wallet instance to handle token operations
-      const wallet = await cashuWalletManager.getWallet(cashuMessage.mint);
-      
-      // Split tokens between developer and payer
-      const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, cashuMessage.proofs);
-      
-      // Store split proofs for recovery
-      await this.storeProofsForRecovery(transactionId, payerProofs, cashuMessage.mint, 'payer');
-      await this.storeProofsForRecovery(transactionId, devProofs, cashuMessage.mint, 'developer');
-      
-      // Forward payments
-      const { getLastPaymentRequest } = await import('../utils/storage');
-      const payerPaymentRequest = getLastPaymentRequest();
-      await this.forwardPayments(payerProofs, devProofs, payerPaymentRequest, cashuMessage.mint);
-      
-      // Mark proofs as forwarded
-      await this.markProofsAsForwarded(transactionId);
-      
-      showNotification('Cashu payment processed successfully!', 'success');
-      
+      // Forward payment to payer
+      await this.forwardPayment(transactionId, cashuMessage.proofs, cashuMessage.mint, receiptEventId)
+
     } catch (error) {
       console.error('Error processing Cashu tokens:', error);
       showNotification('Error processing Cashu payment: ' + error.message, 'error');
@@ -455,6 +429,54 @@ class PayerMonitor {
       // Keep proofs stored for recovery
       console.log(`Cashu proofs stored for recovery under transaction: ${transactionId}`);
     }
+  }
+
+  async forwardPayment(transactionId, proofs, mintUrl, receiptEventId) {
+      // Get receipt info for dev percentage
+      const receiptInfo = this.activeReceipts.get(receiptEventId);
+      const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
+      
+      // Calculate split amounts
+      const receivedAmount = proofs.reduce((sum, proof) => sum + proof.amount, 0);
+      const devAmount = Math.round(receivedAmount * (devPercentage / 100));
+      const payerAmount = receivedAmount - devAmount;
+      
+      console.log(`Splitting Cashu payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
+      
+      // Create wallet instance to handle token operations
+      const wallet = await cashuWalletManager.getWallet(mintUrl);
+      
+      // Split tokens between developer and payer
+      const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, proofs);
+      
+      // Store split proofs for recovery
+      await this.storeProofsForRecovery(transactionId, payerProofs, mintUrl, 'payer');
+      await this.storeProofsForRecovery(transactionId, devProofs, mintUrl, 'developer');
+      
+      const errors = [];
+    
+      try {
+        await this.payoutPayer(payerProofs, mintUrl)
+        
+        await this.payoutDev(devProofs, mintUrl)
+        
+        // If there were any errors, throw them for the caller to handle
+        if (errors.length > 0) {
+          console.error('Payment forwarding errors:', errors);
+          throw new Error(errors.join('; '));
+        }
+        
+        console.log('All payments forwarded successfully');
+        
+      } catch (error) {
+        console.error('Error forwarding payments:', error);
+        throw error; // Re-throw for caller to handle
+      }
+
+      // Mark proofs as forwarded
+      await this.markProofsAsForwarded(transactionId);
+
+      showNotification('Setllement payment forwarded successfully!', 'success');
   }
   
   /**
@@ -464,9 +486,8 @@ class PayerMonitor {
    * @param {Object} settlementData - The settlement data
    * @param {CashuWallet} wallet - The Cashu wallet instance
    */
-  async claimAndForwardPayment(mintQuoteId, event, settlementData, wallet) {
+  async processSettlementInLightning(mintQuoteId, event, settlementData, wallet) {
     const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
-    const transactionId = `${receiptEventId}-${Date.now()}`;
     
     try {
       // Calculate amount in sats from settlement data (prices already in sats)
@@ -480,39 +501,14 @@ class PayerMonitor {
       console.log('Claimed ecash proofs:', proofs.length);
       
       // STEP 1: Store proofs temporarily for recovery
+      const transactionId = `${receiptEventId}-${Date.now()}`;
       await this.storeProofsForRecovery(transactionId, proofs, wallet.mint.mintUrl, 'claimed');
       
       // STEP 2: Publish confirmation event immediately after claiming
       await this.publishConfirmation(event);
       
-      // STEP 3: Split and forward payments
-      const receiptInfo = this.activeReceipts.get(receiptEventId);
-      const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
-      
-      // Calculate split amounts
-      const devAmount = Math.round(satAmount * (devPercentage / 100));
-      const payerAmount = satAmount - devAmount;
-      
-      // Split tokens between developer and payer
-      const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, proofs);
-      
-      console.log(`Split payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
-      
-      // Store split proofs for recovery
-      await this.storeProofsForRecovery(transactionId, payerProofs, wallet.mint.mintUrl, 'payer');
-      await this.storeProofsForRecovery(transactionId, devProofs, wallet.mint.mintUrl, 'developer');
-      
-      // Get payer payment request from settings
-      const { getLastPaymentRequest } = await import('../utils/storage');
-      const payerPaymentRequest = getLastPaymentRequest();
-      
-      // Forward payments using the wallet's mint
-      await this.forwardPayments(payerProofs, devProofs, payerPaymentRequest, wallet.mint.mintUrl);
-      
-      // Mark proofs as 'forwarded' instead of deleting them
-      await this.markProofsAsForwarded(transactionId);
-      
-      showNotification('Payment processed successfully!', 'success');
+      // STEP 3: Forward payment to payer
+      await this.forwardPayment(transactionId, proofs, wallet.mint.mintUrl, receiptEventId)
       
     } catch (error) {
       console.error('Error processing payment:', error);
@@ -643,56 +639,79 @@ class PayerMonitor {
   }
 
   /**
-   * Forward payments to payer and developer
-   * @param {Array} payerProofs - Proofs for the payer
-   * @param {Array} devProofs - Proofs for the developer
-   * @param {String} payerPaymentRequest - The payer's payment request
+   * Forward proofs to developer
+   * @param {Array} proofs - Proofs for the developer
    * @param {String} mintUrl - The mint URL to use for payments
    */
-  async forwardPayments(payerProofs, devProofs, payerPaymentRequest, mintUrl) {
-    const errors = [];
-    
-    try {
-      // Forward to payer using their payment request
-      if (payerPaymentRequest && payerProofs.length > 0) {
-        console.log('Forwarding payment to payer...');
-        const payerSuccess = await this.sendPaymentCashu(payerProofs, payerPaymentRequest, mintUrl);
-        if (!payerSuccess) {
-          errors.push('Failed to forward payment to payer');
-        }
-      } else {
-        console.warn('Skipping payer payment: paymentRequest missing or no payer proofs');
-        if (!payerPaymentRequest) errors.push('No payment request in receipt data');
-        if (payerProofs.length === 0) errors.push('No payer proofs to send');
-      }
-      
-      // Forward to developer using developer payment request
-      if (devProofs.length > 0) {
+  async payoutDev(proofs, mintUrl) {
+    // Forward to developer using developer payment request
+      if (proofs.length > 0) {
         console.log('Forwarding payment to developer...');
         const DEV_CASHU_REQ = "creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWd4djZ6ZHVqMmFmcmZwZzI3bjQzMDhsN2Fna3NrdWY4c3Q0ZzY2Z2EwNzN5YTVodTN0cmNjdmVnNXMwYWeBgmFuYjE3YWloMDgyYmI4NTJhdWNzYXQ=";
-        const devSuccess = await this.sendPaymentCashu(devProofs, DEV_CASHU_REQ, mintUrl);
+        const devSuccess = await this.sendPaymentCashu(proofs, DEV_CASHU_REQ, mintUrl);
         if (!devSuccess) {
-          errors.push('Failed to forward payment to developer');
+          throw Error('Failed to forward payment to developer');
         }
       } else {
-        console.warn('Skipping developer payment: no dev proofs');
-        errors.push('No developer proofs to send');
+        console.log('Skipping developer payment: no dev proofs');
       }
-      
-      // If there were any errors, throw them for the caller to handle
-      if (errors.length > 0) {
-        console.error('Payment forwarding errors:', errors);
-        throw new Error(errors.join('; '));
-      }
-      
-      console.log('All payments forwarded successfully');
-      
-    } catch (error) {
-      console.error('Error forwarding payments:', error);
-      throw error; // Re-throw for caller to handle
-    }
   }
   
+    /**
+   * Forward proofs to developer
+   * @param {Array} proofs - Proofs for the developer
+   * @param {String} mintUrl - The mint URL to use for payments
+   */
+  async payoutPayer(proofs, mintUrl) {
+    try {
+      const { getReceiveAddress } = await import('../utils/storage');
+      const { validateReceiveAddress } = await import('./addressValidation');
+      
+      const receiveAddress = getReceiveAddress();
+      
+      if (!receiveAddress) {
+        console.error('Cannot payout payer: no receive address found');
+        return false;
+      }
+      
+      const validation = validateReceiveAddress(receiveAddress);
+      
+      if (!validation.isValid) {
+        console.error('Cannot payout payer: invalid receive address -', validation.error);
+        return false;
+      }
+      
+      if (validation.type === 'lightning') {
+        console.warn('Lightning payouts not yet supported for payer. TODO: implement token melting');
+        return false;
+      }
+      
+      if (validation.type === 'cashu') {
+        if (proofs.length > 0) {
+          console.log('Forwarding payment to payer via Cashu...');
+          const payerSuccess = await this.sendPaymentCashu(proofs, receiveAddress, mintUrl);
+          if (!payerSuccess) {
+            console.error('Failed to forward payment to payer');
+            return false;
+          }
+          console.log('Successfully paid out payer via Cashu');
+          return true;
+        } else {
+          console.log('Skipping payer payment: no payer proofs');
+          return false;
+        }
+      }
+      
+      console.error('Unknown address type for payer payout:', validation.type);
+      return false;
+      
+    } catch (error) {
+      console.error('Error in payoutPayer:', error);
+      return false;
+    }
+  }
+
+
   /**
    * Publish confirmation event
    * @param {Object} event - The settlement event to confirm

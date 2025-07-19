@@ -1,8 +1,6 @@
-const PAYMENT_REQUESTS_KEY = 'receipt-cash-payment-requests';
+const RECEIVE_ADDRESS_KEY = 'receipt-cash-receive-address';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
 const PROOFS_KEY = 'receipt-cash-proofs';
-const MINT_QUOTES_KEY = 'receipt-cash-mint-quotes'; // TODO: remove
-const RECEIPT_HISTORY_KEY = 'receipt-cash-receipt-history';
 const MINT_QUOTE_RECOVERY_KEY = 'receipt-cash-mint-quote-recovery';
 
 // Default AI settings
@@ -12,31 +10,42 @@ const DEFAULT_AI_SETTINGS = {
   model: 'gpt-4.1-mini'
 };
 
-export function savePaymentRequest(paymentRequest) {
+
+
+/**
+ * Save receive address (can be lightning address or cashu payment request)
+ * @param {String} address - The receive address to save
+ */
+export function saveReceiveAddress(address) {
   try {
-    const requests = getPaymentRequests();
-    if (!requests.includes(paymentRequest)) {
-      requests.push(paymentRequest);
-      localStorage.setItem(PAYMENT_REQUESTS_KEY, JSON.stringify(requests));
-    }
+    localStorage.setItem(RECEIVE_ADDRESS_KEY, address);
   } catch (error) {
-    console.error('Error saving payment request:', error);
+    console.error('Error saving receive address:', error);
   }
 }
 
-export function getPaymentRequests() {
+/**
+ * Get the saved receive address
+ * @returns {String|null} The saved receive address or null if none exists
+ */
+export function getReceiveAddress() {
   try {
-    const stored = localStorage.getItem(PAYMENT_REQUESTS_KEY);
-    return stored ? JSON.parse(stored) : [];
+    return localStorage.getItem(RECEIVE_ADDRESS_KEY);
   } catch (error) {
-    console.error('Error getting payment requests:', error);
-    return [];
+    console.error('Error getting receive address:', error);
+    return null;
   }
 }
 
-export function getLastPaymentRequest() {
-  const requests = getPaymentRequests();
-  return requests.length > 0 ? requests[requests.length - 1] : null;
+/**
+ * Clear the saved receive address
+ */
+export function clearReceiveAddress() {
+  try {
+    localStorage.removeItem(RECEIVE_ADDRESS_KEY);
+  } catch (error) {
+    console.error('Error clearing receive address:', error);
+  }
 }
 
 /**

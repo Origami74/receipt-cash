@@ -125,25 +125,14 @@
       <div v-if="step === 'payment-request'" class="mt-4">
         <div class="bg-white rounded-lg shadow p-4">
           <div class="font-medium mb-2">Create Payment Request</div>
-          <div class="flex gap-2 mb-4">
-            <input
-              v-model="paymentRequest"
-              placeholder="NUT-18 Cashu request"
-              :class="[
-                'flex-1 p-2 border rounded',
-                paymentRequestValid
-                  ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                  : 'border-red-300 focus:border-red-500 focus:ring-red-500'
-              ]"
-              @input="validatePaymentRequest"
-            />
-            <button @click="pasteFromClipboard" class="btn-secondary whitespace-nowrap">
-              Paste
-            </button>
-          </div>
           
-          <div v-if="!paymentRequestValid" class="text-sm text-red-500 mb-4">
-            {{ paymentRequestError }}
+          <div class="mb-4">
+            <ReceiveAddressInput
+              v-model="receiveAddress"
+              label="Receive Address"
+              placeholder="Lightning address (user@domain.com) or Cashu payment request"
+              @validation-change="handleAddressValidation"
+            />
           </div>
           
           <div class="mb-4">
@@ -168,7 +157,16 @@
             </div>
           </div>
           
-          <button @click="createRequest" class="btn-primary w-full">
+          <button
+            @click="createRequest"
+            :disabled="!addressValid || !receiveAddress"
+            :class="[
+              'w-full',
+              (!addressValid || !receiveAddress)
+                ? 'btn-secondary opacity-50 cursor-not-allowed'
+                : 'btn-primary'
+            ]"
+          >
             Create Request
           </button>
         </div>
@@ -208,23 +206,6 @@
       </button>
     </div>
     
-    <!-- Save Payment Request Dialog -->
-    <div v-if="showSaveDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-medium mb-4">Save Payment Request?</h3>
-        <p class="text-gray-600 mb-6">
-          Would you like to save this payment request for future use? It will be automatically filled in next time.
-        </p>
-        <div class="flex gap-4">
-          <button @click="skipSaving" class="btn-secondary flex-1">
-            Skip
-          </button>
-          <button @click="saveAndProceed" class="btn-primary flex-1">
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -237,9 +218,10 @@ import receiptMonitoringService from '../services/receiptMonitoringService';
 import receiptKeyManager from '../utils/receiptKeyManager';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
+import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import { formatCurrency } from '../utils/currency';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricing';
-import { savePaymentRequest, getLastPaymentRequest } from '../utils/storage';
+import { saveReceiveAddress, getReceiveAddress } from '../utils/storage';
 import { showNotification } from '../utils/notification';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -248,7 +230,8 @@ export default {
   name: 'ReceiptPreview',
   components: {
     QRCodeVue,
-    CurrencySelector
+    CurrencySelector,
+    ReceiveAddressInput
   },
   props: {
     receiptData: {
@@ -270,10 +253,12 @@ export default {
     const paymentRequest = ref('');
     const paymentRequestValid = ref(true);
     const paymentRequestError = ref('');
+    const receiveAddress = ref('');
+    const addressValid = ref(true);
+    const addressError = ref('');
+    const addressType = ref('');
     const eventId = ref('');
     const eventEncryptionPrivateKey = ref('');
-    const showSaveDialog = ref(false);
-    const newPaymentRequest = ref('');
     const currentBtcPrice = ref(0);
     const selectedCurrency = ref(receipt.value.currency || 'EUR');
     
@@ -289,11 +274,10 @@ export default {
       // Set currency to receipt's currency
       selectedCurrency.value = receipt.value.currency || 'EUR';
       
-      // Try to load the last used payment request
-      const lastRequest = getLastPaymentRequest();
-      if (lastRequest) {
-        paymentRequest.value = lastRequest;
-        validatePaymentRequest();
+      // Try to load the last used receive address
+      const lastReceiveAddress = getReceiveAddress();
+      if (lastReceiveAddress) {
+        receiveAddress.value = lastReceiveAddress;
       }
       
       // Fetch current BTC price for live preview
@@ -305,26 +289,21 @@ export default {
       }
     });
     
-    // Validate payment request
+    // Handle address validation from ReceiveAddressInput component
+    const handleAddressValidation = (validationResult) => {
+      addressValid.value = validationResult.isValid;
+      addressError.value = validationResult.error;
+      addressType.value = validationResult.type;
+      
+      // Update legacy paymentRequest for backward compatibility
+      paymentRequest.value = receiveAddress.value;
+      paymentRequestValid.value = validationResult.isValid;
+      paymentRequestError.value = validationResult.error;
+    };
+    
+    // Legacy validation for backward compatibility
     const validatePaymentRequest = () => {
-      paymentRequestValid.value = true;
-      paymentRequestError.value = '';
-      
-      if (!paymentRequest.value) {
-        return true;
-      }
-      
-      if (paymentRequest.value.includes('@')) {
-        paymentRequestValid.value = false;
-        paymentRequestError.value = 'Lightning addresses are not supported. Please enter a NUT-18 Cashu request.';
-        return false;
-      }
-      
-      const result = cashuService.validatePaymentRequest(paymentRequest.value);
-      paymentRequestValid.value = result.isValid;
-      paymentRequestError.value = result.error;
-      
-      return result.isValid;
+      return addressValid.value;
     };
     
     const formatPrice = (amount) => {
@@ -387,23 +366,19 @@ export default {
     };
     
     const createRequest = async () => {
-      if (!paymentRequest.value) {
-        showNotification('Please enter a payment request', 'error');
+      if (!receiveAddress.value) {
+        showNotification('Please enter a receive address', 'error');
         return;
       }
       
-      if (!validatePaymentRequest()) {
-        showNotification(paymentRequestError.value, 'error');
+      if (!addressValid.value) {
+        showNotification(addressError.value, 'error');
         return;
       }
       
       try {
-        const lastRequest = getLastPaymentRequest();
-        if (lastRequest !== paymentRequest.value) {
-          newPaymentRequest.value = paymentRequest.value;
-          showSaveDialog.value = true;
-          return;
-        }
+        // Always save the receive address
+        saveReceiveAddress(receiveAddress.value);
         
         await proceedWithRequest();
       } catch (error) {
@@ -498,18 +473,6 @@ export default {
       }
     };
     
-    const saveAndProceed = () => {
-      savePaymentRequest(newPaymentRequest.value);
-      paymentRequest.value = newPaymentRequest.value;
-      showSaveDialog.value = false;
-      proceedWithRequest();
-    };
-    
-    const skipSaving = () => {
-      showSaveDialog.value = false;
-      proceedWithRequest();
-    };
-    
     const copyLink = () => {
       const link = receiptLink.value;
       
@@ -539,7 +502,7 @@ export default {
     const pasteFromClipboard = async () => {
       try {
         const text = await navigator.clipboard.readText();
-        paymentRequest.value = text;
+        receiveAddress.value = text;
       } catch (err) {
         showNotification('Failed to paste from clipboard!', 'error');
         console.error('Failed to paste from clipboard:', err);
@@ -583,12 +546,15 @@ export default {
       paymentRequest,
       paymentRequestValid,
       paymentRequestError,
+      receiveAddress,
+      addressValid,
+      addressError,
+      addressType,
       validatePaymentRequest,
+      handleAddressValidation,
       eventId,
       eventEncryptionPrivateKey,
       hostUrl,
-      showSaveDialog,
-      newPaymentRequest,
       calculateSubtotal: getSubtotal,
       formatPrice,
       formatSats,
@@ -597,8 +563,6 @@ export default {
       copyLink,
       resetProcess,
       pasteFromClipboard,
-      saveAndProceed,
-      skipSaving,
       shareToSocial,
       selectAllItems,
       receiptLink,

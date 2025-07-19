@@ -30,33 +30,13 @@
           <div>
             <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Payment</h4>
             <div class="space-y-4">
-              <div>
-                <label for="paymentAddress" class="block text-sm font-medium text-gray-700 mb-1">
-                  Cashu Payment Address
-                </label>
-                <input
-                  id="paymentAddress"
-                  v-model="settings.paymentAddress"
-                  type="text"
-                  :class="[
-                    'w-full px-3 py-2 border rounded-md shadow-sm text-sm focus:outline-none',
-                    paymentAddressValid
-                      ? 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
-                      : 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                  ]"
-                  placeholder="NUT-18 Cashu payment request"
-                  @change="saveSettings"
-                  @input="validatePaymentAddress"
-                />
-                <div class="mt-1">
-                  <p v-if="paymentAddressValid" class="text-xs text-gray-500">
-                    Used as default when creating new Cashu payment requests
-                  </p>
-                  <p v-else class="text-xs text-red-500">
-                    {{ paymentAddressError }}
-                  </p>
-                </div>
-              </div>
+              <ReceiveAddressInput
+                v-model="settings.receiveAddress"
+                label="Receive Address"
+                input-id="receiveAddress"
+                @validation-change="handleReceiveAddressValidation"
+                @update:modelValue="saveSettings"
+              />
             </div>
           </div>
           
@@ -445,17 +425,23 @@
 
 <script>
 import { ref, onMounted, computed, watch } from 'vue';
-import { getAiSettings, saveAiSettings, clearAiSettings, savePaymentRequest, getLastPaymentRequest,
-         getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote } from '../utils/storage';
+import { getAiSettings, saveAiSettings, clearAiSettings,
+         getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote,
+         getReceiveAddress, saveReceiveAddress } from '../utils/storage';
 import mintQuoteRecoveryService from '../services/mintQuoteRecovery';
 import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../utils/debugLogger';
 import cashuService from '../services/cashu';
+import addressValidation, { AddressType } from '../services/addressValidation';
+import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../utils/versionManager';
 
 export default {
   name: 'SettingsMenu',
+  components: {
+    ReceiveAddressInput
+  },
   props: {
     isOpen: {
       type: Boolean,
@@ -475,12 +461,16 @@ export default {
       completionsUrl: '',
       apiKey: '',
       model: 'gpt-4.1-mini',
-      paymentAddress: ''
+      receiveAddress: ''
     });
     
-    // Payment address validation
-    const paymentAddressValid = ref(true);
-    const paymentAddressError = ref('');
+    // Receive address validation state (handled by component)
+    const receiveAddressValidation = ref({ isValid: true, type: '', error: '' });
+    
+    // Handle validation changes from ReceiveAddressInput component
+    const handleReceiveAddressValidation = (validation) => {
+      receiveAddressValidation.value = validation;
+    };
     
     const pendingProofs = ref({});
     const mintQuotes = ref({});
@@ -506,13 +496,13 @@ export default {
         completionsUrl: storedSettings.completionsUrl || 'https://api.ppq.ai/chat/completions',
         apiKey: storedSettings.apiKey || '',
         model: storedSettings.model || 'gpt-4.1-mini',
-        paymentAddress: ''
+        receiveAddress: ''
       };
       
-      // Load the last payment request
-      const lastRequest = getLastPaymentRequest();
-      if (lastRequest) {
-        settings.value.paymentAddress = lastRequest;
+      // Load the receive address
+      const storedReceiveAddress = getReceiveAddress();
+      if (storedReceiveAddress) {
+        settings.value.receiveAddress = storedReceiveAddress;
       }
       
       // Load pending proofs and mint quotes
@@ -622,27 +612,6 @@ export default {
       }
     };
 
-    // Validate payment address
-    const validatePaymentAddress = () => {
-      // Reset validation state
-      paymentAddressValid.value = true;
-      paymentAddressError.value = '';
-      
-      // Skip validation if empty
-      if (!settings.value.paymentAddress) {
-        return true;
-      }
-      
-      // Validate payment request
-      const result = cashuService.validatePaymentRequest(settings.value.paymentAddress);
-      
-      // Update validation state
-      paymentAddressValid.value = result.isValid;
-      paymentAddressError.value = result.error;
-      
-      return result.isValid;
-    };
-    
     // Save settings to storage
     const saveSettings = () => {
       // Save AI settings
@@ -652,28 +621,31 @@ export default {
         model: settings.value.model
       });
       
-      // Validate and save payment address if entered
-      if (settings.value.paymentAddress) {
-        const isValid = validatePaymentAddress();
-        
-        if (isValid) {
-          savePaymentRequest(settings.value.paymentAddress);
-          showNotification('Payment address saved successfully', 'success');
-        } else {
-          showNotification(`Invalid payment address: ${paymentAddressError.value}`, 'error');
+      // Save receive address (validation is handled by the component)
+      if (settings.value.receiveAddress) {
+        if (receiveAddressValidation.value.isValid) {
+          saveReceiveAddress(settings.value.receiveAddress);
+          const typeDescription = addressValidation.getAddressTypeDescription(receiveAddressValidation.value.type);
+          showNotification(`${typeDescription} saved successfully`, 'success');
         }
+      } else {
+        // Clear the receive address if empty
+        saveReceiveAddress('');
       }
     };
 
     // Clear all settings
     const clearSettings = () => {
       clearAiSettings();
+      saveReceiveAddress(''); // Clear receive address
       settings.value = {
         completionsUrl: 'https://api.ppq.ai/chat/completions',
         apiKey: '',
         model: 'gpt-4.1-mini',
-        paymentAddress: ''
+        receiveAddress: ''
       };
+      // Reset validation state
+      receiveAddressValidation.value = { isValid: false, type: '', error: '' };
     };
     
     // Format transaction ID for display
@@ -871,9 +843,8 @@ export default {
       showMintQuoteConfirmation,
       cancelMintQuoteDeletion,
       deletePendingMintQuote,
-      validatePaymentAddress,
-      paymentAddressValid,
-      paymentAddressError,
+      handleReceiveAddressValidation,
+      receiveAddressValidation,
       formatSats,
       showLightningSection,
       toggleLightningSection,
