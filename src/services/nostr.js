@@ -64,12 +64,12 @@ const connect = async (additionalRelays = []) => {
 /**
 * Publish a receipt event (kind 9567)
 * @param {Object} receiptData - The receipt data in JSON format
-* @param {String} paymentRequest - The NUT-18 Cashu payment request
+* @param {Array} preferredMints - Array of preferred mint URLs (first is default)
 * @param {Number} devFeePercent - Developer fee percentage
 * @param {Number} btcPrice - BTC price in receipt currency for conversion
 * @returns {Object} The event ID and encryption key
 */
-const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent, btcPrice) => {
+const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, btcPrice) => {
   try {
     // Generate unique keys for this receipt
     const receiptPrivateKey = generateSecretKey();
@@ -97,7 +97,11 @@ const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent, b
     
     console.log('Items in sats:', itemsInSats);
 
-    // Create receipt with only sats prices and currency reference
+    // Default mints if none provided
+    const defaultMints = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io'];
+    const finalPreferredMints = (preferredMints && preferredMints.length > 0) ? preferredMints : defaultMints;
+
+    // Create receipt with only sats prices and preferred mints
     const fullReceiptData = {
       merchant: receiptData.merchant,
       date: receiptData.date,
@@ -105,7 +109,7 @@ const publishReceiptEvent = async (receiptData, paymentRequest, devFeePercent, b
       tax: receiptData.tax?.amount ? Math.round((receiptData.tax.amount * 100000000) / btcPrice) : 0, // Store only sats tax
       currency: receiptData.currency, // Keep currency for reference
       total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0, // Store only sats total
-      paymentRequest: paymentRequest,
+      preferredMints: finalPreferredMints, // Array of preferred mints (first is default)
       splitPercentage: devFeePercent,
       btcPrice: btcPrice // Store the BTC price used for conversion
     };

@@ -259,7 +259,7 @@ import { showNotification, useNotification } from '../utils/notification';
 import { formatSats, convertFromSats } from '../utils/pricing';
 import paymentService from '../services/payment';
 import cashuService from '../services/cashu';
-import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
+import cashuWalletManager from '../services/cashuWalletManager';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { saveMintQuote } from '../utils/storage';
@@ -295,6 +295,7 @@ export default {
     const selectedCurrency = ref('USD');
     const currentBtcPrice = ref(0);
     const receiptAuthorPubkey = ref('');
+    const preferredMints = ref([]);
     const showSettings = ref(false);
     
     // Function to navigate back to home page
@@ -415,12 +416,18 @@ export default {
           props.decryptionKey
         );
         
+        // Validate that preferred mints exist, otherwise consider receipt malformed
+        if (!receiptData.preferredMints || !Array.isArray(receiptData.preferredMints) || receiptData.preferredMints.length === 0) {
+          throw new Error('Receipt is malformed: no preferred mints specified');
+        }
+        
         // Update component state with the fetched data
         merchant.value = receiptData.merchant;
         date.value = receiptData.date;
         currency.value = receiptData.currency;
         selectedCurrency.value = receiptData.currency; // Set selected currency to receipt's currency
         btcPrice.value = receiptData.btcPrice;
+        preferredMints.value = receiptData.preferredMints; // Store preferred mints for later use
         items.value = receiptData.items.map(item => ({
           ...item,
           selectedQuantity: 0,     // Initialize selectedQuantity to 0 for user selection
@@ -502,28 +509,46 @@ export default {
         // 2. Calculate payment amount using shared helper
         const satAmount = calculatePaymentAmount();
         
-        // Get mint URL from receipt's payment request
-        // TODO: get accepted mints from receipt
-        let mintUrl = 'https://mint.minibits.cash/Bitcoin'; // fallback
+        // Try each preferred mint in order until one works
+        let mintQuote = null;
+        let selectedMintUrl = null;
+        let lastError = null;
+        let wallet = null;
         
-        const mint = new CashuMint(mintUrl);
-        const wallet = new CashuWallet(mint);
+        for (const mintUrl of preferredMints.value) {
+          try {
+            console.log(`Attempting to create mint quote on: ${mintUrl}`);
+            wallet = await cashuWalletManager.getWallet(mintUrl);
+            
+            mintQuote = await wallet.createMintQuote(satAmount);
+            selectedMintUrl = mintUrl;
+            console.log(`Successfully created mint quote on: ${mintUrl}`);
+            break;
+          } catch (error) {
+            console.error(`Failed to create mint quote on ${mintUrl}:`, error);
+            lastError = error;
+            continue;
+          }
+        }
         
-        const mintQuote = await wallet.createMintQuote(satAmount);
+        if (!mintQuote || !selectedMintUrl) {
+          throw new Error(`Failed to create mint quote on any preferred mint. Last error: ${lastError?.message}`);
+        }
         
-        // 3. Publish settlement event immediately with encrypted mint quote ID
+        // 3. Publish settlement event immediately with encrypted mint quote ID and mint URL
         const settlementId = await settlementService.publishSettlementEvent(
           props.eventId,
           selectedItems.value,
           props.decryptionKey,
           'lightning',
           receiptAuthorPubkey.value,
-          mintQuote.quote // This will be encrypted to receipt author's pubkey
+          mintQuote.quote, // This will be encrypted to receipt author's pubkey
+          selectedMintUrl // Include the mint URL used for the quote, This will be encrypted to receipt author's pubkey
         );
         
         settlementEventId.value = settlementId;
 
-        const saveMintQuoteResult = await saveMintQuote(props.eventId, settlementEventId.value, mintUrl, mintQuote)
+        const saveMintQuoteResult = await saveMintQuote(props.eventId, settlementEventId.value, selectedMintUrl, mintQuote)
         if(!saveMintQuoteResult){
           console.error('Error saving mint quote for potential recovery later:', error);
           showNotification('Error saving mint quote for potential recovery later: ' + error.message, 'error');
@@ -584,12 +609,14 @@ export default {
         
         settlementEventId.value = settlementId;
         
-        // 5. Create Cashu payment request to receipt author's pubkey
+        // 5. Create Cashu payment request to receipt author's pubkey using preferred mints
         const newPaymentRequest = cashuService.createPaymentRequest(
           receiptAuthorPubkey.value,
           satAmount,
           props.eventId,
-          settlementId
+          settlementId,
+          'sat',
+          preferredMints.value // Use payer's preferred mints
         );
         
         // 6. Store the payment request for the modal

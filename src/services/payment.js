@@ -38,6 +38,7 @@ export const fetchBtcPrice = async (currency = 'usd') => {
   }
   
   try {
+    // TODO: https://api.coinbase.com/v2/prices/btc-eur/spot
     const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency}`);
     
     if (!response.ok) {
@@ -46,6 +47,10 @@ export const fetchBtcPrice = async (currency = 'usd') => {
     
     const data = await response.json();
     const price = data.bitcoin[currency.toLowerCase()];
+
+    if(!price){
+      throw Error(`No price returned for ${currency}`)
+    }
     
     // Cache the new price
     priceCache.set(cacheKey, {

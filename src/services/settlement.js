@@ -11,10 +11,11 @@ import { Buffer } from 'buffer';
  * @param {String} paymentType - Payment type: 'lightning' or 'cashu'
  * @param {String} receiptAuthorPubkey - The public key of the receipt author
  * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
+ * @param {String} mintUrl - The mint URL (for lightning payments)
  * @param {Array} relays - Additional relays to use
  * @returns {String} The event ID
  */
-const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, relays = []) => {
+const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, mintUrl = null, relays = []) => {
   try {
     console.log('publishSettlementEvent called with:', {
       receiptEventId,
@@ -48,7 +49,7 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
       ['payment', paymentType]
     ];
     
-    // Add encrypted mint_quote tag only for lightning payments
+    // Add encrypted mint_quote and mint_url tags only for lightning payments
     if (paymentType === 'lightning' && mintQuoteId) {
       // Get the current user's private key for NIP-44 encryption
       const ndk = await nostrService.getNdk();
@@ -60,6 +61,12 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
       // Encrypt mint quote ID using the conversation key
       const encryptedMintQuote = await nip44.encrypt(mintQuoteId, conversationKey);
       tags.push(['mint_quote', encryptedMintQuote]);
+      
+      // Also encrypt and add the mint URL if provided
+      if (mintUrl) {
+        const encryptedMintUrl = await nip44.encrypt(mintUrl, conversationKey);
+        tags.push(['mint_url', encryptedMintUrl]);
+      }
     }
 
     // Create the Nostr event

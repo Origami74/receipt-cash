@@ -72,7 +72,6 @@ export default {
       
       // Run recovery service after a short delay to ensure app is fully initialized
       setTimeout(async () => {
-        // TODO recovery loop
         mintQuoteRecoveryService.start();
       }, 1000);
     });

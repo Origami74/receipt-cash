@@ -1,4 +1,4 @@
-import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
+import cashuWalletManager from './cashuWalletManager';
 import { getProofs, clearProofs } from '../utils/storage';
 
 /**
@@ -127,9 +127,7 @@ class ProofCleanup {
         return true; // No proofs to check, safe to clean up
       }
 
-      const mint = new CashuMint(mintUrl);
-      mint.connectWebSocket();
-      const wallet = new CashuWallet(mint);
+      const wallet = await cashuWalletManager.getWallet(mintUrl);
       
       // Set timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) =>

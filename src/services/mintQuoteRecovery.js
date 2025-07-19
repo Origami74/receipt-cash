@@ -1,4 +1,5 @@
-import { CashuMint, CashuWallet, MintQuoteState } from '@cashu/cashu-ts';
+import { MintQuoteState } from '@cashu/cashu-ts';
+import cashuWalletManager from './cashuWalletManager';
 import { getUnclaimedMintQuotes, markMintQuoteClaimed, saveProofs, cleanupMintQuotes } from '../utils/storage';
 import { showNotification } from '../utils/notification';
 
@@ -7,30 +8,7 @@ import { showNotification } from '../utils/notification';
  */
 class MintQuoteRecoveryService {
   constructor() {
-    this.activeWallets = new Map(); // Cache wallets by mint URL
-  }
-
-  /**
-   * Get or create a wallet for a specific mint
-   * @param {string} mintUrl - The mint URL
-   * @returns {Promise<CashuWallet>} The wallet instance
-   */
-  async getWallet(mintUrl) {
-    if (this.activeWallets.has(mintUrl)) {
-      return this.activeWallets.get(mintUrl);
-    }
-
-    try {
-      const mint = new CashuMint(mintUrl);
-      mint.connectWebSocket();
-      const wallet = new CashuWallet(mint);
-      
-      this.activeWallets.set(mintUrl, wallet);
-      return wallet;
-    } catch (error) {
-      console.error(`Error creating wallet for mint ${mintUrl}:`, error);
-      throw error;
-    }
+    // No longer need to manage wallets - using global wallet manager
   }
 
   /**
@@ -41,7 +19,7 @@ class MintQuoteRecoveryService {
    */
   async IsQuotePaid(mintUrl, mintQuoteId) {
     try {
-      const wallet = await this.getWallet(mintUrl);
+      const wallet = await cashuWalletManager.getWallet(mintUrl);
       const quoteStatus = await wallet.checkMintQuote(mintQuoteId);
       return quoteStatus.state === MintQuoteState.PAID;
     } catch (error) {
@@ -58,7 +36,7 @@ class MintQuoteRecoveryService {
    */
   async IsQuoteIssued(mintUrl, mintQuoteId) {
     try {
-      const wallet = await this.getWallet(mintUrl);
+      const wallet = await cashuWalletManager.getWallet(mintUrl);
       const quoteStatus = await wallet.checkMintQuote(mintQuoteId);
       return quoteStatus.state === MintQuoteState.ISSUED;
     } catch (error) {
@@ -91,7 +69,7 @@ class MintQuoteRecoveryService {
       }
 
       // Claim the ecash tokens
-      const wallet = await this.getWallet(mintQuote.mintUrl);
+      const wallet = await cashuWalletManager.getWallet(mintQuote.mintUrl);
       const proofs = await wallet.mintProofs(mintQuote.mintQuote.amount, mintQuote.mintQuote.quote);
 
       if (!proofs || proofs.length === 0) {

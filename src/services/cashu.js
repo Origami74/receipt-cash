@@ -173,7 +173,7 @@ const validatePaymentRequest = (paymentRequest) => {
  * @param {Array} mints - Array of mint URLs (default: use minibits)
  * @returns {String} The encoded payment request
  */
-const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, unit = 'sat', mints = ['https://mint.minibits.cash/Bitcoin']) => {
+const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, unit = 'sat', mints = []) => {
   try {
     // Create combined ID and memo
     const combinedId = `${receiptId}-${settlementId}`;
@@ -210,10 +210,38 @@ const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, 
   }
 };
 
+/**
+ * Extract preferred mints from a payment request, or return empty array if issues
+ * @param {String} paymentRequest - The NUT-18 Cashu payment request string
+ * @returns {Array} Array of mint URLs from payment request, or empty array if issues
+ */
+const extractPreferredMints = (paymentRequest) => {
+  try {
+    if (!paymentRequest) {
+      return [];
+    }
+    
+    // Decode the payment request
+    const decodedRequest = decodePaymentRequest(paymentRequest);
+    
+    // If mints are specified in the payment request, use those
+    if (decodedRequest.mints && decodedRequest.mints.length > 0) {
+      return decodedRequest.mints;
+    }
+    
+    // Return empty array if no mints specified
+    return [];
+  } catch (error) {
+    console.error('Error extracting preferred mints:', error);
+    return [];
+  }
+};
+
 export default {
   extractNostrTransport,
   decodeRequest,
   createPaymentMessage,
   validatePaymentRequest,
-  createPaymentRequest
+  createPaymentRequest,
+  extractPreferredMints
 };

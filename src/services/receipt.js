@@ -34,6 +34,7 @@ export const processReceiptImage = async (base64Image) => {
                 - The receipt might be crumbled or curled up.
                 - The receipt may be from any country/region, Try to determine where it's made to inform how to interpret the data on the receipt.
                 - The image might be blurry, especially number might be hard to read but are incredibly important to get right.
+                - Try to determine the currency before interpreting the numbers, as the dots (.) and comma's (,) may have to be determined differently based on the currency
 
                 Extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
 {
@@ -154,10 +155,11 @@ export const fetchReceipt = async (eventId, decryptionKey) => {
  * @param {String} paymentType - Payment type: 'lightning' or 'cashu'
  * @param {String} receiptAuthorPubkey - The public key of the receipt author
  * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
+ * @param {String} mintUrl - The mint URL (for lightning payments)
  * @param {Array} relays - Additional relays to use
  * @returns {Promise<String>} The event ID of the settlement
  */
-export const publishSettlement = async (receiptEventId, settledItems, decryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, relays = []) => {
+export const publishSettlement = async (receiptEventId, settledItems, decryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, mintUrl = null, relays = []) => {
   try {
     return await settlementService.publishSettlementEvent(
       receiptEventId,
@@ -166,6 +168,7 @@ export const publishSettlement = async (receiptEventId, settledItems, decryption
       paymentType,
       receiptAuthorPubkey,
       mintQuoteId,
+      mintUrl,
       relays
     );
   } catch (error) {

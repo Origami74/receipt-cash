@@ -460,9 +460,14 @@ export default {
         
         const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
         
+        // Extract preferred mints from payment request or use defaults
+        const preferredMints = paymentRequest.value
+          ? cashuService.extractPreferredMints(paymentRequest.value)
+          : [];
+        
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receiptWithDevSplit,
-          paymentRequest.value,
+          preferredMints,
           parseInt(developerSplit.value),
           btcPrice
         );

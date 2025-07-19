@@ -1,6 +1,7 @@
 import { NDKEvent, NDKKind, NDKUser } from '@nostr-dev-kit/ndk';
 import { nip44 } from 'nostr-tools';
-import { CashuMint, CashuWallet, MintQuoteState } from '@cashu/cashu-ts';
+import { MintQuoteState } from '@cashu/cashu-ts';
+import cashuWalletManager from './cashuWalletManager';
 import nostrService from './nostr';
 import settlementService from './settlement';
 import cashuService from '../services/cashu';
@@ -147,8 +148,9 @@ class PayerMonitor {
   async processLightningSettlement(event, settlementData) {
     try {
       const encryptedMintQuote = event.tags.find(tag => tag[0] === 'mint_quote')?.[1];
+      const encryptedMintUrl = event.tags.find(tag => tag[0] === 'mint_url')?.[1];
       const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
-      
+
       if (!encryptedMintQuote) {
         console.error('No mint quote found in lightning settlement');
         return;
@@ -161,8 +163,9 @@ class PayerMonitor {
         return;
       }
       
-      // Decrypt mint quote ID using conversation key
+      // Decrypt mint quote ID and mint URL using conversation key
       let mintQuoteId;
+      let mintUrl = null;
       try {
         // Get the settler's pubkey from the settlement event
         const settlerPubkey = event.pubkey;
@@ -173,15 +176,21 @@ class PayerMonitor {
         
         // Decrypt the mint quote ID
         mintQuoteId = await nip44.decrypt(encryptedMintQuote, conversationKey);
+        
+        // Decrypt the mint URL if available
+        if (encryptedMintUrl) {
+          mintUrl = await nip44.decrypt(encryptedMintUrl, conversationKey);
+          console.log('Decrypted mint URL:', mintUrl);
+        }
       } catch (error) {
-        console.error('Error decrypting mint quote:', error);
+        console.error('Error decrypting mint quote or URL:', error);
         return;
       }
       
       console.log('Monitoring Lightning payment for mint quote:', mintQuoteId);
       
-      // Start monitoring the mint quote
-      this.monitorMintQuote(mintQuoteId, event, settlementData);
+      // Start monitoring the mint quote with specific mint URL
+      this.monitorMintQuote(mintQuoteId, event, settlementData, mintUrl);
       
     } catch (error) {
       console.error('Error processing Lightning settlement:', error);
@@ -193,8 +202,9 @@ class PayerMonitor {
    * @param {String} mintQuoteId - The mint quote ID to monitor
    * @param {Object} event - The settlement event
    * @param {Object} settlementData - The settlement data
+   * @param {String} mintUrl - The specific mint URL to use (optional)
    */
-  async monitorMintQuote(mintQuoteId, event, settlementData) {
+  async monitorMintQuote(mintQuoteId, event, settlementData, mintUrl = null) {
     const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
     
     // Check if we already published a confirmation for this settlement
@@ -203,8 +213,7 @@ class PayerMonitor {
       return;
     }
     
-    // Get mint URL from settlement data or use default
-    const mintUrl = settlementData.mintUrl || 'https://mint.minibits.cash/Bitcoin';
+    console.log('Using mint URL for monitoring:', mintUrl);
     
     const checkPayment = async () => {
       try {
@@ -214,9 +223,7 @@ class PayerMonitor {
           return;
         }
         
-        const mint = new CashuMint(mintUrl);
-        mint.connectWebSocket();
-        const wallet = new CashuWallet(mint);
+        const wallet = await cashuWalletManager.getWallet(mintUrl);
         
         const currentStatus = await wallet.checkMintQuote(mintQuoteId);
         console.log('Mint quote status:', currentStatus.state);
@@ -422,10 +429,7 @@ class PayerMonitor {
       console.log(`Splitting Cashu payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
       
       // Create wallet instance to handle token operations
-      const { CashuMint, CashuWallet } = await import('@cashu/cashu-ts');
-      const mint = new CashuMint(cashuMessage.mint);
-      mint.connectWebSocket();
-      const wallet = new CashuWallet(mint);
+      const wallet = await cashuWalletManager.getWallet(cashuMessage.mint);
       
       // Split tokens between developer and payer
       const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, cashuMessage.proofs);
@@ -435,7 +439,9 @@ class PayerMonitor {
       await this.storeProofsForRecovery(transactionId, devProofs, cashuMessage.mint, 'developer');
       
       // Forward payments
-      await this.forwardPayments(payerProofs, devProofs, receiptInfo.receiptData);
+      const { getLastPaymentRequest } = await import('../utils/storage');
+      const payerPaymentRequest = getLastPaymentRequest();
+      await this.forwardPayments(payerProofs, devProofs, payerPaymentRequest, cashuMessage.mint);
       
       // Mark proofs as forwarded
       await this.markProofsAsForwarded(transactionId);
@@ -496,8 +502,12 @@ class PayerMonitor {
       await this.storeProofsForRecovery(transactionId, payerProofs, wallet.mint.mintUrl, 'payer');
       await this.storeProofsForRecovery(transactionId, devProofs, wallet.mint.mintUrl, 'developer');
       
-      // Forward payments
-      await this.forwardPayments(payerProofs, devProofs, receiptInfo.receiptData);
+      // Get payer payment request from settings
+      const { getLastPaymentRequest } = await import('../utils/storage');
+      const payerPaymentRequest = getLastPaymentRequest();
+      
+      // Forward payments using the wallet's mint
+      await this.forwardPayments(payerProofs, devProofs, payerPaymentRequest, wallet.mint.mintUrl);
       
       // Mark proofs as 'forwarded' instead of deleting them
       await this.markProofsAsForwarded(transactionId);
@@ -571,85 +581,102 @@ class PayerMonitor {
   }
   
   /**
+   * Send Cashu payment to a specific payment request
+   * @param {Array} proofs - Cashu proofs to send
+   * @param {String} paymentRequest - NUT-18 Cashu payment request
+   * @param {String} mintUrl - The mint URL to use for the payment
+   * @returns {Promise<boolean>} Success status
+   */
+  async sendPaymentCashu(proofs, paymentRequest, mintUrl) {
+    try {
+      if (!proofs || proofs.length === 0) {
+        console.warn('No proofs provided for payment');
+        return false;
+      }
+
+      if (!paymentRequest) {
+        console.warn('No payment request provided');
+        return false;
+      }
+
+      console.log(`Sending Cashu payment with ${proofs.length} proofs using mint: ${mintUrl}, request: ${paymentRequest}`);
+      
+      const transport = cashuService.extractNostrTransport(paymentRequest);
+      if (!transport || !transport.pubkey) {
+        console.error('Invalid payment request - no valid transport found');
+        return false;
+      }
+
+      // Check if the mint URL is compatible with the payment request
+      const decodedRequest = cashuService.decodeRequest(paymentRequest);
+      if (decodedRequest && decodedRequest.mints && decodedRequest.mints.length > 0) {
+        // Payment request specifies mints - check if our mint is included
+        if (!decodedRequest.mints.includes(mintUrl)) {
+          console.error(`Mint URL ${mintUrl} not accepted by payment request. Accepted mints:`, decodedRequest.mints);
+          return false;
+        }
+        console.log(`Mint URL ${mintUrl} is accepted by payment request`);
+      } else {
+        // Payment request doesn't specify mints - any mint should work
+        console.log('Payment request accepts any mint, proceeding with:', mintUrl);
+      }
+
+      const paymentMessage = cashuService.createPaymentMessage(
+        transport.id,
+        mintUrl, // Use the specified mint URL
+        transport.unit,
+        proofs
+      );
+
+      await nostrService.sendNip17Dm(
+        transport.pubkey,
+        paymentMessage,
+        transport.relays
+      );
+
+      console.log('Cashu payment sent successfully');
+      return true;
+    } catch (error) {
+      console.error('Error sending Cashu payment:', error);
+      return false;
+    }
+  }
+
+  /**
    * Forward payments to payer and developer
    * @param {Array} payerProofs - Proofs for the payer
    * @param {Array} devProofs - Proofs for the developer
-   * @param {Object} receiptData - The receipt data
+   * @param {String} payerPaymentRequest - The payer's payment request
+   * @param {String} mintUrl - The mint URL to use for payments
    */
-  async forwardPayments(payerProofs, devProofs, receiptData) {
+  async forwardPayments(payerProofs, devProofs, payerPaymentRequest, mintUrl) {
     const errors = [];
     
     try {
-      // Forward to payer (using their payment request from receipt data)
-      console.log('Attempting to forward payment to payer...');
-      console.log('Receipt data paymentRequest:', receiptData.paymentRequest ? 'present' : 'missing');
-      console.log('Payer proofs length:', payerProofs.length);
-      
-      if (receiptData.paymentRequest && payerProofs.length > 0) {
-        try {
-          console.log('Extracting payer transport from payment request...');
-          const payerTransport = cashuService.extractNostrTransport(receiptData.paymentRequest);
-          console.log('Payer transport extracted:', payerTransport ? 'success' : 'failed');
-          
-          if (payerTransport && payerTransport.pubkey) {
-            console.log('Creating payment message for payer...');
-            const payerMessage = cashuService.createPaymentMessage(
-              payerTransport.id,
-              'https://mint.minibits.cash/Bitcoin', // Default mint URL
-              payerTransport.unit,
-              payerProofs
-            );
-            
-            console.log('Sending NIP-17 DM to payer...');
-            await nostrService.sendNip17Dm(
-              payerTransport.pubkey,
-              payerMessage,
-              payerTransport.relays
-            );
-            
-            console.log('Payment forwarded to payer');
-          } else {
-            console.error('Invalid payer transport information:', payerTransport);
-            errors.push('Invalid payer transport information');
-          }
-        } catch (payerError) {
-          console.error('Error forwarding to payer:', payerError);
-          errors.push(`Payer payment failed: ${payerError.message}`);
+      // Forward to payer using their payment request
+      if (payerPaymentRequest && payerProofs.length > 0) {
+        console.log('Forwarding payment to payer...');
+        const payerSuccess = await this.sendPaymentCashu(payerProofs, payerPaymentRequest, mintUrl);
+        if (!payerSuccess) {
+          errors.push('Failed to forward payment to payer');
         }
       } else {
         console.warn('Skipping payer payment: paymentRequest missing or no payer proofs');
-        if (!receiptData.paymentRequest) errors.push('No payment request in receipt data');
+        if (!payerPaymentRequest) errors.push('No payment request in receipt data');
         if (payerProofs.length === 0) errors.push('No payer proofs to send');
       }
       
-      // Forward to developer
+      // Forward to developer using developer payment request
       if (devProofs.length > 0) {
-        try {
-          const DEV_CASHU_REQ = "creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWd4djZ6ZHVqMmFmcmZwZzI3bjQzMDhsN2Fna3NrdWY4c3Q0ZzY2Z2EwNzN5YTVodTN0cmNjdmVnNXMwYWeBgmFuYjE3YWloMDgyYmI4NTJhdWNzYXQ=";
-          
-          const devTransport = cashuService.extractNostrTransport(DEV_CASHU_REQ);
-          if (devTransport && devTransport.pubkey) {
-            const devMessage = cashuService.createPaymentMessage(
-              devTransport.id,
-              'https://mint.minibits.cash/Bitcoin', // Default mint URL
-              devTransport.unit,
-              devProofs
-            );
-            
-            await nostrService.sendNip17Dm(
-              devTransport.pubkey,
-              devMessage,
-              devTransport.relays
-            );
-            
-            console.log('Payment forwarded to developer');
-          } else {
-            errors.push('Invalid developer transport information');
-          }
-        } catch (devError) {
-          console.error('Error forwarding to developer:', devError);
-          errors.push(`Developer payment failed: ${devError.message}`);
+        console.log('Forwarding payment to developer...');
+        const DEV_CASHU_REQ = "creqAo2F0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0bnl2OWtoMnVld2Q5aHN6OW1od2RlbjV0ZTB3ZmprY2N0ZTljdXJ4dmVuOWVlaHFjdHJ2NWhzenJ0aHdkZW41dGUwZGVoaHh0bnZkYWtxcWd4djZ6ZHVqMmFmcmZwZzI3bjQzMDhsN2Fna3NrdWY4c3Q0ZzY2Z2EwNzN5YTVodTN0cmNjdmVnNXMwYWeBgmFuYjE3YWloMDgyYmI4NTJhdWNzYXQ=";
+        const devSuccess = await this.sendPaymentCashu(devProofs, DEV_CASHU_REQ, mintUrl);
+        if (!devSuccess) {
+          errors.push('Failed to forward payment to developer');
         }
+      } else {
+        console.warn('Skipping developer payment: no dev proofs');
+        errors.push('No developer proofs to send');
       }
       
       // If there were any errors, throw them for the caller to handle
