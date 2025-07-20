@@ -682,8 +682,28 @@ class PayerMonitor {
       }
       
       if (validation.type === 'lightning') {
-        console.warn('Lightning payouts not yet supported for payer. TODO: implement token melting');
-        return false;
+        try {
+          console.log('Attempting Lightning payout via token melting...');
+          const meltResult = await cashuService.meltToLightning(proofs, receiveAddress, mintUrl);
+          
+          if (meltResult.success) {
+            console.log(`✅ Lightning payout successful! Melted ${meltResult.totalMelted} sats to ${receiveAddress}`);
+            
+            // If there are remaining proofs, log them for potential recovery
+            if (meltResult.remainingProofs.length > 0) {
+              console.log(`⚠️  ${meltResult.remainingAmount} sats could not be melted (${meltResult.remainingProofs.length} proofs remaining)`);
+              // TODO: Consider storing remaining proofs for recovery or attempting Cashu fallback
+            }
+            
+            return true;
+          } else {
+            console.error('Lightning melt failed - no sats were successfully melted');
+            return false;
+          }
+        } catch (error) {
+          console.error('Error during Lightning payout:', error);
+          return false;
+        }
       }
       
       if (validation.type === 'cashu') {

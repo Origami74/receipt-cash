@@ -38,7 +38,7 @@ export const fetchBtcPrice = async (currency = 'usd') => {
   }
   
   try {
-    // TODO: https://api.coinbase.com/v2/prices/btc-eur/spot
+    // TODO: https://api.coinbase.com/v2/prices/btc-eur/spot - more currencies
     const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency}`);
     
     if (!response.ok) {
