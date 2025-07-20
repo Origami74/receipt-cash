@@ -16,6 +16,7 @@
     "@nostr-dev-kit/ndk": "^2.14.2",
     "@scure/base": "^1.1.5",
     "@vueuse/core": "^10.9.0",
+    "canvas-confetti": "^1.9.3",
     "pinia": "^2.1.7",
     "qr-scanner": "^1.4.2",
     "qrcode.vue": "^3.6.0",

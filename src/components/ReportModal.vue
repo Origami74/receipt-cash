@@ -107,8 +107,8 @@
 
 <script>
 import { ref } from 'vue';
-import NDK, { NDKEvent } from '@nostr-dev-kit/ndk';
-import { nip44, generateSecretKey, getPublicKey } from 'nostr-tools';
+import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
+import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { showNotification } from '../utils/notification';
 import nostrService from '../services/nostr';
@@ -201,8 +201,8 @@ export default {
         ];
         
         // Sign and publish with temporary signer
-        const signedEvent = await reportSigner.sign(event);
-        await signedEvent.publish();
+        await event.sign(reportSigner);
+        await event.publish();
         
         showNotification('Report submitted successfully. Thank you!', 'success');
         description.value = '';

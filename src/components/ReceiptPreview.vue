@@ -385,7 +385,7 @@ export default {
           items: cleanedItems,
           currency: selectedCurrency.value, // Use the selected currency
           total_amount: cleanedItems.reduce((sum, item) => sum + item.total, 0),
-          devPercentage: parseInt(developerSplit.value)
+          splitPercentage: parseFloat(developerSplit.value)
         };
         
         const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
@@ -398,7 +398,7 @@ export default {
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(
           receiptWithDevSplit,
           preferredMints,
-          parseInt(developerSplit.value),
+          parseFloat(developerSplit.value),
           btcPrice
         );
         

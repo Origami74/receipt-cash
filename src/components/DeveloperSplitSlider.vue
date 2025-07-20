@@ -6,9 +6,6 @@
       </label>
       <div class="emoji-container" :class="{ shaking: isShaking }" :style="{ '--shake-duration': shakeSpeed }">
         <span class="emoji" :style="{ 'transform': `scale(${emojiScale})` }">{{ currentEmoji }}</span>
-        <div v-if="showConfetti" class="confetti-wrapper">
-          <div class="confetti" v-for="i in 10" :key="i"></div>
-        </div>
       </div>
     </div>
     
@@ -41,6 +38,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue';
+import confetti from 'canvas-confetti';
 
 export default {
   name: 'DeveloperSplitSlider',
@@ -128,8 +126,20 @@ export default {
     });
     
     // Confetti for values > 50% and only when dragging
-    const showConfetti = computed(() => {
+    const shouldShowConfetti = computed(() => {
       return isDragging.value && percentage.value > 50;
+    });
+    
+    // Watch for confetti trigger
+    watch(shouldShowConfetti, (newValue, oldValue) => {
+      if (newValue && !oldValue) {
+        // Trigger confetti when we cross the threshold while dragging
+        confetti({
+          particleCount: 60,
+          spread: 60,
+          origin: { y: 0.8 }
+        });
+      }
     });
     
     const updateValue = () => {
@@ -156,7 +166,6 @@ export default {
       displayValue,
       currentEmoji,
       isShaking,
-      showConfetti,
       shakeSpeed,
       emojiScale,
       isDragging,
@@ -215,34 +224,4 @@ export default {
   @apply bg-green-600 transform scale-110;
 }
 
-.confetti-wrapper {
-  @apply absolute top-0 left-0 w-full h-full pointer-events-none;
-}
-
-.confetti {
-  @apply absolute w-2 h-2 opacity-80;
-  animation: confetti-fall 1s ease-in-out infinite;
-}
-
-.confetti:nth-child(1) { background: #ff6b6b; left: 10%; animation-delay: 0s; }
-.confetti:nth-child(2) { background: #4ecdc4; left: 20%; animation-delay: 0.1s; }
-.confetti:nth-child(3) { background: #45b7d1; left: 30%; animation-delay: 0.2s; }
-.confetti:nth-child(4) { background: #f9ca24; left: 40%; animation-delay: 0.3s; }
-.confetti:nth-child(5) { background: #f0932b; left: 50%; animation-delay: 0.4s; }
-.confetti:nth-child(6) { background: #eb4d4b; left: 60%; animation-delay: 0.5s; }
-.confetti:nth-child(7) { background: #6c5ce7; left: 70%; animation-delay: 0.6s; }
-.confetti:nth-child(8) { background: #a29bfe; left: 80%; animation-delay: 0.7s; }
-.confetti:nth-child(9) { background: #fd79a8; left: 90%; animation-delay: 0.8s; }
-.confetti:nth-child(10) { background: #00b894; left: 95%; animation-delay: 0.9s; }
-
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(-100px) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(100px) rotate(720deg);
-    opacity: 0;
-  }
-}
 </style>

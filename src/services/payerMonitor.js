@@ -394,7 +394,7 @@ class PayerMonitor {
    */
   async processSettlementInCashu(cashuMessage, settlementEvent, settlementData) {
     const receiptEventId = settlementEvent.tags.find(tag => tag[0] === 'e')?.[1];
-    
+    const transactionId = `${receiptEventId}-cashu-${Date.now()}`;
     try {
       console.log('Processing received Cashu tokens:', cashuMessage.proofs.length, 'proofs');
       
@@ -414,7 +414,6 @@ class PayerMonitor {
       }
 
       // Store received proofs for recovery
-      const transactionId = `${receiptEventId}-cashu-${Date.now()}`;
       await this.storeProofsForRecovery(transactionId, cashuMessage.proofs, cashuMessage.mint, 'received');
       
       // Publish confirmation event immediately after receiving tokens
@@ -435,14 +434,14 @@ class PayerMonitor {
   async forwardPayment(transactionId, proofs, mintUrl, receiptEventId) {
       // Get receipt info for dev percentage
       const receiptInfo = this.activeReceipts.get(receiptEventId);
-      const devPercentage = receiptInfo?.receiptData?.splitPercentage || 5;
+      const devPercentage = receiptInfo?.receiptData?.splitPercentage;
       
       // Calculate split amounts
       const receivedAmount = proofs.reduce((sum, proof) => sum + proof.amount, 0);
       const devAmount = Math.round(receivedAmount * (devPercentage / 100));
       const payerAmount = receivedAmount - devAmount;
       
-      console.log(`Splitting Cashu payment - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
+      console.log(`Splitting Cashu payment (devSplit: ${devPercentage}%) - Payer: ${payerAmount} sats, Developer: ${devAmount} sats`);
       
       // Create wallet instance to handle token operations
       const wallet = await cashuWalletManager.getWallet(mintUrl);
@@ -490,6 +489,7 @@ class PayerMonitor {
   async processSettlementInLightning(mintQuoteId, event, settlementData, wallet) {
     const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
     
+    const transactionId = `${receiptEventId}-${Date.now()}`;
     try {
       // Calculate amount in sats from settlement data (prices already in sats)
       const satAmount = settlementData.settledItems.reduce((sum, item) =>
@@ -502,7 +502,6 @@ class PayerMonitor {
       console.log('Claimed ecash proofs:', proofs.length);
       
       // STEP 1: Store proofs temporarily for recovery
-      const transactionId = `${receiptEventId}-${Date.now()}`;
       await this.storeProofsForRecovery(transactionId, proofs, wallet.mint.mintUrl, 'claimed');
       
       // STEP 2: Publish confirmation event immediately after claiming
