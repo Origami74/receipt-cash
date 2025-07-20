@@ -3,7 +3,7 @@
  */
 
 // Maximum number of log entries to keep
-const MAX_LOGS = 200;
+const MAX_LOGS = 2000;
 
 // Store for captured logs
 let capturedLogs = [];
