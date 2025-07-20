@@ -136,25 +136,7 @@
           </div>
           
           <div class="mb-4">
-            <div class="flex justify-between items-center mb-1">
-              <label for="developerSplit" class="text-sm font-medium text-gray-700">
-                Developer Split: {{ displayDevSplit }}%
-              </label>
-            </div>
-            <input
-              id="developerSplit"
-              v-model="sliderValue"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              @input="updateDevSplit"
-            />
-            <div class="flex justify-between text-xs text-gray-500 mt-1">
-              <span>0%</span>
-              <span>100%</span>
-            </div>
+            <DeveloperSplitSlider v-model="developerSplit" />
           </div>
           
           <button
@@ -219,6 +201,7 @@ import receiptKeyManager from '../utils/receiptKeyManager';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
+import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
 import { formatCurrency } from '../utils/currency';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricing';
 import { saveReceiveAddress, getReceiveAddress } from '../utils/storage';
@@ -231,7 +214,8 @@ export default {
   components: {
     QRCodeVue,
     CurrencySelector,
-    ReceiveAddressInput
+    ReceiveAddressInput,
+    DeveloperSplitSlider
   },
   props: {
     receiptData: {
@@ -262,10 +246,8 @@ export default {
     const currentBtcPrice = ref(0);
     const selectedCurrency = ref(receipt.value.currency || 'EUR');
     
-    // Developer split using logarithmic scale
-    const developerSplit = ref(2); // The actual percentage value (default 2%)
-    const displayDevSplit = ref('2'); // Display value as string
-    const sliderValue = ref(calculateSliderFromPercentage(2)); // Slider position value (0-100)
+    // Developer split with 0.1% precision (default 2.1%)
+    const developerSplit = ref(2.1);
     
     const hostUrl = computed(() => `https://${location.host}`);
     const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
@@ -387,33 +369,6 @@ export default {
       }
     };
     
-    // Function to convert slider position (0-100) to actual percentage (0-100)
-    function calculatePercentageFromSlider(sliderPos) {
-      if (sliderPos === 0) return 0;
-      
-      const scaleFactor = 0.05;
-      const percentage = Math.round((Math.exp(scaleFactor * sliderPos) - 1) / (Math.exp(5) - 1) * 100);
-      
-      return Math.min(100, Math.max(0, percentage));
-    }
-    
-    // Function to convert percentage (0-100) to slider position (0-100)
-    function calculateSliderFromPercentage(percentage) {
-      if (percentage === 0) return 0;
-      if (percentage === 100) return 100;
-      
-      const scaleFactor = 0.05;
-      const sliderPos = Math.round(Math.log(percentage / 100 * (Math.exp(5) - 1) + 1) / scaleFactor);
-      
-      return Math.min(100, Math.max(0, sliderPos));
-    }
-    
-    // Update developer split based on slider position
-    const updateDevSplit = () => {
-      const percentage = calculatePercentageFromSlider(sliderValue.value);
-      developerSplit.value = percentage;
-      displayDevSplit.value = percentage.toString();
-    };
 
     const proceedWithRequest = async () => {
       try {
@@ -567,9 +522,6 @@ export default {
       selectAllItems,
       receiptLink,
       developerSplit,
-      displayDevSplit,
-      updateDevSplit,
-      sliderValue,
       currentBtcPrice,
       selectedCurrency,
       onCurrencyChange,

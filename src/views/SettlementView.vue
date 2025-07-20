@@ -15,6 +15,13 @@
       </div>
     </div>
     
+    <!-- Welcome confetti for high dev percentages -->
+    <div v-if="showWelcomeConfetti" class="fixed inset-0 pointer-events-none z-50">
+      <div class="confetti-wrapper">
+        <div class="confetti" v-for="i in 20" :key="i"></div>
+      </div>
+    </div>
+    
     <template v-else>
       <div class="bg-white shadow-sm p-4">
         <div class="flex justify-between items-center">
@@ -146,16 +153,17 @@
           <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
             Summary
           </div>
-          <div class="p-3 border-t border-gray-200 text-xs text-gray-500" v-if="devPercentage > 0">
+          <div class="p-3 border-t border-gray-200 text-xs text-gray-500">
             <div>
               Receipt conversion rate: 1 BTC = {{ currency === 'USD' ? '$' : currency + ' ' }}{{ btcPrice.toLocaleString() }}
             </div>
             <div v-if="currentBtcPrice && currentBtcPrice !== btcPrice">
               Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
             </div>
-            <div class="">
-              Receipt creator shares {{ devPercentage }}% with the maintainer of this app. This does not affect any of your owed amounts. 
-            </div>
+          </div>
+          <div v-if="devPercentage > 0" class="p-3 border-t border-gray-100 text-xs text-gray-500 flex items-center">
+            <span>Receipt creator shares {{ formatDevPercentage() }}% with the maintainer of this app. This does not affect any of your owed amounts.</span>
+            <span class="emoji-display mr-2">{{ getDevPercentageEmoji() }}</span>
           </div>
           <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
             <div>Total</div>
@@ -434,8 +442,12 @@ export default {
           confirmedQuantity: 0,    // Confirmed settlements (green)
           pendingQuantity: 0       // Pending settlements (orange)
         }));
-        receiptAuthorPubkey.value = receiptData.authorPubkey
+        receiptAuthorPubkey.value = receiptData.authorPubkey;
         
+        // Extract developer percentage from receipt data
+        if (receiptData.splitPercentage !== undefined) {
+          devPercentage.value = receiptData.splitPercentage;
+        }
 
         // Fetch current BTC price for the selected currency
         try {
@@ -830,9 +842,43 @@ export default {
     };
     
     
+    // Get emoji for dev percentage display
+    const getDevPercentageEmoji = () => {
+      const p = devPercentage.value;
+      if (p === 0) return '🫤';
+      if (p < 1) return '😐';
+      if (p < 2) return '🙂';
+      if (p < 5) return '😊';
+      if (p < 10) return '😄';
+      if (p < 20) return '🤩';
+      if (p < 30) return '🥳';
+      if (p < 50) return '🎉';
+      if (p < 70) return '🚀';
+      if (p < 90) return '👑';
+      return '🔥';
+    };
+    
+    // Format dev percentage with proper decimal places (always show tenths)
+    const formatDevPercentage = () => {
+      return devPercentage.value.toFixed(1);
+    };
+    
+    // Show confetti celebration when opening receipts with high dev percentages
+    const showWelcomeConfetti = ref(false);
+    
     // Component lifecycle
     onMounted(() => {
       fetchReceiptData();
+      
+      // Show confetti celebration if dev percentage is high when loading
+      setTimeout(() => {
+        if (devPercentage.value > 50) {
+          showWelcomeConfetti.value = true;
+          setTimeout(() => {
+            showWelcomeConfetti.value = false;
+          }, 3000); // Show for 3 seconds
+        }
+      }, 1000); // Delay to let data load first
     });
     
     onUnmounted(() => {
@@ -886,7 +932,10 @@ export default {
       currentPaymentType,
       settlementEventId,
       calculatedPaymentAmount,
-      cashuPaymentRequest
+      cashuPaymentRequest,
+      getDevPercentageEmoji,
+      formatDevPercentage,
+      showWelcomeConfetti
     };
   }
 };
@@ -894,4 +943,49 @@ export default {
 
 <style scoped>
 /* Component-specific styles go here */
-</style> 
+
+.emoji-display {
+  font-size: 1.2em;
+}
+
+.confetti-wrapper {
+  @apply absolute top-0 left-0 w-full h-full pointer-events-none;
+}
+
+.confetti {
+  @apply absolute w-3 h-3 opacity-80;
+  animation: confetti-fall-welcome 2s ease-in-out infinite;
+}
+
+.confetti:nth-child(1) { background: #ff6b6b; left: 5%; animation-delay: 0s; }
+.confetti:nth-child(2) { background: #4ecdc4; left: 10%; animation-delay: 0.1s; }
+.confetti:nth-child(3) { background: #45b7d1; left: 15%; animation-delay: 0.2s; }
+.confetti:nth-child(4) { background: #f9ca24; left: 20%; animation-delay: 0.3s; }
+.confetti:nth-child(5) { background: #f0932b; left: 25%; animation-delay: 0.4s; }
+.confetti:nth-child(6) { background: #eb4d4b; left: 30%; animation-delay: 0.5s; }
+.confetti:nth-child(7) { background: #6c5ce7; left: 35%; animation-delay: 0.6s; }
+.confetti:nth-child(8) { background: #a29bfe; left: 40%; animation-delay: 0.7s; }
+.confetti:nth-child(9) { background: #fd79a8; left: 45%; animation-delay: 0.8s; }
+.confetti:nth-child(10) { background: #00b894; left: 50%; animation-delay: 0.9s; }
+.confetti:nth-child(11) { background: #ff7675; left: 55%; animation-delay: 1.0s; }
+.confetti:nth-child(12) { background: #74b9ff; left: 60%; animation-delay: 1.1s; }
+.confetti:nth-child(13) { background: #fd63c3; left: 65%; animation-delay: 1.2s; }
+.confetti:nth-child(14) { background: #55a3ff; left: 70%; animation-delay: 1.3s; }
+.confetti:nth-child(15) { background: #ff9ff3; left: 75%; animation-delay: 1.4s; }
+.confetti:nth-child(16) { background: #54a0ff; left: 80%; animation-delay: 1.5s; }
+.confetti:nth-child(17) { background: #5f27cd; left: 85%; animation-delay: 1.6s; }
+.confetti:nth-child(18) { background: #00d2d3; left: 90%; animation-delay: 1.7s; }
+.confetti:nth-child(19) { background: #ff9472; left: 95%; animation-delay: 1.8s; }
+.confetti:nth-child(20) { background: #9c88ff; left: 97%; animation-delay: 1.9s; }
+
+@keyframes confetti-fall-welcome {
+  0% {
+    transform: translateY(-100px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+</style>
