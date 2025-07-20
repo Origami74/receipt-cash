@@ -178,6 +178,7 @@ export const publishSettlement = async (receiptEventId, settledItems, decryption
   }
 };
 
+
 /**
  * Subscribes to settlement updates for a receipt
  * @param {String} receiptEventId - The event ID of the receipt
