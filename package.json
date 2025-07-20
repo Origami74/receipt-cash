@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "env VITE_USE_HTTPS=true vite",
-    "build": "vite build",
-    "publish": "vite build && npx nsite-cli upload dist",
+    "build": "vite build && cp dist/index.html dist/404.html",
+    "publish": "vite build && cp dist/index.html dist/404.html && npx nsite-cli upload dist",
     "preview": "vite preview"
   },
   "dependencies": {
