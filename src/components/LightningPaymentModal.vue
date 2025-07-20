@@ -12,7 +12,7 @@
             </svg>
           </div>
           <div class="text-xl font-bold text-green-600 mb-2">Payment Successful!</div>
-          <div class="text-gray-600">Your payment has been processed successfully</div>
+          <div class="text-gray-600">Your payment has been sent successfully. The payment will now be processed by the receipt creator, who will then send a confirmation.</div>
         </div>
         
         <!-- Error state with error message -->

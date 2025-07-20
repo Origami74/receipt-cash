@@ -263,6 +263,7 @@ import { formatSats, convertFromSats } from '../utils/pricing';
 import paymentService from '../services/payment';
 import cashuService from '../services/cashu';
 import cashuWalletManager from '../services/cashuWalletManager';
+import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { saveMintQuote } from '../utils/storage';
@@ -386,10 +387,13 @@ export default {
 
     const devPercentage = ref(-1); // Default dev percentage (will be overridden from receipt)
     
-    // Add missing variables that are used in the template but no longer needed
+    // Payment processing states
     const paymentProcessingState = ref('initial');
     const paymentErrorMessage = ref('');
     const invoiceError = ref(false);
+    const mintQuoteId = ref('');
+    const mintQuoteWallet = ref(null);
+    const checkingMintQuote = ref(false);
 
     
     
@@ -561,12 +565,19 @@ export default {
           showNotification('Error saving mint quote for potential recovery later: ' + error.message, 'error');
         }
 
-        // 4. Get the Lightning invoice and show payment modal
+        // 4. Store mint quote info for monitoring
+        mintQuoteId.value = mintQuote.quote;
+        mintQuoteWallet.value = wallet;
+
+        // 5. Get the Lightning invoice and show payment modal
         const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
         lightningInvoice.value = mintQuoteChecked.request;
         showLightningModal.value = true;
         
-        // 5. Show notification about the process
+        // 6. Start monitoring mint quote payment status
+        monitorMintQuotePayment();
+        
+        // 7. Show notification about the process
         showNotification('Settlement request sent! Please pay the invoice. The payer will monitor the payment.', 'info');
         
         // 6. Mark selected items as pending settlements (orange)
@@ -804,7 +815,63 @@ export default {
       showLightningModal.value = false;
       showCashuModal.value = false;
       lightningInvoice.value = '';
+      // Clear mint quote monitoring
+      mintQuoteId.value = '';
+      mintQuoteWallet.value = null;
+      checkingMintQuote.value = false;
       // Note: We don't reset pending quantities as they may come from other users
+    };
+    
+    // Monitor mint quote payment status
+    const monitorMintQuotePayment = async () => {
+      if (!mintQuoteId.value || !mintQuoteWallet.value) {
+        console.log('No mint quote to monitor');
+        return;
+      }
+      
+      console.log('Starting mint quote payment monitoring for:', mintQuoteId.value);
+      
+      const checkPayment = async () => {
+        try {
+          // Stop checking if we already have success or if modal is closed
+          if (paymentSuccess.value || !showLightningModal.value) {
+            console.log('Stopping mint quote monitoring - success achieved or modal closed');
+            return;
+          }
+          
+          const currentStatus = await mintQuoteWallet.value.checkMintQuote(mintQuoteId.value);
+          console.log('Mint quote status:', currentStatus.state);
+          
+          if (currentStatus.state === MintQuoteState.PAID) {
+            // Payment detected! Settler is off the hook
+            console.log('Lightning payment detected! Settler is off the hook.');
+            
+            // Set payment success immediately - no need to wait for confirmation event
+            paymentSuccess.value = true;
+            paymentInProgress.value = false;
+            
+            // Show notification that payment was successful
+            showNotification('Payment successful! The payer will now process your settlement.', 'success');
+            
+          } else if (currentStatus.state === MintQuoteState.ISSUED) {
+            console.log('Lightning payment was already processed (tokens claimed)');
+            // This shouldn't happen in our flow, but handle it gracefully
+            paymentSuccess.value = true;
+            paymentInProgress.value = false;
+          } else {
+            // Continue monitoring (states: MintQuoteState.UNPAID, MintQuoteState.PENDING)
+            setTimeout(checkPayment, 4000); // Check every 3 seconds
+          }
+          
+        } catch (error) {
+          console.error('Error checking mint quote:', error);
+          // Continue monitoring despite errors, but with longer interval
+          setTimeout(checkPayment, 5000);
+        }
+      };
+      
+      // Start monitoring
+      checkPayment();
     };
     
     // Open Cashu wallet with the generated payment request

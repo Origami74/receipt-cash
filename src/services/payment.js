@@ -38,17 +38,23 @@ export const fetchBtcPrice = async (currency = 'usd') => {
   }
   
   try {
-    // TODO: https://api.coinbase.com/v2/prices/btc-eur/spot - more currencies
-    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency}`);
+    // Using Coinbase API for BTC price data
+    const response = await fetch(`https://api.coinbase.com/v2/prices/btc-${currency.toLowerCase()}/spot`);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const data = await response.json();
-    const price = data.bitcoin[currency.toLowerCase()];
+    
+    // Handle Coinbase API error response format
+    if (data.error) {
+      throw new Error(`Coinbase API error: ${data.message || data.error}`);
+    }
+    
+    const price = parseFloat(data.data.amount);
 
-    if(!price){
+    if (!price) {
       throw Error(`No price returned for ${currency}`)
     }
     
