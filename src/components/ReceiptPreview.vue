@@ -13,7 +13,7 @@
       </div>
     </div>
     
-    <div class="flex-1 overflow-y-auto p-4">
+    <div class="flex-1 overflow-y-auto p-4" :class="{ 'pb-2': step === 'qr-display' }">
       <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
           <div>Items</div>
@@ -154,23 +154,46 @@
         </div>
       </div>
       
-      <div v-if="step === 'qr-display'" class="mt-4">
-        <div class="bg-white rounded-lg shadow p-4 text-center">
-          <div class="font-medium mb-2">Share this QR code</div>
-          <div class="qr-container mb-4">
-            <QRCodeVue 
-              :value="receiptLink"
-              :size="256"
-              level="H"
-              render-as="svg"
-              class="mx-auto"
-            />
+      <div v-if="step === 'qr-display'" class="mt-4" ref="qrSection">
+        <div class="bg-white rounded-lg shadow p-6 text-center">
+          <!-- Prominent instructional text -->
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Share This Receipt</h2>
+            <p class="text-lg text-gray-700 font-semibold mb-1">
+              Send this QR code to the people who need to pay
+            </p>
+            <p class="text-sm text-gray-600">
+              They can scan it or use the link to pay their share
+            </p>
           </div>
-          <div class="flex flex-col gap-2">
-            <button @click="copyLink" class="btn-secondary w-full">
+          
+          <!-- Enhanced QR code with orange border -->
+          <div class="qr-container mb-6 flex justify-center">
+            <div class="p-4 border-4 border-orange-500 rounded-2xl bg-white shadow-lg">
+              <QRCodeVue
+                :value="receiptLink"
+                :size="320"
+                level="H"
+                render-as="svg"
+                class="mx-auto"
+              />
+            </div>
+          </div>
+          
+          <!-- Enhanced buttons with icons -->
+          <div class="flex flex-col gap-3">
+            <button @click="copyLink" class="btn-secondary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
+              <!-- Copy icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
               Copy Link
             </button>
-            <button @click="shareToSocial" class="btn-primary w-full">
+            <button @click="shareToSocial" class="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
+              <!-- Share icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+              </svg>
               Share
             </button>
           </div>
@@ -192,7 +215,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import nostrService from '../services/nostr';
 import cashuService from '../services/cashu';
 import paymentService from '../services/payment';
@@ -234,6 +257,7 @@ export default {
       }))
     });
     const step = ref('payment-request');
+    const qrSection = ref(null);
     const paymentRequest = ref('');
     const paymentRequestValid = ref(true);
     const paymentRequestError = ref('');
@@ -422,6 +446,16 @@ export default {
         console.log('Started payer monitoring for receipt:', publishedReceiptEvent.id);
         
         step.value = 'qr-display';
+        
+        // Auto-scroll to QR section after DOM update
+        nextTick(() => {
+          if (qrSection.value) {
+            qrSection.value.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+        });
       } catch (error) {
         console.error('Error creating payment request:', error);
         showNotification(`Failed to create payment request`, 'error');
@@ -526,6 +560,7 @@ export default {
       selectedCurrency,
       onCurrencyChange,
       formatCurrency,
+      qrSection,
       // Editing functions
       startEditing,
       saveEdit,
@@ -539,4 +574,24 @@ export default {
 
 <style scoped>
 /* Component-specific styles */
+.qr-container {
+  /* Ensure QR container is properly centered and sized */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Bitcoin orange color for QR border */
+.border-orange-500 {
+  border-color: #f7931a !important;
+}
+
+/* Enhanced button styling for QR display */
+.btn-primary {
+  @apply bg-blue-500 text-white py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 active:bg-blue-700 transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-800 py-2 px-4 rounded-lg shadow-md hover:bg-gray-200 active:bg-gray-300 transition-colors duration-200;
+}
 </style>
