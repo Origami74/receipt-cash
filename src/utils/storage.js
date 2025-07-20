@@ -423,3 +423,152 @@ export function cleanupMintQuotes(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
     return 0;
   }
 }
+
+// Change Jar Storage Constants
+const CHANGE_JAR_KEY = 'receipt-cash-change-jar';
+
+/**
+ * Store change proofs for a specific mint
+ * @param {string} mintUrl - The mint URL
+ * @param {Array} proofs - Array of proof objects to store
+ * @returns {boolean} True if saving was successful
+ */
+export function storeChangeForMint(mintUrl, proofs) {
+  try {
+    if (!mintUrl || !proofs || proofs.length === 0) {
+      return false;
+    }
+
+    const changeJar = getChangeJar();
+    const mintKey = mintUrl.toLowerCase();
+    
+    // Initialize mint entry if it doesn't exist
+    if (!changeJar[mintKey]) {
+      changeJar[mintKey] = {
+        mintUrl: mintUrl,
+        proofs: [],
+        totalAmount: 0,
+        lastUpdated: Date.now()
+      };
+    }
+    
+    // Add new proofs to existing ones
+    changeJar[mintKey].proofs.push(...proofs);
+    changeJar[mintKey].totalAmount = changeJar[mintKey].proofs.reduce((sum, p) => sum + p.amount, 0);
+    changeJar[mintKey].lastUpdated = Date.now();
+    
+    localStorage.setItem(CHANGE_JAR_KEY, JSON.stringify(changeJar));
+    
+    const addedAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
+    console.log(`💰 Stored ${addedAmount} sats change for mint ${mintUrl} (${proofs.length} proofs)`);
+    return true;
+  } catch (error) {
+    console.error('Error storing change for mint:', error);
+    return false;
+  }
+}
+
+/**
+ * Get change proofs for a specific mint
+ * @param {string} mintUrl - The mint URL
+ * @returns {Array} Array of proof objects for the mint
+ */
+export function getChangeForMint(mintUrl) {
+  try {
+    if (!mintUrl) return [];
+    
+    const changeJar = getChangeJar();
+    const mintKey = mintUrl.toLowerCase();
+    
+    return changeJar[mintKey]?.proofs || [];
+  } catch (error) {
+    console.error('Error getting change for mint:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all change jar data
+ * @returns {Object} Object containing all change data by mint
+ */
+export function getChangeJar() {
+  try {
+    const stored = localStorage.getItem(CHANGE_JAR_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (error) {
+    console.error('Error retrieving change jar:', error);
+    return {};
+  }
+}
+
+/**
+ * Get change jar summary
+ * @returns {Object} Summary with total amounts and counts by mint
+ */
+export function getChangeJarSummary() {
+  try {
+    const changeJar = getChangeJar();
+    const summary = {
+      totalMints: 0,
+      totalAmount: 0,
+      mints: {}
+    };
+    
+    Object.entries(changeJar).forEach(([mintKey, data]) => {
+      summary.totalMints++;
+      summary.totalAmount += data.totalAmount;
+      summary.mints[data.mintUrl] = {
+        amount: data.totalAmount,
+        proofCount: data.proofs.length,
+        lastUpdated: data.lastUpdated
+      };
+    });
+    
+    return summary;
+  } catch (error) {
+    console.error('Error getting change jar summary:', error);
+    return { totalMints: 0, totalAmount: 0, mints: {} };
+  }
+}
+
+/**
+ * Clear change for a specific mint
+ * @param {string} mintUrl - The mint URL
+ * @returns {boolean} True if clearing was successful
+ */
+export function clearChangeForMint(mintUrl) {
+  try {
+    if (!mintUrl) return false;
+    
+    const changeJar = getChangeJar();
+    const mintKey = mintUrl.toLowerCase();
+    
+    if (changeJar[mintKey]) {
+      const clearedAmount = changeJar[mintKey].totalAmount;
+      delete changeJar[mintKey];
+      localStorage.setItem(CHANGE_JAR_KEY, JSON.stringify(changeJar));
+      console.log(`Cleared ${clearedAmount} sats change for mint ${mintUrl}`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error clearing change for mint:', error);
+    return false;
+  }
+}
+
+/**
+ * Clear all change jar data
+ * @returns {boolean} True if clearing was successful
+ */
+export function clearAllChange() {
+  try {
+    localStorage.removeItem(CHANGE_JAR_KEY);
+    console.log('Cleared all change jar data');
+    return true;
+  } catch (error) {
+    console.error('Error clearing all change:', error);
+    return false;
+  }
+}

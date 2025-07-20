@@ -9,6 +9,7 @@ import receiptKeyManager from '../utils/receiptKeyManager';
 import { showNotification } from '../utils/notification';
 import { Buffer } from 'buffer';
 import { validateReceiveAddress } from './addressValidation';
+import {storeChangeForMint} from '../utils/storage'
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -692,7 +693,20 @@ class PayerMonitor {
             // If there are remaining proofs, log them for potential recovery
             if (meltResult.remainingProofs.length > 0) {
               console.log(`⚠️  ${meltResult.remainingAmount} sats could not be melted (${meltResult.remainingProofs.length} proofs remaining)`);
-              // TODO: Consider storing remaining proofs for recovery or attempting Cashu fallback
+              
+              if(meltResult.remainingAmount > 10){
+                // Try to melt once more
+
+                // change from 2nd melt should go to 'change jar' that's stored on the device
+                console.log('TODO: Implement second melt attempt for larger amounts');
+                // For now, store directly in change jar
+                storeChangeForMint(mintUrl, meltResult.remainingProofs);
+                console.log(`💰 Stored ${meltResult.remainingAmount} sats in change jar for mint: ${mintUrl}`);
+              } else {
+                // straight to 'change jar'
+                storeChangeForMint(mintUrl, meltResult.remainingProofs);
+                console.log(`💰 Stored ${meltResult.remainingAmount} sats in change jar for mint: ${mintUrl}`);
+              }
             }
             
             return true;

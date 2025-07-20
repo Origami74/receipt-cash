@@ -221,6 +221,88 @@
             </div>
           </div>
           
+          <!-- Change Jar Section -->
+          <div class="pt-4 border-t border-gray-200">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Change Jar</h4>
+              <button
+                @click="loadChangeJar"
+                class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                title="Refresh change jar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">
+              Change from failed Lightning melts. These are proofs that couldn't be melted due to fees or other issues.
+            </p>
+            
+            <div v-if="Object.keys(changeJar).length === 0" class="text-sm text-gray-500 italic">
+              No change available
+            </div>
+            
+            <div v-for="(changeData, mintUrl) in changeJar" :key="mintUrl" class="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium">{{ formatMintUrl(mintUrl) }}</span>
+                <span class="text-xs text-gray-500">{{ formatDate(changeData.lastUpdated) }}</span>
+              </div>
+              
+              <div class="text-sm mb-2">
+                <span class="font-medium">Amount:</span> {{ formatSats(changeData.totalAmount) }}
+                <span class="text-gray-500 ml-2">({{ changeData.proofs.length }} proofs)</span>
+              </div>
+              
+              <div class="flex justify-end space-x-2">
+                <button
+                  @click="copyChangeProofs(mintUrl, changeData)"
+                  class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                >
+                  Copy Token
+                </button>
+                <button
+                  v-if="isChangeCopied(mintUrl)"
+                  @click="showChangeRecoveryConfirmation(mintUrl)"
+                  class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
+                >
+                  Mark recovered
+                </button>
+                <button
+                  @click="confirmClearChange(mintUrl)"
+                  class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+            
+            <!-- Change Recovery Confirmation Modal -->
+            <div v-if="showChangeConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Are you sure you want to mark this change as recovered? It will be permanently deleted and can't be recovered again.
+                </p>
+                <div class="flex space-x-3 justify-end">
+                  <button
+                    @click="cancelChangeRecovery"
+                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    @click="confirmChangeRecovery"
+                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete Permanently
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- Unprocessed Mint Quotes Section (Collapsible) -->
           <div class="pt-4 border-t border-gray-200">
             <div class="flex justify-between items-center mb-3">
@@ -427,7 +509,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
          getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote,
-         getReceiveAddress, saveReceiveAddress } from '../utils/storage';
+         getReceiveAddress, saveReceiveAddress, getChangeJar, clearChangeForMint } from '../utils/storage';
 import mintQuoteRecoveryService from '../services/mintQuoteRecovery';
 import { showNotification } from '../utils/notification';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
@@ -449,12 +531,16 @@ export default {
     }
   },
   emits: ['close'],
-  setup(props) {
+  setup(props, { emit }) {
     // Watch for changes to isOpen prop
     watch(() => props.isOpen, (newVal) => {
       if (newVal) {
-        // Refresh pending proofs when the menu is opened
+        // Refresh pending proofs and change jar when the menu is opened
         loadPendingProofs();
+        loadChangeJar();
+        if (debugEnabled.value) {
+          refreshDebugLogs();
+        }
       }
     });
     const settings = ref({
@@ -476,6 +562,8 @@ export default {
     const mintQuotes = ref({});
     const recoveryStatuses = ref({});
     const copiedProofs = ref({}); // Track which proofs have been copied
+    const changeJar = ref({}); // Track change jar data
+    const copiedChange = ref({}); // Track which change has been copied
     const showConfirmationModal = ref(false); // Control confirmation modal visibility
     const pendingRecoveryItem = ref({ txId: '', category: '' }); // Store item pending recovery
     const showLightningSection = ref(false); // Track if Lightning section is expanded
@@ -483,6 +571,8 @@ export default {
     const showMintQuoteConfirmation = ref(false); // Control mint quote deletion confirmation
     const showRecoveryConfirmationModal = ref(false); // Control recovery confirmation modal
     const pendingRecoveryId = ref(''); // Store recovery ID pending action
+    const showChangeConfirmationModal = ref(false); // Control change recovery confirmation modal
+    const pendingChangeRecovery = ref(''); // Store mint URL pending change recovery
     
     // Debug console state
     const debugEnabled = ref(debugLogger.isCapturingLogsEnabled());
@@ -508,6 +598,7 @@ export default {
       // Load pending proofs and mint quotes
       loadPendingProofs();
       loadMintQuotes();
+      loadChangeJar();
     });
     
     // Load pending proofs from storage
@@ -827,12 +918,89 @@ export default {
       }
     };
     
-    // Refresh logs when the menu is opened
-    watch(() => props.isOpen, (newVal) => {
-      if (newVal && debugEnabled.value) {
-        refreshDebugLogs();
+    
+    
+    // Change Jar Functions
+    const loadChangeJar = () => {
+      changeJar.value = getChangeJar();
+    };
+    
+    const formatMintUrl = (mintUrl) => {
+      if (!mintUrl) return 'Unknown';
+      // Extract domain from URL
+      try {
+        const url = new URL(mintUrl);
+        return url.hostname;
+      } catch {
+        // If not a valid URL, just show a shortened version
+        return mintUrl.length > 30 ? `${mintUrl.substring(0, 30)}...` : mintUrl;
       }
-    });
+    };
+    
+    const copyChangeProofs = (mintUrl, changeData) => {
+      try {
+        // Create a properly encoded Cashu token using the official library function
+        const tokenData = {
+          mint: changeData.mintUrl,
+          proofs: changeData.proofs
+        };
+        
+        // Get encoded token string with the cashu: prefix
+        const tokenString = getEncodedTokenV4(tokenData);
+        
+        navigator.clipboard.writeText(tokenString);
+        showNotification(`Copied change token (${formatSats(changeData.totalAmount)}) to clipboard`, 'success');
+        
+        // Mark as copied to show the recovery button
+        copiedChange.value[mintUrl] = true;
+      } catch (error) {
+        console.error('Error copying change token:', error);
+        showNotification('Failed to copy change token', 'error');
+      }
+    };
+    
+    const isChangeCopied = (mintUrl) => {
+      return copiedChange.value[mintUrl] === true;
+    };
+    
+    const showChangeRecoveryConfirmation = (mintUrl) => {
+      pendingChangeRecovery.value = mintUrl;
+      showChangeConfirmationModal.value = true;
+    };
+    
+    const cancelChangeRecovery = () => {
+      pendingChangeRecovery.value = '';
+      showChangeConfirmationModal.value = false;
+    };
+    
+    const confirmChangeRecovery = () => {
+      const mintUrl = pendingChangeRecovery.value;
+      if (!mintUrl) return;
+      
+      // Clear the change for this mint
+      clearChangeForMint(mintUrl);
+      
+      // Remove from copied tracking
+      delete copiedChange.value[mintUrl];
+      
+      // Refresh the change jar
+      loadChangeJar();
+      
+      // Close the modal
+      showChangeConfirmationModal.value = false;
+      pendingChangeRecovery.value = '';
+      
+      showNotification(`Change for ${formatMintUrl(mintUrl)} marked as recovered and removed`, 'success');
+    };
+    
+    const confirmClearChange = (mintUrl) => {
+      if (confirm(`Are you sure you want to delete change for ${formatMintUrl(mintUrl)}? This action cannot be undone.`)) {
+        clearChangeForMint(mintUrl);
+        delete copiedChange.value[mintUrl];
+        loadChangeJar();
+        showNotification(`Change for ${formatMintUrl(mintUrl)} deleted`, 'success');
+      }
+    };
 
     return {
       mintQuotes,
@@ -883,7 +1051,21 @@ export default {
       reportLogs,
       
       // Update management
-      checkForUpdates
+      checkForUpdates,
+      
+      // Change Jar properties and methods
+      changeJar,
+      copiedChange,
+      loadChangeJar,
+      formatMintUrl,
+      copyChangeProofs,
+      isChangeCopied,
+      showChangeRecoveryConfirmation,
+      cancelChangeRecovery,
+      confirmChangeRecovery,
+      confirmClearChange,
+      showChangeConfirmationModal,
+      pendingChangeRecovery
     };
   }
 }
