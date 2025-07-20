@@ -129,17 +129,8 @@ class ProofCleanup {
 
       const wallet = await cashuWalletManager.getWallet(mintUrl);
       
-      // Set timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Mint check timed out')), 10000)
-      );
-      
-      const loadMintPromise = wallet.loadMint();
-      await Promise.race([loadMintPromise, timeoutPromise]);
-      
       // Check if proofs are still spendable (not claimed)
-      const checkPromise = wallet.checkProofsStates(proofs);
-      const stateCheckResult = await Promise.race([checkPromise, timeoutPromise]);
+      const stateCheckResult = await wallet.checkProofsStates(proofs);
       
       // If all proofs are spent, they were successfully claimed
       const allSpent = stateCheckResult.every(result => result.state === 'SPENT');

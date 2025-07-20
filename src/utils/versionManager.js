@@ -2,7 +2,7 @@
 import { showNotification } from './notification';
 
 // Update this version number with each release
-export const CURRENT_VERSION = '1.0.2';
+export const CURRENT_VERSION = '1.0.3';
 
 // Key for storing version in localStorage
 const VERSION_KEY = 'receipt-cash-version';

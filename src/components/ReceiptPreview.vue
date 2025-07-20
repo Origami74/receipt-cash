@@ -414,9 +414,9 @@ export default {
         
         const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
         
-        // Extract preferred mints from payment request or use defaults
-        const preferredMints = paymentRequest.value
-          ? cashuService.extractPreferredMints(paymentRequest.value)
+        // Extract preferred mints from payment request if it's a Cashu request
+        const preferredMints = (addressType.value === 'cashu' && receiveAddress.value)
+          ? cashuService.extractPreferredMints(receiveAddress.value)
           : [];
         
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(

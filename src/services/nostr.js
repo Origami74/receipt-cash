@@ -4,6 +4,8 @@ import { Buffer } from 'buffer';
 
 // Default relays as fallback
 const DEFAULT_RELAYS = [
+  'wss://nos.lol',
+  'wss://relay.getalby.com',
   'wss://relay.damus.io',
   'wss://relay.primal.net'
 ];
