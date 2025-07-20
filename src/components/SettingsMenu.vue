@@ -94,7 +94,7 @@
           <!-- Proof Recovery Section -->
           <div class="pt-4 border-t border-gray-200">
             <div class="flex justify-between items-center mb-3">
-              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Proof Recovery</h4>
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Cashu Recovery</h4>
               <button
                 @click="loadPendingProofs"
                 class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
@@ -107,7 +107,7 @@
               </button>
             </div>
             <p class="text-sm text-gray-600 mb-3">
-              If a payment failed to complete, you can recover your funds by copying out the proofs below.
+              If a payment failed to complete, you can recover your funds by copying out the cashu tokens below.
             </p>
             
             <div v-if="Object.keys(pendingProofs).length === 0" class="text-sm text-gray-500 italic">
@@ -224,7 +224,7 @@
           <!-- Change Jar Section -->
           <div class="pt-4 border-t border-gray-200">
             <div class="flex justify-between items-center mb-3">
-              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Change Jar</h4>
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Cashu Change Jar</h4>
               <button
                 @click="loadChangeJar"
                 class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
@@ -237,7 +237,7 @@
               </button>
             </div>
             <p class="text-sm text-gray-600 mb-3">
-              Change from failed Lightning melts. These are proofs that couldn't be melted due to fees or other issues.
+              Change from failed Lightning melts. This is Cashu money that could not be paid out to lightning due to fees or other issues.
             </p>
             
             <div v-if="Object.keys(changeJar).length === 0" class="text-sm text-gray-500 italic">
