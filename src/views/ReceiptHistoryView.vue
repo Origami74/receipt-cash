@@ -41,9 +41,9 @@
       <div v-else class="space-y-4">
         <!-- Display receipt events using the new component -->
         <ReceiptItem
-          v-for="[receiptEvent, parsedContent] in receiptEvents"
+          v-for="[receiptEvent, parsedContent, contentDecryptionKey] in receiptEvents"
           :key="receiptEvent.id"
-          :receiptEvent="[receiptEvent, parsedContent]"
+          :receiptEvent="[receiptEvent, parsedContent, contentDecryptionKey]"
         />
         
       </div>
@@ -102,11 +102,11 @@ export default {
         }
         
         // Get the encryption private key as Uint8Array
-        const encryptionKey = Uint8Array.from(Buffer.from(matchingIdentity.contentSigner.key));
+        const contentDecryptionKey = Uint8Array.from(Buffer.from(matchingIdentity.contentSigner.key));
         
         // Decrypt using symmetric approach (not two-party)
         //  TODO: remove dpeendency on nostr tools and do this with AppleSauce (Threw invalid MAC eerors)
-        const decryptedContent = await nip44.decrypt(receiptEvent.content, encryptionKey);
+        const decryptedContent = await nip44.decrypt(receiptEvent.content, contentDecryptionKey);
         
         console.log("Decrypted content:", decryptedContent);
         
@@ -114,8 +114,8 @@ export default {
         const parsedContent = safeParseReceiptContent(decryptedContent);
         
         if (parsedContent) {
-          // Save as tuple: [event, parsedContent]
-          receiptEvents.value.push([receiptEvent, parsedContent]);
+          // Save as tuple: [event, parsedContent, contentDecryptionKey]
+          receiptEvents.value.push([receiptEvent, parsedContent, contentDecryptionKey]);
         } else {
           console.warn("Invalid receipt content after decryption, skipping event:", receiptEvent.id);
         }
