@@ -66,6 +66,8 @@ export default {
     const settlementEvents = ref([]);
     const settlementConfirmationEvents = ref([]);
 
+    // const settledAmount
+
     // Convert the tuple [event, parsedContent] to receipt format
     const receipt = computed(() => {
       const [eventData, parsedContent] = props.receiptEvent;
@@ -136,7 +138,7 @@ export default {
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
           .subscribe((event) => {
             console.log("confirmation event", event);
-            settlementEvents.value.push(event);
+            settlementConfirmationEvents.value.push(event);
           })
 
 
