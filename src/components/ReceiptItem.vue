@@ -137,14 +137,15 @@ export default {
         itemCount: parsedContent.items.length,
         settledAmount: totalSettledAmount.value,
         confirmedSettledAmount: confirmedSettledAmount.value,
-        decryptionKey: '', // Not needed in this context
         status: 'pending'
       };
     });
 
     const viewReceipt = () => {
+      // Convert Uint8Array to hex string for URL
+      const keyHex = Buffer.from(contentDecryptionKey).toString('hex');
       // Navigate to the receipt view
-      router.push(`/?receipt=${receipt.value.id}&key=${receipt.value.decryptionKey}`);
+      router.push(`/?receipt=${receipt.value.id}&key=${keyHex}`);
     };
 
     const getSettlementProgress = (receipt) => {
