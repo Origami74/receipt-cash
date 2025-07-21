@@ -98,11 +98,21 @@ export function parseReceiptContent(receiptContent) {
       }
     }
 
+    // BTC Price (required)
+    if (receiptData.btcPrice === undefined || receiptData.btcPrice === null) {
+      throw new ReceiptValidationError('BTC price must be present', 'btcPrice', receiptData.btcPrice);
+    }
+    const btcPrice = Number(receiptData.btcPrice);
+    if (isNaN(btcPrice) || btcPrice <= 0) {
+      throw new ReceiptValidationError('BTC price must be a positive number', 'btcPrice', receiptData.btcPrice);
+    }
+
     // Return normalized receipt data (no derived fields)
     const parsedReceipt = {
       items: validatedItems,
       currency,
-      splitPercentage
+      splitPercentage,
+      btcPrice
     };
 
     return parsedReceipt;

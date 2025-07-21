@@ -10,7 +10,7 @@
       </div>
       <div class="text-right">
         <div class="font-bold">{{ formatSats(receipt.totalAmount) }} sats</div>
-        <div class="text-sm text-gray-500">{{ convertFromSats(receipt.totalAmount, receipt.btcPrice, receipt.currency) }}</div>
+        <div class="text-sm text-gray-500">🔒 {{ convertFromSats(receipt.totalAmount, receipt.btcPrice, receipt.currency) }}</div>
       </div>
     </div>
 
@@ -124,6 +124,8 @@ export default {
       // Calculate total from parsed items
       const totalAmount = parsedContent.items.reduce((sum, item) => sum + item.total, 0);
       
+      console.log("ggggggg", parsedContent)
+
       return {
         id: receiptEvent.id,
         eventId: receiptEvent.id,
@@ -131,7 +133,7 @@ export default {
         created_at: receiptEvent.created_at,
         totalAmount,
         currency: parsedContent.currency,
-        btcPrice: 0, // Will be fetched separately if needed
+        btcPrice: parsedContent.btcPrice,
         itemCount: parsedContent.items.length,
         settledAmount: totalSettledAmount.value,
         confirmedSettledAmount: confirmedSettledAmount.value,
