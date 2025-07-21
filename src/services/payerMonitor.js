@@ -337,7 +337,6 @@ class PayerMonitor {
           const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
           
           if (rumor && rumor.kind === 14) {
-            console.log('Successfully unwrapped gift wrap, found kind 14 DM');
             
             // Parse the message content
             try {
@@ -346,9 +345,6 @@ class PayerMonitor {
               // Check if this is a Cashu payment message
               if (messageContent.id && messageContent.proofs && messageContent.mint) {
                 const expectedMemo = `${receiptEventId}-${settlementEventId}`;
-                
-                console.log('Found Cashu payment message, ID:', messageContent.id);
-                console.log('Expected memo:', expectedMemo);
                 
                 // Check if the payment ID matches our expected memo format
                 if (messageContent.id === expectedMemo) {
