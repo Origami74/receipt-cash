@@ -16,32 +16,15 @@
     </div>
     
     <template v-else>
-      <div class="bg-white shadow-sm p-4">
-        <div class="flex justify-between items-center">
-          <button @click="goBack" class="btn flex items-center text-gray-700 hover:text-gray-900">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span>Back</span>
-          </button>
-          <button @click="showSettings = true" class="btn text-gray-700 hover:text-gray-900">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        </div>
-        <div class="flex justify-between items-center mt-2">
-          <h1 class="text-xl font-bold">{{ merchant }}</h1>
-          <div class="text-sm text-gray-500">{{ date }}</div>
-        </div>
-        <div class="flex justify-end mt-2">
-          <CurrencySelector
-            v-model="selectedCurrency"
-            @update:modelValue="onCurrencyChange"
-          />
-        </div>
-      </div>
+      <ReceiptHeader
+        :title="title || 'No Title'"
+        :date="date || 'yyyy-mm-dd'"
+        :selectedCurrency="selectedCurrency"
+        backButtonText="Back"
+        @back-click="goBack"
+        @toggle-settings="showSettings = true"
+        @currency-change="onCurrencyChange"
+      />
       
       <div class="flex-1 overflow-y-auto p-4">
         <!-- Receipt Items -->
@@ -107,31 +90,15 @@
           </div>
         </div>
         
-        <!-- Receipt Summary -->
-        <div class="bg-white rounded-lg shadow mb-4">
-          <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
-            Summary
-          </div>
-          <div class="p-3 border-t border-gray-200 text-xs text-gray-500">
-            <div>
-              Receipt conversion rate: 1 BTC = {{ currency === 'USD' ? '$' : currency + ' ' }}{{ btcPrice.toLocaleString() }}
-            </div>
-            <div v-if="currentBtcPrice && currentBtcPrice !== btcPrice">
-              Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
-            </div>
-          </div>
-          <div v-if="devPercentage > 0" class="p-3 border-t border-gray-100 text-xs text-gray-500 flex items-center">
-            <span>Receipt creator shares {{ formatDevPercentage(devPercentage) }}% with the maintainer of this app.</span>
-            <span class="emoji-display mr-2">{{ getDevPercentageEmoji(devPercentage) }}</span>
-          </div>
-          <div class="p-3 flex justify-between items-center font-bold border-t border-gray-200">
-            <div>Total</div>
-            <div class="text-right">
-              <div>{{ formatSats(totalAmount) }} sats</div>
-              <div class="text-sm text-gray-500">{{ toFiat(totalAmount) }}</div>
-            </div>
-          </div>
-        </div>
+        <ReceiptSummary
+          :receiptBtcPrice="btcPrice"
+          :currentBtcPrice="currentBtcPrice"
+          :currency="currency"
+          :selectedCurrency="selectedCurrency"
+          :splitPercentage="devPercentage"
+          :totalAmount="totalAmount"
+          :toFiat="toFiat"
+        />
         
         <!-- Settlements List -->
         <div v-if="settlements.length > 0" class="bg-white rounded-lg shadow">
@@ -251,6 +218,8 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import ReceiptHeader from '../components/ReceiptHeader.vue';
+import ReceiptSummary from '../components/ReceiptSummary.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../services/notificationService';
@@ -268,6 +237,8 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '.
 export default {
   name: 'ReceiptView',
   components: {
+    ReceiptHeader,
+    ReceiptSummary,
     SettingsMenu,
     CurrencySelector
   },
@@ -283,7 +254,7 @@ export default {
   },
   setup(props) {
     const router = useRouter();
-    const merchant = ref('');
+    const title = ref('');
     const date = ref('');
     const items = ref([]);
     const loading = ref(true);
@@ -385,7 +356,7 @@ export default {
         }
         
         // Update component state with the fetched data
-        merchant.value = receiptData.merchant;
+        title.value = receiptData.title;
         date.value = receiptData.date;
         currency.value = receiptData.currency;
         selectedCurrency.value = receiptData.currency;
@@ -528,7 +499,7 @@ export default {
     });
     
     return {
-      merchant,
+      title,
       date,
       items,
       totalAmount,
