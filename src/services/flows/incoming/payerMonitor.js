@@ -7,6 +7,13 @@ import settlementService from '../outgoing/settlement';
 import cashuService from '../shared/cashuService';
 import { showNotification } from '../../notificationService';
 import {storeChangeForMint} from '../../storageService'
+import { globalEventStore, globalPool } from '../../nostr/applesauce';
+import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_SETTLEMENT } from '../../nostr/constants';
+import { unlockGiftWrap } from 'applesauce-core/helpers';
+import { onlyEvents } from 'applesauce-relay';
+import { mapEventsToStore } from 'applesauce-core';
+import { Buffer } from 'buffer';
+import { SimpleSigner } from 'applesauce-signers';
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -300,23 +307,11 @@ class PayerMonitor {
       console.log('Confirmation already exists for settlement:', event.id, '- skipping Cashu monitoring');
       return;
     }
+
     
-    try {
-      const ndk = await nostrService.getNdk();
-      
-      // Create subscription for incoming DMs (kind 14 - gift wraps)
-      const dmFilter = {
-        kinds: [1059], // Gift wrapped messages (NIP-17) - using kind 1059 which is correct
-        '#p': [receiptPubkey], // Messages to our receipt pubkey
-        since: oneDayBefore // Settlement time minus 1 day for safety
-      };
-      
-      console.log('Setting up Cashu payment subscription with filter:', dmFilter);
-      const subscription = ndk.subscribe(dmFilter);
-      
-      // Handle incoming events
-      subscription.on('event', async (dmEvent) => {
-        try {
+
+    const handleGiftWrappedEvent = async (giftWrappedEvent) => {
+      try {
           // Stop processing if we already published a confirmation
           if (this.publishedConfirmations.has(event.id)) {
             console.log('Confirmation already published for settlement:', event.id);
@@ -324,15 +319,14 @@ class PayerMonitor {
             return;
           }
           
-          console.log('Received potential Cashu payment DM, kind:', dmEvent.kind);
+          console.log('Received potential Cashu payment DM, kind:', giftWrappedEvent.kind);
+
+          // TODO: don't do this for each event
+          const privateKeyBytes = Uint8Array.from(Buffer.from(receiptInfo.publishingPrivateKey, 'hex'));
+          const receiptSigner = new SimpleSigner(privateKeyBytes);
           
-          // Try to decrypt the gift wrap using NDK's unwrapping
-          const { NDKPrivateKeySigner, giftUnwrap, NDKUser } = await import('@nostr-dev-kit/ndk');
-          const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
-          
-          // Unwrap the gift to get the inner rumor
-          const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
-          
+          const rumor = await unlockGiftWrap(giftWrappedEvent, receiptSigner)
+
           if (rumor && rumor.kind === 14) {
             
             // Parse the message content
@@ -348,7 +342,7 @@ class PayerMonitor {
                   console.log('Found matching Cashu payment! Processing...');
                   
                   // Stop the subscription since we found our payment
-                  subscription.stop();
+                  dmSubscription.remove();
                   
                   // Process the received Cashu tokens
                   await this.processSettlementInCashu(messageContent, event, settlementData);
@@ -364,19 +358,17 @@ class PayerMonitor {
           // Failed to decrypt, might not be for us or different format
           console.log('Failed to unwrap gift:', decryptError.message);
         }
-      });
-      
-      // Store subscription for cleanup
-      if (!this.monitoringIntervals.has(receiptEventId)) {
-        this.monitoringIntervals.set(receiptEventId, []);
-      }
-      this.monitoringIntervals.get(receiptEventId).push(subscription);
-      
-      console.log('Cashu payment subscription started for settlement:', settlementEventId);
-      
-    } catch (error) {
-      console.error('Error setting up Cashu payment subscription:', error);
     }
+
+    const dmSubscription = globalPool
+      .subscription(DEFAULT_RELAYS, {
+        kinds: [KIND_GIFTWRAPPED_MSG],
+        '#p': [receiptPubkey],
+        since: oneDayBefore
+      })
+      .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+      .subscribe(handleGiftWrappedEvent);
+
   }
   
   /**
@@ -744,6 +736,8 @@ class PayerMonitor {
    */
   async publishConfirmation(event) {
     try {
+    console.log(`publishing settlement confirmation event ${event.id}`)
+
       const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
       const settlerPubkey = event.tags.find(tag => tag[0] === 'p')?.[1];
       
