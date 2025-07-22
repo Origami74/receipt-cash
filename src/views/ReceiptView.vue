@@ -1,21 +1,12 @@
 <template>
-  <div class="h-full flex flex-col bg-gray-50">
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <div class="text-center">
-        <div class="text-xl font-bold mb-2">Loading Receipt...</div>
-        <div class="text-gray-500">Please wait</div>
-      </div>
-    </div>
-    
-    <div v-else-if="error" class="flex-1 flex items-center justify-center">
-      <div class="text-center p-4">
-        <div class="text-xl font-bold mb-2 text-red-500">Error</div>
-        <div class="text-gray-700 mb-4">{{ error }}</div>
-        <button @click="fetchReceipt" class="btn-primary">Try Again</button>
-      </div>
-    </div>
-    
-    <template v-else>
+  <LoadingErrorWrapper
+    :loading="loading"
+    :error="error"
+    :errorDetails="errorDetails"
+    loadingMessage="Loading Receipt..."
+    retryButtonText="Try Again"
+    @retry="fetchReceipt"
+  >
       <ReceiptHeader
         :title="title || 'No Title'"
         :date="date || 'yyyy-mm-dd'"
@@ -205,14 +196,12 @@
           <div class="text-gray-400 text-sm mt-1">Settlements for this receipt will appear here</div>
         </div>
       </div>
-    </template>
-    
     <!-- Settings Menu -->
     <SettingsMenu
       :is-open="showSettings"
       @close="showSettings = false"
     />
-  </div>
+  </LoadingErrorWrapper>
 </template>
 
 <script>
@@ -220,6 +209,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
+import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../services/notificationService';
@@ -239,6 +229,7 @@ export default {
   components: {
     ReceiptHeader,
     ReceiptSummary,
+    LoadingErrorWrapper,
     SettingsMenu,
     CurrencySelector
   },
@@ -259,6 +250,7 @@ export default {
     const items = ref([]);
     const loading = ref(true);
     const error = ref(null);
+    const errorDetails = ref(null);
     const btcPrice = ref(0);
     const currency = ref('USD');
     const selectedCurrency = ref('USD');
@@ -381,6 +373,12 @@ export default {
       } catch (err) {
         console.error('Error processing receipt event:', err);
         error.value = 'Failed to load receipt data. Please try again.';
+        errorDetails.value = {
+          message: err.message,
+          stack: err.stack,
+          eventId: props.eventId,
+          timestamp: new Date().toISOString()
+        };
       } finally {
         loading.value = false;
       }
@@ -390,6 +388,7 @@ export default {
     const fetchReceipt = () => {
       loading.value = true;
       error.value = null;
+      errorDetails.value = null;
 
       // Fetch receipt event using eventLoader
       globalEventLoader({
@@ -506,6 +505,7 @@ export default {
       devPercentage,
       loading,
       error,
+      errorDetails,
       notification,
       clearNotification,
       fetchReceipt,
