@@ -112,7 +112,7 @@ import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { showNotification } from '../services/notificationService';
 import nostrService from '../services/flows/shared/nostr';
-import debugLogger from '../services/loggingService';
+import debugLogger from '../services/debugService';
 
 // Developer public key to send reports to
 const DEVELOPER_PUBKEY = 'a5db1b45079ed0a6b654857712bae6e5d62ff0345abb38571f898bb9cb70100c';

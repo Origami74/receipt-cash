@@ -31,7 +31,7 @@ import Notification from './components/Notification.vue';
 import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
-import debugLogger from './services/loggingService';
+import debugLogger from './services/debugService';
 import { checkForVersionUpdate } from './services/updaterService';
 
 export default {

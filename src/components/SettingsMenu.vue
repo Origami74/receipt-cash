@@ -513,7 +513,7 @@ import { getAiSettings, saveAiSettings, clearAiSettings,
 import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecovery';
 import { showNotification } from '../services/notificationService';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
-import debugLogger from '../services/loggingService';
+import debugLogger from '../services/debugService';
 import addressValidation, { AddressType } from '../utils/receiveAddressValidationUtils';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../services/updaterService';

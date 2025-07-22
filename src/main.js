@@ -6,7 +6,7 @@ import './style.css';
 import nostrService from './services/flows/shared/nostr';
 import receiptMonitoringService from './services/flows/incoming/receiptMonitoringService';
 import proofCleanup from './services/flows/shared/proofCleanup';
-import debugLogger from './services/loggingService';
+import debugLogger from './services/debugService';
 
 // Initialize Nostr
 nostrService.connect();
