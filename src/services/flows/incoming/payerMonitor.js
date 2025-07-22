@@ -1,15 +1,12 @@
-import { NDKEvent, NDKKind, NDKUser } from '@nostr-dev-kit/ndk';
+import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip44 } from 'nostr-tools';
 import { MintQuoteState } from '@cashu/cashu-ts';
-import cashuWalletManager from './cashuWalletManager';
-import nostrService from './nostr';
-import settlementService from './settlement';
-import cashuService from '../services/cashu';
-import receiptKeyManager from '../utils/receiptKeyManager';
-import { showNotification } from '../utils/notification';
-import { Buffer } from 'buffer';
-import { validateReceiveAddress } from './addressValidation';
-import {storeChangeForMint} from '../utils/storage'
+import cashuWalletManager from '../shared/cashuWalletManager';
+import nostrService from '../shared/nostr';
+import settlementService from '../outgoing/settlement';
+import cashuService from '../shared/cashu';
+import { showNotification } from '../../../utils/notification';
+import {storeChangeForMint} from '../../../utils/storage'
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -524,7 +521,7 @@ class PayerMonitor {
    */
   async storeProofsForRecovery(transactionId, proofs, mintUrl, category) {
     try {
-      const { saveProofs } = await import('../utils/storage');
+      const { saveProofs } = await import('../../../utils/storage');
       
       saveProofs(transactionId, category, proofs, 'pending', mintUrl);
       
@@ -541,7 +538,7 @@ class PayerMonitor {
    */
   async markProofsAsForwarded(transactionId) {
     try {
-      const { updateProofStatus } = await import('../utils/storage');
+      const { updateProofStatus } = await import('../../../utils/storage');
       
       // Mark all categories as 'forwarded' instead of deleting
       const categories = ['claimed', 'payer', 'developer'];
@@ -563,7 +560,7 @@ class PayerMonitor {
    */
   async clearStoredProofs(transactionId) {
     try {
-      const { clearProofs } = await import('../utils/storage');
+      const { clearProofs } = await import('../../../utils/storage');
       clearProofs(transactionId);
       console.log(`Cleared stored proofs for transaction: ${transactionId}`);
       
@@ -660,8 +657,8 @@ class PayerMonitor {
    */
   async payoutPayer(proofs, mintUrl) {
     try {
-      const { getReceiveAddress } = await import('../utils/storage');
-      const { validateReceiveAddress } = await import('./addressValidation');
+      const { getReceiveAddress } = await import('../../../utils/storage');
+      const { validateReceiveAddress } = await import('../../addressValidation');
       
       const receiveAddress = getReceiveAddress();
       

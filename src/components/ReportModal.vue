@@ -111,7 +111,7 @@ import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { showNotification } from '../utils/notification';
-import nostrService from '../services/nostr';
+import nostrService from '../services/flows/shared/nostr';
 import debugLogger from '../utils/debugLogger';
 
 // Developer public key to send reports to

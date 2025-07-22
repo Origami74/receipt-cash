@@ -3,9 +3,9 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import './style.css';
-import nostrService from './services/nostr';
-import receiptMonitoringService from './services/receiptMonitoringService';
-import proofCleanup from './services/proofCleanup';
+import nostrService from './services/flows/shared/nostr';
+import receiptMonitoringService from './services/flows/incoming/receiptMonitoringService';
+import proofCleanup from './services/flows/shared/proofCleanup';
 import debugLogger from './utils/debugLogger';
 
 // Initialize Nostr

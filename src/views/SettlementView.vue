@@ -250,9 +250,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import confetti from 'canvas-confetti';
-import receiptService from '../services/receipt';
-import settlementService from '../services/settlement';
-import nostrService from '../services/nostr';
+import settlementService from '../services/flows/outgoing/settlement';
+import nostrService from '../services/flows/shared/nostr';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
@@ -261,8 +260,8 @@ import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../utils/notification';
 import { formatSats, convertFromSats } from '../utils/pricing';
 import paymentService from '../services/payment';
-import cashuService from '../services/cashu';
-import cashuWalletManager from '../services/cashuWalletManager';
+import cashuService from '../services/flows/shared/cashu';
+import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -411,6 +410,48 @@ export default {
         items.value[index].selectedQuantity--;
       }
     };
+
+
+/**
+ * Fetches a receipt from the Nostr network
+ * @param {String} eventId - The event ID of the receipt
+ * @param {String} decryptionKey - The key to decrypt the receipt
+ * @returns {Promise<Object>} The receipt data
+ */
+const fetchReceipt = async (eventId, decryptionKey) => {
+  if (!eventId) {
+    throw new Error('Invalid event ID');
+  }
+
+  if (!decryptionKey) {
+    throw new Error('Missing decryption key');
+  }
+  
+  try {
+    // Fetch receipt data from Nostr network
+    const receiptData = await nostrService.fetchReceiptEvent(eventId, decryptionKey);
+    
+    // Fetch current BTC price in the receipt's currency
+    const btcPrice = await paymentService.fetchBtcPrice(receiptData.currency);
+    
+    // Prepare receipt data with additional fields for UI
+    const receipt = {
+      ...receiptData,
+      btcPrice,
+      // Add UI-specific fields to items
+      items: receiptData.items.map(item => ({
+        ...item,
+        selectedQuantity: 0,
+        settled: false
+      }))
+    };
+    
+    return receipt;
+  } catch (error) {
+    console.error('Error fetching receipt:', error);
+    throw error;
+  }
+};
     
     // Fetch receipt data from service
     const fetchReceiptData = async () => {
@@ -418,7 +459,7 @@ export default {
         loading.value = true;
         
         // Use receipt service to fetch data
-        const receiptData = await receiptService.fetchReceipt(
+        const receiptData = await fetchReceipt(
           props.eventId,
           props.decryptionKey
         );

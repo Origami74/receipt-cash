@@ -55,7 +55,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import receiptKeyManager from '../utils/receiptKeyManager';
-import nostrService from '../services/nostr';
+import nostrService from '../services/flows/shared/nostr.js';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
 import { DEFAULT_RELAYS, globalEventStore, globalPool } from '../services/nostr/applesauce';

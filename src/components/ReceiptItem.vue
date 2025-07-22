@@ -171,7 +171,6 @@ export default {
       return 'Pending Settlement';
     };
 
-
     const handleSettlementEvent = async (settlementEvent) => {
       console.log("settlement event", settlementEvent);
       

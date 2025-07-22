@@ -216,10 +216,10 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import nostrService from '../services/nostr';
-import cashuService from '../services/cashu';
+import nostrService from '../services/flows/shared/nostr';
+import cashuService from '../services/flows/shared/cashu';
 import paymentService from '../services/payment';
-import receiptMonitoringService from '../services/receiptMonitoringService';
+import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
 import receiptKeyManager from '../utils/receiptKeyManager';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';

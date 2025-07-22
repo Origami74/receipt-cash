@@ -30,7 +30,7 @@ import { showNotification, useNotification } from './utils/notification';
 import Notification from './components/Notification.vue';
 import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
-import mintQuoteRecoveryService from './services/mintQuoteRecovery';
+import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './utils/debugLogger';
 import { checkForVersionUpdate } from './utils/versionManager';
 

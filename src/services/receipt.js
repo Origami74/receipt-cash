@@ -1,6 +1,3 @@
-import nostrService from './nostr';
-import paymentService from './payment';
-import settlementService from './settlement';
 import { getAiSettings } from '../utils/storage';
 
 /**
@@ -107,99 +104,7 @@ Here are some things to keep in mind:
   }
 };
 
-/**
- * Fetches a receipt from the Nostr network
- * @param {String} eventId - The event ID of the receipt
- * @param {String} decryptionKey - The key to decrypt the receipt
- * @returns {Promise<Object>} The receipt data
- */
-export const fetchReceipt = async (eventId, decryptionKey) => {
-  if (!eventId) {
-    throw new Error('Invalid event ID');
-  }
-
-  if (!decryptionKey) {
-    throw new Error('Missing decryption key');
-  }
-  
-  try {
-    // Fetch receipt data from Nostr network
-    const receiptData = await nostrService.fetchReceiptEvent(eventId, decryptionKey);
-    
-    // Fetch current BTC price in the receipt's currency
-    const btcPrice = await paymentService.fetchBtcPrice(receiptData.currency);
-    
-    // Prepare receipt data with additional fields for UI
-    const receipt = {
-      ...receiptData,
-      btcPrice,
-      // Add UI-specific fields to items
-      items: receiptData.items.map(item => ({
-        ...item,
-        selectedQuantity: 0,
-        settled: false
-      }))
-    };
-    
-    return receipt;
-  } catch (error) {
-    console.error('Error fetching receipt:', error);
-    throw error;
-  }
-};
-
-/**
- * Publishes a settlement event for a receipt
- * @param {String} receiptEventId - The event ID of the receipt
- * @param {Array} settledItems - The items that were settled
- * @param {String} decryptionKey - The key to decrypt the receipt
- * @param {String} paymentType - Payment type: 'lightning' or 'cashu'
- * @param {String} receiptAuthorPubkey - The public key of the receipt author
- * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
- * @param {String} mintUrl - The mint URL (for lightning payments)
- * @param {Array} relays - Additional relays to use
- * @returns {Promise<String>} The event ID of the settlement
- */
-export const publishSettlement = async (receiptEventId, settledItems, decryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, mintUrl = null, relays = []) => {
-  try {
-    return await settlementService.publishSettlementEvent(
-      receiptEventId,
-      settledItems,
-      decryptionKey,
-      paymentType,
-      receiptAuthorPubkey,
-      mintQuoteId,
-      mintUrl,
-      relays
-    );
-  } catch (error) {
-    console.error('Error publishing settlement:', error);
-    throw error;
-  }
-};
-
-
-/**
- * Subscribes to settlement updates for a receipt
- * @param {String} receiptEventId - The event ID of the receipt
- * @param {String} decryptionKey - The key to decrypt the receipt
- * @param {Function} callback - Callback function when new settlements arrive
- * @returns {Function} Unsubscribe function
- */
-export const subscribeToSettlementUpdates = async (receiptEventId, decryptionKey, callback) => {
-  try {
-    return await settlementService.subscribeToSettlements(receiptEventId, decryptionKey, (settlement) => {
-      callback(settlement);
-    });
-  } catch (error) {
-    console.error('Error subscribing to settlement updates:', error);
-    throw error;
-  }
-};
 
 export default {
   processReceiptImage,
-  fetchReceipt,
-  publishSettlement,
-  subscribeToSettlementUpdates
 };
