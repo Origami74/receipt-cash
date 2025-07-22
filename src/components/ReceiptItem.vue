@@ -124,8 +124,6 @@ export default {
       // Calculate total from parsed items
       const totalAmount = parsedContent.items.reduce((sum, item) => sum + item.total, 0);
       
-      console.log("ggggggg", parsedContent)
-
       return {
         id: receiptEvent.id,
         eventId: receiptEvent.id,
@@ -158,7 +156,7 @@ export default {
       const totalProgress = getSettlementProgress(receipt);
       
       if (confirmedProgress === 100) return 'bg-green-100 text-green-800';  // Fully confirmed
-      if (confirmedProgress > 0) return 'bg-green-100 text-green-800';      // Partially confirmed (green)
+      if (confirmedProgress > 0) return 'bg-yellow-100 text-yellow-800';      // Partially confirmed (green)
       if (totalProgress > 0) return 'bg-yellow-100 text-yellow-800';        // Settled but unconfirmed (orange)
       return 'bg-gray-100 text-gray-800';                                   // Pending
     };
@@ -167,8 +165,8 @@ export default {
       const confirmedProgress = Math.round((receipt.confirmedSettledAmount || 0) / receipt.totalAmount * 100);
       const totalProgress = getSettlementProgress(receipt);
       
-      if (confirmedProgress === 100) return 'Fully Confirmed';
-      if (confirmedProgress > 0) return 'Partially Confirmed';
+      if (confirmedProgress === 100) return 'Fully Settled';
+      if (confirmedProgress > 0) return 'Partially Settled';
       if (totalProgress > 0) return 'Settled (Unconfirmed)';
       return 'Pending Settlement';
     };
@@ -218,81 +216,12 @@ export default {
             console.log("confirmation event", event);
             settlementConfirmationEvents.value.push(event);
           })
-
-
-        // // Get NDK instance
-        // const ndk = await nostrService.getNdk();
-        
-        // // Get the receipt author's public key from the receipt event
-        // const receiptAuthorPubkey = receiptEvent.authorPubkey;
-        // if (!receiptAuthorPubkey) {
-        //   console.warn('No author pubkey found in receipt event');
-        //   return 0;
-        // }
-        
-        // // Query for confirmation events (kind 9569) for this receipt
-        // const confirmationEvents = await ndk.fetchEvents({
-        //   kinds: [9569],
-        //   authors: [receiptAuthorPubkey],
-        //   '#e': [receiptEventId],
-        //   limit: 100
-        // });
-        
-        // console.log(`Found ${confirmationEvents.size} confirmations for receipt ${receiptEventId}`);
-        
-        // // For each confirmation, get the settlement event it references
-        // let totalSettledAmount = 0;
-        // const processedSettlements = new Set();
-        
-        // for (const confirmationEvent of confirmationEvents) {
-        //   const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
-        //   if (eTags.length >= 2) {
-        //     const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
-            
-        //     // Skip if we've already processed this settlement
-        //     if (processedSettlements.has(settlementEventId)) {
-        //       continue;
-        //     }
-        //     processedSettlements.add(settlementEventId);
-            
-        //     try {
-        //       // Fetch the settlement event to get the settled items
-        //       const settlementEvent = await ndk.fetchEvent(settlementEventId);
-        //       if (settlementEvent) {
-        //         // We need the receipt encryption key to decrypt the settlement
-        //         const encryptionKey = receiptKeyManager.getEncryptionKey(receiptEventId);
-        //         if (encryptionKey) {
-        //           const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
-        //           const { nip44 } = await import('nostr-tools');
-                  
-        //           const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
-        //           const { settledItems } = JSON.parse(decryptedContent);
-                  
-        //           // Calculate the total amount for this settlement
-        //           const settlementAmount = settledItems.reduce((sum, item) => {
-        //             const quantity = item.selectedQuantity || item.quantity || 0;
-        //             const price = item.price || 0;
-        //             return sum + (quantity * price);
-        //           }, 0);
-                  
-        //           totalSettledAmount += settlementAmount;
-        //           console.log(`Added ${settlementAmount} sats from settlement ${settlementEventId}`);
-        //         }
-        //       }
-        //     } catch (error) {
-        //       console.error('Error processing settlement event:', error);
-        //     }
-        //   }
-        // }
-        
-        // return totalSettledAmount;
         
       } catch (error) {
         console.error('Error calculating settled amount:', error);
         return 0;
       }
     };
-
 
     onMounted(() => {
       loadSettlements();
