@@ -1,4 +1,4 @@
-import cashuService from './flows/shared/cashu';
+import cashuService from '../services/flows/shared/cashuService';
 
 /**
  * Address type enum

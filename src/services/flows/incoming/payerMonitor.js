@@ -4,7 +4,7 @@ import { MintQuoteState } from '@cashu/cashu-ts';
 import cashuWalletManager from '../shared/cashuWalletManager';
 import nostrService from '../shared/nostr';
 import settlementService from '../outgoing/settlement';
-import cashuService from '../shared/cashu';
+import cashuService from '../shared/cashuService';
 import { showNotification } from '../../notificationService';
 import {storeChangeForMint} from '../../storageService'
 
@@ -658,7 +658,7 @@ class PayerMonitor {
   async payoutPayer(proofs, mintUrl) {
     try {
       const { getReceiveAddress } = await import('../../storageService');
-      const { validateReceiveAddress } = await import('../../addressValidation');
+      const { validateReceiveAddress } = await import('../../../utils/receiveAddressValidationUtils');
       
       const receiveAddress = getReceiveAddress();
       

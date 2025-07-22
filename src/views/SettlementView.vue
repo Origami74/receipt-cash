@@ -260,7 +260,7 @@ import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import { formatSats, convertFromSats } from '../utils/pricingUtils';
 import paymentService from '../services/btcPriceService';
-import cashuService from '../services/flows/shared/cashu';
+import cashuService from '../services/flows/shared/cashuService';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
