@@ -367,7 +367,7 @@ export default {
     });
 
     const selectedSubtotal = computed(() => {
-      return items.filter(item => item.selectedQuantity > 0)
+      return selectedItems.value.filter(item => item.selectedQuantity > 0)
         .reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
     });
 
