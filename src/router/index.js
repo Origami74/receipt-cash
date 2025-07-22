@@ -10,6 +10,12 @@ const routes = [
     path: '/history',
     name: 'ReceiptHistory',
     component: () => import('../views/ReceiptHistoryView.vue')
+  },
+  {
+    path: '/receipt/:eventId/:decryptionKey',
+    name: 'ReceiptView',
+    component: () => import('../views/ReceiptView.vue'),
+    props: true
   }
 ];
 

@@ -258,8 +258,8 @@ import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../services/notificationService';
-import { formatSats, convertFromSats } from '../utils/pricingUtils';
-import paymentService from '../services/btcPriceService';
+import { formatSats, convertFromSats, getDevPercentageEmoji, formatDevPercentage } from '../utils/pricingUtils';
+import btcPriceService from '../services/btcPriceService';
 import cashuService from '../services/flows/shared/cashuService';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
@@ -429,7 +429,7 @@ const fetchReceipt = async (eventId, decryptionKey) => {
     const receiptData = await nostrService.fetchReceiptEvent(eventId, decryptionKey);
     
     // Fetch current BTC price in the receipt's currency
-    const btcPrice = await paymentService.fetchBtcPrice(receiptData.currency);
+    const btcPrice = await btcPriceService.fetchBtcPrice(receiptData.currency);
     
     // Prepare receipt data with additional fields for UI
     const receipt = {
@@ -488,7 +488,7 @@ const fetchReceipt = async (eventId, decryptionKey) => {
 
         // Fetch current BTC price for the selected currency
         try {
-          currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+          currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
         } catch (error) {
           console.error('Error fetching current BTC price:', error);
           // Fall back to receipt's stored BTC price
@@ -515,7 +515,7 @@ const fetchReceipt = async (eventId, decryptionKey) => {
     const onCurrencyChange = async () => {
       try {
         // Fetch new BTC price for the selected currency
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for new currency:', error);
         showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');

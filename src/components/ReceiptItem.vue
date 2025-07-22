@@ -143,7 +143,7 @@ export default {
       // Convert Uint8Array to hex string for URL
       const keyHex = Buffer.from(contentDecryptionKey).toString('hex');
       // Navigate to the receipt view
-      router.push(`/?receipt=${receipt.value.id}&key=${keyHex}`);
+      router.push(`/receipt/${receipt.value.id}/${keyHex}`);
     };
 
     const getSettlementProgress = (receipt) => {

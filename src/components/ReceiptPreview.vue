@@ -218,7 +218,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
-import paymentService from '../services/btcPriceService';
+import btcPriceService from '../services/btcPriceService';
 import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
 import receiptKeyManager from '../services/keyManagementService';
 import QRCodeVue from 'qrcode.vue';
@@ -288,7 +288,7 @@ export default {
       
       // Fetch current BTC price for live preview
       try {
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for preview:', error);
         showNotification('Failed to fetch BTC price for preview', 'error');
@@ -319,7 +319,7 @@ export default {
     const onCurrencyChange = async () => {
       try {
         // Fetch new BTC price for the selected currency
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for new currency:', error);
         showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
@@ -413,7 +413,7 @@ export default {
           splitPercentage: parseFloat(developerSplit.value)
         };
         
-        const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        const btcPrice = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
         
         // Extract preferred mints from payment request if it's a Cashu request
         const preferredMints = (addressType.value === 'cashu' && receiveAddress.value)
