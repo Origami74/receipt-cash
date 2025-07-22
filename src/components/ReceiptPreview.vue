@@ -218,7 +218,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashu';
-import paymentService from '../services/payment';
+import paymentService from '../services/btcPriceService';
 import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
 import receiptKeyManager from '../services/keyManagementService';
 import QRCodeVue from 'qrcode.vue';

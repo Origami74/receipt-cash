@@ -259,7 +259,7 @@ import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import { formatSats, convertFromSats } from '../utils/pricingUtils';
-import paymentService from '../services/payment';
+import paymentService from '../services/btcPriceService';
 import cashuService from '../services/flows/shared/cashu';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
@@ -367,7 +367,8 @@ export default {
     });
 
     const selectedSubtotal = computed(() => {
-      return paymentService.calculateSelectedSubtotal(selectedItems.value);
+      return items.filter(item => item.selectedQuantity > 0)
+        .reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
     });
 
     const selectAllItems = () => {
