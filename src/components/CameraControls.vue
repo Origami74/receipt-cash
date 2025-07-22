@@ -93,7 +93,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { showNotification } from '../utils/notificationService';
+import { showNotification } from '../services/notificationService';
 import receiptService from '../services/receipt';
 
 export default {

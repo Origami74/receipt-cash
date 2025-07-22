@@ -54,7 +54,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import receiptKeyManager from '../utils/keyManagementService.js';
+import receiptKeyManager from '../services/keyManagementService.js';
 import nostrService from '../services/flows/shared/nostr.js';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';

@@ -1,17 +1,5 @@
 import { formatCurrency } from '../utils/currencyUtils';
 
-/**
- * Converts a fiat currency amount to satoshis based on current BTC price
- * @param {Number} amount - Amount in fiat currency
- * @param {Number} btcPrice - Current BTC price in the same fiat currency
- * @returns {Number} Amount in satoshis
- */
-export const toSats = (amount, btcPrice) => {
-  if (!btcPrice) return 0;
-  // Convert to sats: (fiat amount * 100000000) / BTC price
-  return Math.round((amount * 100000000) / btcPrice);
-};
-
 // Cache for Bitcoin prices with 5-minute expiry
 const priceCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -81,16 +69,6 @@ export const fetchBtcPrice = async (currency = 'usd') => {
 };
 
 /**
- * Formats a price in the specified currency
- * @param {Number} amount - Amount to format
- * @param {String} currencyCode - Currency code (e.g. 'USD')
- * @returns {String} Formatted price
- */
-export const formatPrice = (amount, currencyCode) => {
-  return formatCurrency(amount, currencyCode);
-};
-
-/**
  * Calculates the total for selected items
  * @param {Array} items - Array of items with price and selectedQuantity
  * @returns {Number} Total price
@@ -126,9 +104,7 @@ export const calculateDeveloperFee = (amount, devPercentage) => {
 };
 
 export default {
-  toSats,
   fetchBtcPrice,
-  formatPrice,
   calculateSelectedSubtotal,
   calculateTax,
   calculateDeveloperFee,

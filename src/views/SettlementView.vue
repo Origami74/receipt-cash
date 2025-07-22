@@ -257,7 +257,7 @@ import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
-import { showNotification, useNotification } from '../utils/notificationService';
+import { showNotification, useNotification } from '../services/notificationService';
 import { formatSats, convertFromSats } from '../utils/pricingUtils';
 import paymentService from '../services/payment';
 import cashuService from '../services/flows/shared/cashu';
@@ -265,7 +265,7 @@ import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { saveMintQuote } from '../utils/storageService';
+import { saveMintQuote } from '../services/storageService';
 
 export default {
   name: 'SettlementView',
@@ -369,10 +369,6 @@ export default {
     const selectedSubtotal = computed(() => {
       return paymentService.calculateSelectedSubtotal(selectedItems.value);
     });
-
-    const formatPrice = (amount) => {
-      return paymentService.formatPrice(amount, currency.value);
-    };
 
     const selectAllItems = () => {
       const allUnsettled = items.value.filter(item => !item.settled);
@@ -1028,7 +1024,6 @@ const fetchReceipt = async (eventId, decryptionKey) => {
       payWithLightning: payWithLightningReversed,
       payWithCashu: payWithCashuReversed,
       selectAllItems,
-      formatPrice,
       lightningInvoice,
       showLightningModal,
       showCashuModal,

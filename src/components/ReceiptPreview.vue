@@ -220,15 +220,15 @@ import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashu';
 import paymentService from '../services/payment';
 import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
-import receiptKeyManager from '../utils/keyManagementService';
+import receiptKeyManager from '../services/keyManagementService';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
-import { saveReceiveAddress, getReceiveAddress } from '../utils/storageService';
-import { showNotification } from '../utils/notificationService';
+import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
+import { showNotification } from '../services/notificationService';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 

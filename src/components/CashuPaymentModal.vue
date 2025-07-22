@@ -96,7 +96,7 @@
 
 <script>
 import QRCode from 'qrcode.vue';
-import { showNotification } from '../utils/notificationService';
+import { showNotification } from '../services/notificationService';
 
 export default {
   name: 'CashuPaymentModal',

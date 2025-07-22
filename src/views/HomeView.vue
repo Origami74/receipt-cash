@@ -50,7 +50,7 @@ import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CameraControls from '../components/CameraControls.vue';
-import { showNotification, useNotification } from '../utils/notificationService';
+import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/receipt';
 
 export default {

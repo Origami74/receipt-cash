@@ -5,8 +5,8 @@ import cashuWalletManager from '../shared/cashuWalletManager';
 import nostrService from '../shared/nostr';
 import settlementService from '../outgoing/settlement';
 import cashuService from '../shared/cashu';
-import { showNotification } from '../../../utils/notificationService';
-import {storeChangeForMint} from '../../../utils/storageService'
+import { showNotification } from '../../notificationService';
+import {storeChangeForMint} from '../../storageService'
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -521,7 +521,7 @@ class PayerMonitor {
    */
   async storeProofsForRecovery(transactionId, proofs, mintUrl, category) {
     try {
-      const { saveProofs } = await import('../../../utils/storageService');
+      const { saveProofs } = await import('../../storageService');
       
       saveProofs(transactionId, category, proofs, 'pending', mintUrl);
       
@@ -538,7 +538,7 @@ class PayerMonitor {
    */
   async markProofsAsForwarded(transactionId) {
     try {
-      const { updateProofStatus } = await import('../../../utils/storageService');
+      const { updateProofStatus } = await import('../../storageService');
       
       // Mark all categories as 'forwarded' instead of deleting
       const categories = ['claimed', 'payer', 'developer'];
@@ -560,7 +560,7 @@ class PayerMonitor {
    */
   async clearStoredProofs(transactionId) {
     try {
-      const { clearProofs } = await import('../../../utils/storageService');
+      const { clearProofs } = await import('../../storageService');
       clearProofs(transactionId);
       console.log(`Cleared stored proofs for transaction: ${transactionId}`);
       
@@ -657,7 +657,7 @@ class PayerMonitor {
    */
   async payoutPayer(proofs, mintUrl) {
     try {
-      const { getReceiveAddress } = await import('../../../utils/storageService');
+      const { getReceiveAddress } = await import('../../storageService');
       const { validateReceiveAddress } = await import('../../addressValidation');
       
       const receiveAddress = getReceiveAddress();

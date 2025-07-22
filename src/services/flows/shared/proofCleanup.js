@@ -1,5 +1,5 @@
 import cashuWalletManager from './cashuWalletManager';
-import { getProofs, clearProofs } from '../../../utils/storageService';
+import { getProofs, clearProofs } from '../../storageService';
 
 /**
  * ProofCleanup - Background service to safely clean up claimed proofs
