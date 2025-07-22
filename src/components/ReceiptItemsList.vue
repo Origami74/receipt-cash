@@ -67,6 +67,8 @@
 </template>
 
 <script>
+import { formatSats } from '../utils/pricingUtils';
+
 export default {
   name: 'ReceiptItemsList',
   props: {
@@ -74,14 +76,13 @@ export default {
       type: Array,
       required: true
     },
-    formatSats: {
-      type: Function,
-      required: true
-    },
     toFiat: {
       type: Function,
       required: true
     }
+  },
+  methods: {
+    formatSats
   }
 };
 </script>
