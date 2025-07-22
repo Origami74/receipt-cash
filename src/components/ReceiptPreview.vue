@@ -154,60 +154,20 @@
         </div>
       </div>
       
-      <div v-if="step === 'qr-display'" class="mt-4" ref="qrSection">
-        <div class="bg-white rounded-lg shadow p-6 text-center">
-          <!-- Prominent instructional text -->
-          <div class="mb-6">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Share This Receipt</h2>
-            <p class="text-lg text-gray-700 font-semibold mb-1">
-              Send this QR code to the people who need to pay
-            </p>
-            <p class="text-sm text-gray-600">
-              They can scan it or use the link to pay their share
-            </p>
-          </div>
-          
-          <!-- Enhanced QR code with orange border -->
-          <div class="qr-container mb-6 flex justify-center">
-            <div class="p-4 border-4 border-orange-500 rounded-2xl bg-white shadow-lg">
-              <QRCodeVue
-                :value="receiptLink"
-                :size="320"
-                level="H"
-                render-as="svg"
-                class="mx-auto"
-              />
-            </div>
-          </div>
-          
-          <!-- Enhanced buttons with icons -->
-          <div class="flex flex-col gap-3">
-            <button @click="copyLink" class="btn-secondary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
-              <!-- Copy icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy Link
-            </button>
-            <button @click="shareToSocial" class="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
-              <!-- Share icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-              </svg>
-              Share
-            </button>
-          </div>
-        </div>
-      </div>
+      <ReceiptShareQR
+        v-if="step === 'qr-display'"
+        :receipt-link="receiptLink"
+        ref="qrSection"
+      />
     </div>
     
     <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-      <button 
+      <button
         v-if="step === 'qr-display'"
-        @click="resetProcess" 
+        @click="navigateToReceiptView"
         class="w-full btn-secondary"
       >
-        Done
+        Continue
       </button>
     </div>
     
@@ -216,6 +176,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
 import btcPriceService from '../services/btcPriceService';
@@ -225,6 +186,7 @@ import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
+import ReceiptShareQR from './ReceiptShareQR.vue';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
 import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
@@ -238,7 +200,8 @@ export default {
     QRCodeVue,
     CurrencySelector,
     ReceiveAddressInput,
-    DeveloperSplitSlider
+    DeveloperSplitSlider,
+    ReceiptShareQR
   },
   props: {
     receiptData: {
@@ -248,6 +211,8 @@ export default {
   },
   emits: ['select-all'],
   setup(props, { emit }) {
+    const router = useRouter();
+    
     const receipt = ref({
       ...props.receiptData,
       items: props.receiptData.items.map(item => ({
@@ -450,11 +415,8 @@ export default {
         
         // Auto-scroll to QR section after DOM update
         nextTick(() => {
-          if (qrSection.value) {
-            qrSection.value.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start'
-            });
+          if (qrSection.value && qrSection.value.scrollIntoView) {
+            qrSection.value.scrollIntoView();
           }
         });
       } catch (error) {
@@ -463,30 +425,21 @@ export default {
       }
     };
     
-    const copyLink = () => {
-      const link = receiptLink.value;
-      
-      if (!navigator || !navigator.clipboard) {
-        console.error('Clipboard API not available');
-        showNotification('Clipboard not available', 'error');
-        return;
-      }
-      
-      navigator.clipboard.writeText(link)
-        .then(() => {
-          showNotification('Link copied to clipboard', 'success');
-        })
-        .catch(err => {
-          showNotification('Failed to copy link', 'error');
-          console.error('Failed to copy link:', err);
-        });
-    };
     
-    const resetProcess = () => {
-      step.value = 'receipt-display';
-      paymentRequest.value = '';
-      eventId.value = '';
-      eventEncryptionPrivateKey.value = '';
+    const navigateToReceiptView = () => {
+      // Navigate to the receipt view using the eventId and encryption key
+      if (eventId.value && eventEncryptionPrivateKey.value) {
+        router.push({
+          name: 'ReceiptView',
+          params: {
+            eventId: eventId.value,
+            decryptionKey: eventEncryptionPrivateKey.value
+          }
+        });
+      } else {
+        console.error('Missing eventId or decryptionKey for navigation');
+        showNotification('Unable to navigate to receipt view', 'error');
+      }
     };
 
     const pasteFromClipboard = async () => {
@@ -499,32 +452,6 @@ export default {
       }
     };
     
-    const shareToSocial = async () => {
-      try {
-        const shareData = {
-          title: 'Be my sugardad? 🥺',
-          text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total_amount || 0)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here: `,
-          url: receiptLink.value
-        };
-
-        if (navigator.share) {
-          await navigator.share(shareData);
-        } else {
-          if (!navigator || !navigator.clipboard) {
-            console.error('Clipboard API not available');
-            showNotification('Clipboard not available', 'error');
-            return;
-          }
-          await navigator.clipboard.writeText(`${shareData.text}\n\n${shareData.url}`);
-          showNotification('Link copied to clipboard', 'success');
-        }
-      } catch (error) {
-        if (error.name !== 'AbortError') {
-          console.error('Error sharing:', error);
-          showNotification('Failed to share', 'error');
-        }
-      }
-    };
     
     const selectAllItems = () => {
       emit('select-all');
@@ -550,10 +477,8 @@ export default {
       formatSats,
       convertToSats,
       createRequest,
-      copyLink,
-      resetProcess,
+      navigateToReceiptView,
       pasteFromClipboard,
-      shareToSocial,
       selectAllItems,
       receiptLink,
       developerSplit,
