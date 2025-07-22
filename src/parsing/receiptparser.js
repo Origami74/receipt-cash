@@ -107,12 +107,32 @@ export function parseReceiptContent(receiptContent) {
       throw new ReceiptValidationError('BTC price must be a positive number', 'btcPrice', receiptData.btcPrice);
     }
 
+    // Title (optional)
+    let title;
+    if (receiptData.title !== undefined) {
+      if (typeof receiptData.title !== 'string') {
+        throw new ReceiptValidationError('Title must be a string', 'title', receiptData.title);
+      }
+      title = receiptData.title.trim();
+    }
+
+    // Note (optional)
+    let note;
+    if (receiptData.note !== undefined) {
+      if (typeof receiptData.note !== 'string') {
+        throw new ReceiptValidationError('Note must be a string', 'note', receiptData.note);
+      }
+      note = receiptData.note.trim();
+    }
+
     // Return normalized receipt data (no derived fields)
     const parsedReceipt = {
       items: validatedItems,
       currency,
       splitPercentage,
-      btcPrice
+      btcPrice,
+      ...(title !== undefined && { title }),
+      ...(note !== undefined && { note })
     };
 
     return parsedReceipt;

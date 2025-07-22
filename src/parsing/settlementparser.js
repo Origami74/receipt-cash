@@ -95,9 +95,29 @@ export function parseSettlementContent(settlementContent) {
     // Validate each settled item
     const validatedItems = settlementData.settledItems.map((item, index) => validateSettlementItem(item, index));
 
+    // Title (optional)
+    let title;
+    if (settlementData.title !== undefined) {
+      if (typeof settlementData.title !== 'string') {
+        throw new SettlementValidationError('Title must be a string', 'title', settlementData.title);
+      }
+      title = settlementData.title.trim();
+    }
+
+    // Note (optional)
+    let note;
+    if (settlementData.note !== undefined) {
+      if (typeof settlementData.note !== 'string') {
+        throw new SettlementValidationError('Note must be a string', 'note', settlementData.note);
+      }
+      note = settlementData.note.trim();
+    }
+
     // Return normalized settlement data (no derived fields)
     const parsedSettlement = {
-      settledItems: validatedItems
+      settledItems: validatedItems,
+      ...(title !== undefined && { title }),
+      ...(note !== undefined && { note })
     };
 
     return parsedSettlement;
