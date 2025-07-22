@@ -239,7 +239,7 @@ export default {
     const developerSplit = ref(2.1);
     
     const hostUrl = computed(() => `https://${location.host}`);
-    const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
+    const receiptLink = computed(() => `${hostUrl.value}/receipt/${eventId.value}/${eventEncryptionPrivateKey.value}`);
     
     onMounted(async () => {
       // Set currency to receipt's currency
