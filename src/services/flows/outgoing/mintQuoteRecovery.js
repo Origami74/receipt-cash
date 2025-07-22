@@ -1,7 +1,7 @@
 import { MintQuoteState } from '@cashu/cashu-ts';
 import cashuWalletManager from '../shared/cashuWalletManager';
-import { getUnclaimedMintQuotes, markMintQuoteClaimed, saveProofs, cleanupMintQuotes } from '../../../utils/storage';
-import { showNotification } from '../../../utils/notification';
+import { getUnclaimedMintQuotes, markMintQuoteClaimed, saveProofs, cleanupMintQuotes } from '../../../utils/storageService';
+import { showNotification } from '../../../utils/notificationService';
 
 /**
  * Service for handling settler recovery of Lightning payments

@@ -110,9 +110,9 @@ import { ref } from 'vue';
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { showNotification } from '../utils/notification';
+import { showNotification } from '../utils/notificationService';
 import nostrService from '../services/flows/shared/nostr';
-import debugLogger from '../utils/debugLogger';
+import debugLogger from '../utils/loggingService';
 
 // Developer public key to send reports to
 const DEVELOPER_PUBKEY = 'a5db1b45079ed0a6b654857712bae6e5d62ff0345abb38571f898bb9cb70100c';

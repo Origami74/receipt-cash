@@ -257,15 +257,15 @@ import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
-import { showNotification, useNotification } from '../utils/notification';
-import { formatSats, convertFromSats } from '../utils/pricing';
+import { showNotification, useNotification } from '../utils/notificationService';
+import { formatSats, convertFromSats } from '../utils/pricingUtils';
 import paymentService from '../services/payment';
 import cashuService from '../services/flows/shared/cashu';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { saveMintQuote } from '../utils/storage';
+import { saveMintQuote } from '../utils/storageService';
 
 export default {
   name: 'SettlementView',

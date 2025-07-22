@@ -1,4 +1,4 @@
-import { getAiSettings } from '../utils/storage';
+import { getAiSettings } from '../utils/storageService';
 
 /**
  * Process a captured receipt image using the PPQ API

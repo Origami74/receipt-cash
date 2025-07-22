@@ -100,7 +100,7 @@
 </template>
 
 <script>
-import { getOrderedCurrencies, searchCurrencies, getCurrencyInfo } from '../utils/currency.js';
+import { getOrderedCurrencies, searchCurrencies, getCurrencyInfo } from '../utils/currencyUtils.js';
 
 export default {
   name: 'CurrencySelector',

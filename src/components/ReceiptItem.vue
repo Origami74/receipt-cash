@@ -60,7 +60,7 @@
 <script>
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { formatSats, convertFromSats } from '../utils/pricing';
+import { formatSats, convertFromSats } from '../utils/pricingUtils.js';
 import { formatDate } from '../utils/dateUtils';
 import { KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
 import { DEFAULT_RELAYS, globalEventStore, globalPool } from '../services/nostr/applesauce';

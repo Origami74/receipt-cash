@@ -1,4 +1,4 @@
-import { formatCurrency } from './currency';
+import { formatCurrency } from './currencyUtils';
 
 /**
  * Format sats with proper number formatting

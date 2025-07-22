@@ -1,4 +1,4 @@
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency } from '../utils/currencyUtils';
 
 /**
  * Converts a fiat currency amount to satoshis based on current BTC price

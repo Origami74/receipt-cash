@@ -1,5 +1,5 @@
 // Version-based update manager
-import { showNotification } from './notification';
+import { showNotification } from './notificationService';
 
 // Update this version number with each release
 export const CURRENT_VERSION = '1.0.4';

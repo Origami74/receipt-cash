@@ -36,7 +36,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { showConfirmation } from '../utils/notification';
+import { showConfirmation } from '../utils/notificationService';
 
 // LocalStorage key for banner visibility state
 const BANNER_STORAGE_KEY = 'receipt-cash-experimental-warning-hidden';

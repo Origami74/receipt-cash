@@ -134,7 +134,7 @@
 
 <script>
 import QRCode from 'qrcode.vue';
-import { showNotification } from '../utils/notification';
+import { showNotification } from '../utils/notificationService';
 
 export default {
   name: 'LightningPaymentModal',

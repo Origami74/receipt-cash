@@ -1,7 +1,7 @@
 import nostrService from '../shared/nostr';
 import payerMonitor from './payerMonitor';
-import receiptKeyManager from '../../../utils/receiptKeyManager';
-import { showNotification } from '../../../utils/notification';
+import receiptKeyManager from '../../../utils/keyManagementService';
+import { showNotification } from '../../../utils/notificationService';
 
 /**
  * Background service that manages receipt monitoring initialization
