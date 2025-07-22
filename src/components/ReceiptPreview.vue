@@ -401,7 +401,8 @@ export default {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
-          total: item.price * item.quantity
+          total: item.price * item.quantity,
+          title: item.merchant
         }));
         
         const receiptWithDevSplit = {

@@ -58,12 +58,13 @@ import receiptKeyManager from '../services/keyManagementService.js';
 import nostrService from '../services/flows/shared/nostr.js';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
-import { DEFAULT_RELAYS, globalEventStore, globalPool } from '../services/nostr/applesauce';
+import { globalEventStore, globalPool } from '../services/nostr/applesauce';
 import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import ReceiptItem from '../components/ReceiptItem.vue';
 import { safeParseReceiptContent } from '../parsing/receiptparser.js';
 import { nip44 } from 'nostr-tools';
+import { DEFAULT_RELAYS } from '../services/nostr/constants.js';
 
 export default {
   name: 'ReceiptHistoryView',

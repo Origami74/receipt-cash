@@ -32,7 +32,7 @@ export const processReceiptImage = async (base64Image) => {
                 - The receipt may be from any country/region, Try to determine where it's made to inform how to interpret the data on the receipt.
                 - The image might be blurry, especially number might be hard to read but are incredibly important to get right.
 
-                Extract the items (with prices and quantities), total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
+                Extract the items (with prices and quantities), total amount and currency (in ISO 4217), merchant. Output the result as RAW JSON (no markdown) of the following format:
 {
   "items": [
     {
@@ -44,6 +44,7 @@ export const processReceiptImage = async (base64Image) => {
   ],
   "currency": "EUR",
   "total_amount": 4.70
+  "merchant": "Star Coffee"
 }
 
 Here are some things to keep in mind:
@@ -83,7 +84,7 @@ Here are some things to keep in mind:
     
     // Transform the data to our application format
     return {
-      merchant: "Store", // Will be updated with actual merchant name in future
+      title: parsedData.merchant,
       date: new Date().toISOString().split('T')[0],
       items: parsedData.items.map(item => ({
         name: item.name,
