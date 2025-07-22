@@ -8,12 +8,14 @@ import cashuService from '../shared/cashuService';
 import { showNotification } from '../../notificationService';
 import {storeChangeForMint} from '../../storageService'
 import { globalEventStore, globalPool } from '../../nostr/applesauce';
-import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_SETTLEMENT } from '../../nostr/constants';
+import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../../nostr/constants';
 import { unlockGiftWrap } from 'applesauce-core/helpers';
 import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
+import { includeHashtags } from 'applesauce-factory/operations/event';
+import { EventFactory } from 'applesauce-factory';
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -353,6 +355,8 @@ class PayerMonitor {
               // Not a JSON message or not a Cashu payment, continue
               console.log('Message not a Cashu payment:', parseError.message);
             }
+          } else{
+            console.log(`rumor kind was ${rumor.kind}`)
           }
         } catch (decryptError) {
           // Failed to decrypt, might not be for us or different format
@@ -747,34 +751,42 @@ class PayerMonitor {
         console.error('No receipt private key found for publishing confirmation');
         return;
       }
+
+      const privateKeyBytes = Uint8Array.from(Buffer.from(receiptInfo.publishingPrivateKey, 'hex'));
+      const receiptSigner = new SimpleSigner(privateKeyBytes);
+
+      const factory = new EventFactory({
+        signer: receiptSigner,
+      });
       
-      // Mark this settlement as confirmed to prevent duplicate processing
-      this.publishedConfirmations.add(event.id);
-      
-      // Create a signer with the receipt private key
-      const { NDKPrivateKeySigner } = await import('@nostr-dev-kit/ndk');
-      const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
-      
-      const ndk = await nostrService.getNdk();
-      
-      // Create NDK event for confirmation
-      const confirmationEvent = new NDKEvent(ndk);
-      confirmationEvent.kind = 9569;
-      confirmationEvent.created_at = Math.floor(Date.now() / 1000);
-      confirmationEvent.content = "";
-      confirmationEvent.tags = [
-        ['e', receiptEventId],
-        ['e', event.id],
-        ['p', settlerPubkey]
-      ];
-      
-      // Sign with the receipt private key
-      await confirmationEvent.sign(receiptSigner);
-      
-      // Publish the event
-      await confirmationEvent.publish();
-      
-      console.log('Published confirmation for settlement:', event.id);
+      const draft = await factory.build(
+        { 
+          kind: KIND_SETTLEMENT_CONFIRMATION,
+          tags: [
+            ['e', receiptEventId],
+            ['e', event.id],
+            ['p', settlerPubkey]
+          ]
+        },
+      );
+      // Sign the draft event with the signer
+      const signed = await factory.sign(draft);
+
+      globalPool
+      .publish(DEFAULT_RELAYS, signed)
+      .subscribe((response) => {
+        if (response.ok) {
+          console.log(`Settlement Confirmation successfully to ${response.from}`);
+        } else {
+          console.log(`Failed to publish Settlement Confirmation to ${response.from}: ${response.reason}`);
+        }
+      })
+      .subscribe({
+        complete: () => {
+          eventStore.add(event);
+          this.publishedConfirmations.add(event.id);
+        },
+      });
       
     } catch (error) {
       console.error('Error publishing confirmation:', error);
