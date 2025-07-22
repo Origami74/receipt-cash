@@ -42,7 +42,23 @@
           :toFiat="toFiat"
           @toggle-settlement="toggleSettlement"
         />
+
+        <!-- Share QR Code Section (conditionally shown) -->
+        <ReceiptShareQR
+          v-if="showShareQR"
+          ref="shareQRComponent"
+          :receiptLink="receiptLink"
+        />
       </div>
+
+    <!-- Sticky Action Bar -->
+    <ReceiptActionBar
+      :eventId="eventId"
+      :decryptionKey="decryptionKey"
+      @share="handleShare"
+      @pay="handlePay"
+    />
+
     <!-- Settings Menu -->
     <SettingsMenu
       :is-open="showSettings"
@@ -52,12 +68,14 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
 import ReceiptItemsList from '../components/ReceiptItemsList.vue';
 import ReceiptSettlementsList from '../components/ReceiptSettlementsList.vue';
+import ReceiptShareQR from '../components/ReceiptShareQR.vue';
+import ReceiptActionBar from '../components/ReceiptActionBar.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
@@ -80,6 +98,8 @@ export default {
     ReceiptSummary,
     ReceiptItemsList,
     ReceiptSettlementsList,
+    ReceiptShareQR,
+    ReceiptActionBar,
     LoadingErrorWrapper,
     SettingsMenu,
     CurrencySelector
@@ -111,6 +131,8 @@ export default {
     const settlements = ref([]);
     const expandedSettlements = ref(new Set());
     const devPercentage = ref(0);
+    const showShareQR = ref(false);
+    const shareQRComponent = ref(null);
 
     // Function to navigate back
     const goBack = () => {
@@ -165,6 +187,13 @@ export default {
           unconfirmedQuantity
         };
       });
+    });
+
+    // Computed property for receipt link
+    const receiptLink = computed(() => {
+      if (!props.eventId || !props.decryptionKey) return '';
+      const baseUrl = window.location.origin;
+      return `${baseUrl}/receipt/${props.eventId}?key=${props.decryptionKey}`;
     });
 
     // Toggle settlement expansion
@@ -344,6 +373,25 @@ export default {
       return convertFromSats(satsAmount, currentBtcPrice.value, selectedCurrency.value);
     };
 
+    // Action bar event handlers
+    const handleShare = () => {
+      showShareQR.value = !showShareQR.value;
+      
+      // Scroll to QR section if showing
+      if (showShareQR.value) {
+        // Use nextTick to ensure the component is rendered
+        nextTick(() => {
+          if (shareQRComponent.value) {
+            shareQRComponent.value.scrollIntoView();
+          }
+        });
+      }
+    };
+
+    const handlePay = ({ eventId, decryptionKey }) => {
+      router.push(`/pay/${eventId}/${decryptionKey}`);
+    };
+
     // Component lifecycle
     onMounted(() => {
       fetchReceipt();
@@ -377,7 +425,13 @@ export default {
       formatRelativeTime,
       getDevPercentageEmoji,
       formatDevPercentage,
-      itemsWithSettlements
+      itemsWithSettlements,
+      // New action bar functionality
+      showShareQR,
+      shareQRComponent,
+      receiptLink,
+      handleShare,
+      handlePay
     };
   }
 };
