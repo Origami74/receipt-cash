@@ -51,7 +51,7 @@ import Spinner from '../components/Spinner.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CameraControls from '../components/CameraControls.vue';
 import { showNotification, useNotification } from '../services/notificationService';
-import receiptService from '../services/receipt';
+import receiptService from '../services/aiService';
 
 export default {
   name: 'HomeView',
