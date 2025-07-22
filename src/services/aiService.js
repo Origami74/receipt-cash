@@ -31,10 +31,8 @@ export const processReceiptImage = async (base64Image) => {
                 - The receipt might be crumbled or curled up.
                 - The receipt may be from any country/region, Try to determine where it's made to inform how to interpret the data on the receipt.
                 - The image might be blurry, especially number might be hard to read but are incredibly important to get right.
-                - Determine the currency before interpreting the amounts. 
-                - Dots (.) and comma's (,) meanings depend on the currency of the receipt.
 
-                Extract the items (with prices and quantities), tax, total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
+                Extract the items (with prices and quantities), total amount and currency (in ISO 4217). Output the result as RAW JSON (no markdown) of the following format:
 {
   "items": [
     {
@@ -44,9 +42,6 @@ export const processReceiptImage = async (base64Image) => {
       "total": 2.70
     }
   ],
-  "tax": {
-    "amount": 0.85
-  },
   "currency": "EUR",
   "total_amount": 4.70
 }
@@ -56,6 +51,8 @@ Here are some things to keep in mind:
 - The receipt can be blurry or have a low resolution
 - NEVER use a column indicating tax (tx) as the quantity of an item!
 - Some receipts don't show the price per item, only the total price for that line item
+- Determine the currency before interpreting the amounts. 
+- Dots (.) and comma's (,) meanings depend on the currency of the receipt.
 `
               },
               {
@@ -94,7 +91,6 @@ Here are some things to keep in mind:
         quantity: item.quantity,
         total: item.total
       })),
-      tax: parsedData.tax.amount,
       currency: parsedData.currency,
       total: parsedData.total_amount
     };

@@ -108,7 +108,6 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       merchant: receiptData.merchant,
       date: receiptData.date,
       items: itemsInSats,
-      tax: receiptData.tax?.amount ? Math.round((receiptData.tax.amount * 100000000) / btcPrice) : 0, // Store only sats tax
       currency: receiptData.currency, // Keep currency for reference
       total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0, // Store only sats total
       preferredMints: finalPreferredMints, // Array of preferred mints (first is default)
