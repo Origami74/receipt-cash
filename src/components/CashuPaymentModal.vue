@@ -78,7 +78,7 @@
             @click="cancel"
             class="w-full py-2 px-4 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
           >
-            Cancel
+            Done
           </button>
         </template>
         <!-- Show "Done" button when payment is successful -->

@@ -170,46 +170,17 @@
         </div>
       </div>
       
-      <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-        <div class="space-y-2">
-          <!-- Show payment buttons when payment is not successful -->
-          <template v-if="!paymentSuccess">
-            <button
-              @click="payWithLightning"
-              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
-              :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
-            >
-              <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
-                ⏳ Settlement request sent...
-              </span>
-              <span v-else>
-                ⚡️ Pay with Lightning
-              </span>
-            </button>
-            <button
-              @click="payWithCashu"
-              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
-              :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
-            >
-              <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
-                ⏳ Settlement request sent...
-              </span>
-              <span v-else>
-                🥜 Pay with Cashu
-              </span>
-            </button>
-          </template>
-          
-          <!-- Show scan receipt button when payment is successful -->
-          <button
-            v-if="paymentSuccess"
-            @click="goToHome"
-            class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg"
-          >
-            📱 Scan a Receipt
-          </button>
-        </div>
-      </div>
+      <PaymentActionButtons
+        :selectedItems="selectedItems"
+        :paymentInProgress="paymentInProgress"
+        :paymentSuccess="paymentSuccess"
+        :currentPaymentType="currentPaymentType"
+        :lightningPaymentLocked="lightningPaymentLocked"
+        :cashuPaymentLocked="cashuPaymentLocked"
+        @pay-lightning="payWithLightning"
+        @pay-cashu="payWithCashu"
+        @scan-receipt="goToHome"
+      />
     </template>
     
     <!-- Payment Modals -->
@@ -257,6 +228,7 @@ import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
+import PaymentActionButtons from '../components/PaymentActionButtons.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import { formatSats, convertFromSats, getDevPercentageEmoji, formatDevPercentage } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
@@ -274,7 +246,8 @@ export default {
     LightningPaymentModal,
     Notification,
     SettingsMenu,
-    CurrencySelector
+    CurrencySelector,
+    PaymentActionButtons
   },
   props: {
     eventId: {

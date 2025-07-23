@@ -10,7 +10,7 @@
             :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
           >
             <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
-              ⏳ Settlement request sent...
+              ⏳ Settlement sent...
             </span>
             <span v-else>
               ⚡️ Pay with Lightning
@@ -22,7 +22,7 @@
             :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
           >
             <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
-              ⏳ Settlement request sent...
+              ⏳ Settlement sent...
             </span>
             <span v-else>
               🥜 Pay with Cashu

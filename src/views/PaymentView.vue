@@ -116,6 +116,7 @@ import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
 import { saveMintQuote } from '../services/storageService';
+import { getTagValue } from 'applesauce-core/helpers';
 
 export default {
   name: 'PaymentView',
@@ -621,17 +622,26 @@ export default {
 
     // Handle confirmation events
     const handleConfirmationEvent = async (confirmationEvent) => {
+      console.log("New confirmation event:", confirmationEvent)
       try {
-        // Extract the settlement event ID from the confirmation event
+        // Extract all event IDs from the confirmation event
         const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
-        if (eTags.length >= 2) {
-          const settlementEventId = eTags[1][1];
-          
-          // Find and update the settlement status
-          const settlement = settlements.value.find(s => s.id === settlementEventId);
-          if (settlement && settlement.status !== 'confirmed') {
+        const eventIds = eTags.map(tag => tag[1]);
+        console.log("eTags", eTags)
+        console.log("eventIds", eventIds)
+
+        // Check each of our settlements to see if it's being confirmed
+        for (const settlement of settlements.value) {
+          if (eventIds.includes(settlement.id) && settlement.status !== 'confirmed') {
             settlement.status = 'confirmed';
           }
+        }
+        
+        // If this is for the current payment settlement and it's a Cashu payment, mark as successful
+        if (eventIds.includes(settlementEventId.value) && currentPaymentType.value === 'cashu') {
+          paymentSuccess.value = true;
+          paymentInProgress.value = false;
+          showNotification('Cashu payment confirmed by recipient!', 'success');
         }
       } catch (error) {
         console.error('Error processing confirmation event:', error);

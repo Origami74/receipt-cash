@@ -298,11 +298,11 @@ class PayerMonitor {
     
     // Calculate 'since' time: settlement event creation time minus 1 day for safety
     const settlementCreatedAt = event.created_at || Math.floor(Date.now() / 1000);
-    const oneDayBefore = settlementCreatedAt - (24 * 60 * 60); // 24 hours before
+    const threeDaysBefore = settlementCreatedAt - (72 * 60 * 60); // 3 days before (NIP says 2days, we do + 24h account for timezone issues)
     
     console.log('Monitoring Cashu payments to receipt pubkey:', receiptPubkey);
     console.log('Expected payment memo:', `${receiptEventId}-${settlementEventId}`);
-    console.log('Monitoring since:', new Date(oneDayBefore * 1000).toISOString());
+    console.log('Monitoring since:', new Date(threeDaysBefore * 1000).toISOString());
     
     // Don't even start monitoring if we already have a confirmation
     if (this.publishedConfirmations.has(event.id)) {
@@ -368,7 +368,7 @@ class PayerMonitor {
       .subscription(DEFAULT_RELAYS, {
         kinds: [KIND_GIFTWRAPPED_MSG],
         '#p': [receiptPubkey],
-        since: oneDayBefore
+        since: threeDaysBefore
       })
       .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
       .subscribe(handleGiftWrappedEvent);
@@ -777,7 +777,7 @@ class PayerMonitor {
       .publish(DEFAULT_RELAYS, signed)
       .subscribe({
         complete: () => {
-          eventStore.add(event);
+          globalEventStore.add(event);
         },
       });
       
