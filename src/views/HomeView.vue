@@ -11,7 +11,14 @@
         
         <div class="camera-overlay">
           <div class="p-4 bg-black/50">
-            <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+            <div class="flex items-center justify-center space-x-2">
+              <img
+                src="/receipt-cash-logo.png"
+                alt="Receipt.Cash Logo"
+                class="w-8 h-8"
+              />
+              <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+            </div>
           </div>
           
           <camera-controls

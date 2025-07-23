@@ -9,7 +9,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png', '_redirects'],
+      includeAssets: ['receipt-cash-logo.ico', 'receipt-cash-logo.png', 'robots.txt', 'apple-touch-icon.png', '_redirects'],
       manifest: {
         name: 'Receipt.Cash',
         short_name: 'Receipt.Cash',
@@ -17,14 +17,14 @@ export default defineConfig({
         theme_color: '#FFB54C',
         icons: [
           {
-            src: 'https://m.primal.net/PxBU.png',
+            src: '/receipt-cash-logo.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/webp'
           },
           {
-            src: 'https://m.primal.net/PxBU.png',
+            src: '/receipt-cash-logo.png',
             sizes: '512x512',
-            type: 'image/png',
+            type: 'image/webp',
             purpose: 'any maskable'
           }
         ]
