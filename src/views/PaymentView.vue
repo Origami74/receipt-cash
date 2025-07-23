@@ -627,8 +627,6 @@ export default {
         // Extract all event IDs from the confirmation event
         const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
         const eventIds = eTags.map(tag => tag[1]);
-        console.log("eTags", eTags)
-        console.log("eventIds", eventIds)
 
         // Check each of our settlements to see if it's being confirmed
         for (const settlement of settlements.value) {
