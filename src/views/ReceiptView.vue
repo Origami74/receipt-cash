@@ -69,7 +69,7 @@
 
 <script>
 import { ref, computed, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
 import ReceiptItemsList from '../components/ReceiptItemsList.vue';
@@ -116,6 +116,7 @@ export default {
   },
   setup(props) {
     const router = useRouter();
+    const route = useRoute();
     const title = ref('');
     const date = ref('');
     const items = ref([]);
@@ -373,18 +374,23 @@ export default {
       return convertFromSats(satsAmount, currentBtcPrice.value, selectedCurrency.value);
     };
 
+    // Show and scroll to QR code
+    const showAndScrollToQR = () => {
+      showShareQR.value = true;
+      // Use nextTick to ensure the component is rendered
+      nextTick(() => {
+        if (shareQRComponent.value) {
+          shareQRComponent.value.scrollIntoView();
+        }
+      });
+    };
+
     // Action bar event handlers
     const handleShare = () => {
-      showShareQR.value = !showShareQR.value;
-      
-      // Scroll to QR section if showing
       if (showShareQR.value) {
-        // Use nextTick to ensure the component is rendered
-        nextTick(() => {
-          if (shareQRComponent.value) {
-            shareQRComponent.value.scrollIntoView();
-          }
-        });
+        showShareQR.value = false;
+      } else {
+        showAndScrollToQR();
       }
     };
 
@@ -395,6 +401,20 @@ export default {
     // Component lifecycle
     onMounted(() => {
       fetchReceipt();
+      
+      // Check if we should automatically show the QR (e.g., when coming from receipt creation)
+      if (route.query.showQR === 'true') {
+        // Wait for the receipt to load, then show and scroll to QR
+        const checkLoaded = () => {
+          if (!loading.value) {
+            showAndScrollToQR();
+          } else {
+            // Check again in 100ms if still loading
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+      }
     });
     
     return {

@@ -759,6 +759,7 @@ class PayerMonitor {
         signer: receiptSigner,
       });
       
+      
       const draft = await factory.build(
         { 
           kind: KIND_SETTLEMENT_CONFIRMATION,
@@ -774,17 +775,9 @@ class PayerMonitor {
 
       globalPool
       .publish(DEFAULT_RELAYS, signed)
-      .subscribe((response) => {
-        if (response.ok) {
-          console.log(`Settlement Confirmation successfully to ${response.from}`);
-        } else {
-          console.log(`Failed to publish Settlement Confirmation to ${response.from}: ${response.reason}`);
-        }
-      })
       .subscribe({
         complete: () => {
           eventStore.add(event);
-          this.publishedConfirmations.add(event.id);
         },
       });
       

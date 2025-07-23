@@ -13,7 +13,7 @@
       </div>
     </div>
     
-    <div class="flex-1 overflow-y-auto p-4" :class="{ 'pb-2': step === 'qr-display' }">
+    <div class="flex-1 overflow-y-auto p-4">
       <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
           <div>Items</div>
@@ -24,13 +24,6 @@
               class="text-sm text-blue-500 hover:text-blue-600"
             >
               Add Item
-            </button>
-            <button
-              v-if="step === 'qr-display'"
-              @click="selectAllItems"
-              class="text-sm text-blue-500 hover:text-blue-600"
-            >
-              Select All
             </button>
           </div>
         </div>
@@ -154,28 +147,14 @@
         </div>
       </div>
       
-      <ReceiptShareQR
-        v-if="step === 'qr-display'"
-        :receipt-link="receiptLink"
-        ref="qrSection"
-      />
     </div>
     
-    <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-      <button
-        v-if="step === 'qr-display'"
-        @click="navigateToReceiptView"
-        class="w-full btn-secondary"
-      >
-        Continue
-      </button>
-    </div>
     
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
@@ -186,7 +165,6 @@ import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
-import ReceiptShareQR from './ReceiptShareQR.vue';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
 import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
@@ -200,8 +178,7 @@ export default {
     QRCodeVue,
     CurrencySelector,
     ReceiveAddressInput,
-    DeveloperSplitSlider,
-    ReceiptShareQR
+    DeveloperSplitSlider
   },
   props: {
     receiptData: {
@@ -222,7 +199,6 @@ export default {
       }))
     });
     const step = ref('payment-request');
-    const qrSection = ref(null);
     const paymentRequest = ref('');
     const paymentRequestValid = ref(true);
     const paymentRequestError = ref('');
@@ -238,8 +214,6 @@ export default {
     // Developer split with 0.1% precision (default 2.1%)
     const developerSplit = ref(2.1);
     
-    const hostUrl = computed(() => `https://${location.host}`);
-    const receiptLink = computed(() => `${hostUrl.value}/receipt/${eventId.value}/${eventEncryptionPrivateKey.value}`);
     
     onMounted(async () => {
       // Set currency to receipt's currency
@@ -411,12 +385,15 @@ export default {
         
         console.log('Started payer monitoring for receipt:', publishedReceiptEvent.id);
         
-        step.value = 'qr-display';
-        
-        // Auto-scroll to QR section after DOM update
-        nextTick(() => {
-          if (qrSection.value && qrSection.value.scrollIntoView) {
-            qrSection.value.scrollIntoView();
+        // Navigate directly to the receipt view to show the QR
+        router.push({
+          name: 'ReceiptView',
+          params: {
+            eventId: publishedReceiptEvent.id,
+            decryptionKey: publishedReceiptEvent.encryptionPrivateKey
+          },
+          query: {
+            showQR: 'true'
           }
         });
       } catch (error) {
@@ -426,21 +403,6 @@ export default {
     };
     
     
-    const navigateToReceiptView = () => {
-      // Navigate to the receipt view using the eventId and encryption key
-      if (eventId.value && eventEncryptionPrivateKey.value) {
-        router.push({
-          name: 'ReceiptView',
-          params: {
-            eventId: eventId.value,
-            decryptionKey: eventEncryptionPrivateKey.value
-          }
-        });
-      } else {
-        console.error('Missing eventId or decryptionKey for navigation');
-        showNotification('Unable to navigate to receipt view', 'error');
-      }
-    };
 
     const pasteFromClipboard = async () => {
       try {
@@ -453,9 +415,6 @@ export default {
     };
     
     
-    const selectAllItems = () => {
-      emit('select-all');
-    };
     
     return {
       receipt,
@@ -471,22 +430,17 @@ export default {
       handleAddressValidation,
       eventId,
       eventEncryptionPrivateKey,
-      hostUrl,
       calculateSubtotal: getSubtotal,
       formatPrice,
       formatSats,
       convertToSats,
       createRequest,
-      navigateToReceiptView,
       pasteFromClipboard,
-      selectAllItems,
-      receiptLink,
       developerSplit,
       currentBtcPrice,
       selectedCurrency,
       onCurrencyChange,
       formatCurrency,
-      qrSection,
       // Editing functions
       startEditing,
       saveEdit,
