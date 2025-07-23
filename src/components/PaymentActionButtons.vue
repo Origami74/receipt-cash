@@ -6,8 +6,10 @@
         <div class="flex space-x-3">
           <button
             @click="$emit('pay-lightning')"
-            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500 font-medium"
+            @touchend.prevent="$emit('pay-lightning')"
+            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500 font-medium touch-manipulation"
             :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
+            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
           >
             <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
               ⏳ Settlement sent...
@@ -18,8 +20,10 @@
           </button>
           <button
             @click="$emit('pay-cashu')"
-            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600 font-medium"
+            @touchend.prevent="$emit('pay-cashu')"
+            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600 font-medium touch-manipulation"
             :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
+            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
           >
             <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
               ⏳ Settlement sent...
@@ -35,7 +39,9 @@
       <button
         v-if="paymentSuccess"
         @click="$emit('scan-receipt')"
-        class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg"
+        @touchend.prevent="$emit('scan-receipt')"
+        class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg touch-manipulation"
+        style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
       >
         📱 Scan a Receipt
       </button>
