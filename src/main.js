@@ -13,7 +13,7 @@ nostrService.connect();
 receiptMonitoringService.initialize();
 
 // Start cleanup services
-proofCleanup.start();
+// proofCleanup.start();
 
 
 // Initialize debug logging if it was previously enabled
