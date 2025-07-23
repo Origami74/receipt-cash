@@ -23,10 +23,10 @@
       </button>
     </div>
     <div class="flex justify-between items-center mt-2">
-      <h1 class="text-xl font-bold">{{ title }}</h1>
-      <div class="text-sm text-gray-500">{{ date }}</div>
-    </div>
-    <div class="flex justify-end mt-2">
+      <div>
+        <h1 class="text-xl font-bold">{{ title }}</h1>
+        <div class="text-sm text-gray-500 mt-1">{{ date }}</div>
+      </div>
       <CurrencySelector
         :modelValue="selectedCurrency"
         @update:modelValue="$emit('currency-change', $event)"
