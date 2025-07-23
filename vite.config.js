@@ -28,6 +28,34 @@ export default defineConfig({
             purpose: 'any maskable'
           }
         ]
+      },
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) => {
+              return request.mode === 'navigate';
+            },
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'navigations',
+              networkTimeoutSeconds: 3,
+              plugins: [
+                {
+                  cacheWillUpdate: async ({ response }) => {
+                    // Don't cache redirected responses to avoid the redirect mode error
+                    return response.redirected ? null : response;
+                  },
+                  cacheKeyWillBeUsed: async ({ request }) => {
+                    // Always return the same cache key for navigation requests
+                    return new URL('/', location.origin).href;
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/]
       }
     })
   ],
