@@ -13,6 +13,8 @@ nostrService.connect();
 receiptMonitoringService.initialize();
 
 // Start cleanup services
+
+// temp disable cleanup becasue of rate limiting by the mint
 // proofCleanup.start();
 
 
