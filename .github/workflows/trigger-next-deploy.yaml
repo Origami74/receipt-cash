@@ -4,6 +4,9 @@ on:
   push:
     branches: [ next ]
 
+permissions:
+  contents: read
+
 jobs:
   trigger-deploy:
     runs-on: ubuntu-latest
@@ -12,6 +15,7 @@ jobs:
     - name: Trigger deploy workflow in mirror repository
       uses: peter-evans/repository-dispatch@v3
       with:
+        token: ${{ secrets.DEPLOY_TOKEN }}
         repository: Origami74/receipt-cash-next-mirror
         event-type: deploy
         client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
