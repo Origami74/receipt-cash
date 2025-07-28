@@ -1,0 +1,18 @@
+name: Trigger Next Branch Deploy
+
+on:
+  push:
+    branches: [ next ]
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Trigger deploy workflow in mirror repository
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: Origami74/receipt-cash-next-mirror
+        event-type: deploy
+        client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
