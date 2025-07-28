@@ -33,8 +33,11 @@ jobs:
         node-version: '22'
         cache: 'npm'
     
-    - name: Install dependencies
-      run: npm i
+    - name: Clean and install dependencies
+      run: |
+        # Remove lock file and node_modules to fix npm optional dependencies bug
+        rm -rf node_modules package-lock.json
+        npm install
     
     - name: Build project
       run: npm run build
