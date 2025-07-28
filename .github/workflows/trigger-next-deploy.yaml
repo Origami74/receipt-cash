@@ -13,9 +13,9 @@ jobs:
     
     steps:
     - name: Trigger deploy workflow in mirror repository
-      uses: peter-evans/repository-dispatch@v3
-      with:
-        token: ${{ secrets.DEPLOY_TOKEN }}
-        repository: Origami74/receipt-cash-next-mirror
-        event-type: deploy
-        client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+      run: |
+        gh workflow run deploy \
+          --repo Origami74/receipt-cash-next-mirror \
+          --ref main
+      env:
+        GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
