@@ -18,4 +18,4 @@ jobs:
           --repo Origami74/receipt-cash-next-mirror \
           --ref main
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
