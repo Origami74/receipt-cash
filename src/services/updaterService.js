@@ -1,8 +1,8 @@
 // Version-based update manager
-import { showNotification } from './notification';
+import { showNotification } from './notificationService';
 
 // Update this version number with each release
-export const CURRENT_VERSION = '1.0.4';
+export const CURRENT_VERSION = '1.1.4';
 
 // Key for storing version in localStorage
 const VERSION_KEY = 'receipt-cash-version';
@@ -39,6 +39,15 @@ export const checkForVersionUpdate = async () => {
 };
 
 /**
+ * Force reload with cache bypass using timestamp
+ */
+const forceReloadWithCacheBust = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('t', Date.now());
+  window.location.href = url.toString();
+};
+
+/**
  * Force app update by clearing cache and reloading
  */
 export const forceAppUpdate = async () => {
@@ -57,13 +66,13 @@ export const forceAppUpdate = async () => {
     
     // Force reload with cache bypass
     setTimeout(() => {
-      window.location.reload(true);
+      forceReloadWithCacheBust();
     }, 500);
     
   } catch (error) {
     console.error('Error forcing app update:', error);
-    // Fallback: just reload
-    window.location.reload();
+    // Fallback: force reload with cache bypass
+    forceReloadWithCacheBust();
   }
 };
 

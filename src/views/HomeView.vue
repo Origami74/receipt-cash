@@ -9,9 +9,23 @@
       <div v-if="!capturedReceipt" class="camera-container">
         <video ref="videoElement" class="h-full w-full object-cover"></video>
         
+        <!-- Camera Permission Overlay Component -->
+        <CameraPermissionOverlay
+          :hasPermission="hasPermission"
+          :isInitializing="cameraInitializing"
+          @request-permission="requestCameraPermission"
+        />
+        
         <div class="camera-overlay">
           <div class="p-4 bg-black/50">
-            <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+            <div class="flex items-center justify-center space-x-2">
+              <img
+                src="/receipt-cash-logo.png"
+                alt="Receipt.Cash Logo"
+                class="w-8 h-8"
+              />
+              <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+            </div>
           </div>
           
           <camera-controls
@@ -50,8 +64,9 @@ import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CameraControls from '../components/CameraControls.vue';
-import { showNotification, useNotification } from '../utils/notification';
-import receiptService from '../services/receipt';
+import CameraPermissionOverlay from '../components/CameraPermissionOverlay.vue';
+import { showNotification, useNotification } from '../services/notificationService';
+import receiptService from '../services/aiService';
 
 export default {
   name: 'HomeView',
@@ -61,7 +76,8 @@ export default {
     Notification,
     Spinner,
     SettingsMenu,
-    CameraControls
+    CameraControls,
+    CameraPermissionOverlay
   },
   setup() {
     const route = useRoute();
@@ -74,20 +90,41 @@ export default {
     const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
     const isSettingsOpen = ref(false);
+    const cameraInitializing = ref(false);
     
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
     
     const requestCameraPermission = async () => {
       try {
+        cameraInitializing.value = true;
+        console.log('Requesting camera permission...');
+        
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         stream.getTracks().forEach(track => track.stop()); // Stop the stream after getting permission
         hasPermission.value = true;
-        initializeCamera();
+        
+        console.log('Camera permission granted, initializing camera...');
+        // Use nextTick to ensure DOM is updated before initializing camera
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await initializeCamera();
       } catch (error) {
         console.error('Camera permission error:', error);
-        showNotification('Camera access is required to scan receipts. Please enable camera access in your browser settings.');
+        
+        // Check if the user explicitly denied permission
+        const isPermissionDenied = error.name === 'NotAllowedError' ||
+                                   error.name === 'PermissionDeniedError' ||
+                                   error.message.includes('Permission denied');
+        
+        // Only show notification if it's not an explicit denial
+        if (!isPermissionDenied) {
+          showNotification('Camera access failed. Please check your browser settings and try again.');
+        } else {
+          console.log('Camera permission explicitly denied by user');
+        }
+        
         hasPermission.value = false;
+        cameraInitializing.value = false;
       }
     };
 
@@ -98,12 +135,26 @@ export default {
       }
 
       try {
-        // Check if video element is available
+        cameraInitializing.value = true;
+        
+        // Wait for video element to be available with retries
+        let retries = 0;
+        const maxRetries = 20; // 2 seconds max wait
+        
+        while (!videoElement.value && retries < maxRetries) {
+          console.log(`Waiting for video element... attempt ${retries + 1}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          retries++;
+        }
+        
         if (!videoElement.value) {
-          console.warn('Video element not available yet, waiting for DOM update');
-          // Wait for the next tick to ensure video element is mounted
-          setTimeout(initializeCamera, 100);
-          return;
+          throw new Error('Video element not available after waiting');
+        }
+
+        // Clean up any existing scanner
+        if (qrScanner.value) {
+          qrScanner.value.destroy();
+          qrScanner.value = null;
         }
 
         qrScanner.value = new QrScanner(
@@ -118,10 +169,18 @@ export default {
             returnDetailedScanResult: true
           }
         );
+        
+        console.log('Starting QR Scanner...');
         await qrScanner.value.start();
+        console.log('QR Scanner started successfully');
+        
+        cameraInitializing.value = false;
+        
       } catch (error) {
         console.error('Error initializing camera:', error);
         showNotification('Failed to initialize camera. Please try refreshing the page.');
+        hasPermission.value = false; // Reset permission on error
+        cameraInitializing.value = false;
       }
     };
 
@@ -289,6 +348,7 @@ export default {
       decryptionKey,
       isProcessing,
       isSettingsOpen,
+      cameraInitializing,
       toggleFlash,
       captureReceipt,
       resetCapture,

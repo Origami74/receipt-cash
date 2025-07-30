@@ -26,13 +26,13 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { showNotification, useNotification } from './utils/notification';
+import { showNotification, useNotification } from './services/notificationService';
 import Notification from './components/Notification.vue';
 import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
-import mintQuoteRecoveryService from './services/mintQuoteRecovery';
-import debugLogger from './utils/debugLogger';
-import { checkForVersionUpdate } from './utils/versionManager';
+import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
+import debugLogger from './services/debugService';
+import { checkForVersionUpdate } from './services/updaterService';
 
 export default {
   name: 'App',

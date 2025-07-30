@@ -1,4 +1,4 @@
-import { formatCurrency } from './currency';
+import { formatCurrency } from './currencyUtils';
 
 /**
  * Format sats with proper number formatting
@@ -49,4 +49,35 @@ export function calculateSubtotal(items) {
     const quantity = item.quantity || 0;
     return sum + (price * quantity);
   }, 0);
+}
+
+/**
+ * Get emoji for developer percentage display
+ * @param {number} percentage - Developer percentage
+ * @returns {string} Appropriate emoji
+ */
+export function getDevPercentageEmoji(percentage) {
+  if (percentage === 0) return '🫤';
+  if (percentage < 1) return '😐';
+  if (percentage < 2) return '🙂';
+  if (percentage < 5) return '😊';
+  if (percentage < 10) return '😄';
+  if (percentage < 20) return '🤩';
+  if (percentage < 30) return '🥳';
+  if (percentage < 50) return '🎉';
+  if (percentage < 70) return '🚀';
+  if (percentage < 90) return '👑';
+  return '🔥';
+}
+
+/**
+ * Format developer percentage with proper decimal places (always show tenths)
+ * @param {number} percentage - Developer percentage
+ * @returns {string} Formatted percentage
+ */
+export function formatDevPercentage(percentage) {
+  if (typeof percentage !== 'number' || isNaN(percentage)) {
+    return '0.0';
+  }
+  return percentage.toFixed(1);
 }

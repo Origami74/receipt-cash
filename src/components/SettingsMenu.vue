@@ -509,15 +509,14 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
          getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote,
-         getReceiveAddress, saveReceiveAddress, getChangeJar, clearChangeForMint } from '../utils/storage';
-import mintQuoteRecoveryService from '../services/mintQuoteRecovery';
-import { showNotification } from '../utils/notification';
+         getReceiveAddress, saveReceiveAddress, getChangeJar, clearChangeForMint } from '../services/storageService';
+import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecovery';
+import { showNotification } from '../services/notificationService';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
-import debugLogger from '../utils/debugLogger';
-import cashuService from '../services/cashu';
-import addressValidation, { AddressType } from '../services/addressValidation';
+import debugLogger from '../services/debugService';
+import addressValidation, { AddressType } from '../utils/receiveAddressValidationUtils';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
-import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../utils/versionManager';
+import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../services/updaterService';
 
 export default {
   name: 'SettingsMenu',

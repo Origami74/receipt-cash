@@ -39,6 +39,7 @@
             @keydown.enter.prevent="selectFirstResult"
             @keydown.down.prevent="navigateDown"
             @keydown.up.prevent="navigateUp"
+            @click="$refs.searchInput.focus()"
           />
         </div>
 
@@ -100,7 +101,7 @@
 </template>
 
 <script>
-import { getOrderedCurrencies, searchCurrencies, getCurrencyInfo } from '../utils/currency.js';
+import { getOrderedCurrencies, searchCurrencies, getCurrencyInfo } from '../utils/currencyUtils.js';
 
 export default {
   name: 'CurrencySelector',
@@ -155,8 +156,13 @@ export default {
     toggleDropdown() {
       this.isOpen = !this.isOpen;
       if (this.isOpen) {
+        // Don't auto-focus on mobile to prevent unwanted keyboard
+        // Only focus if user explicitly clicks/taps on the search input
         this.$nextTick(() => {
-          this.$refs.searchInput?.focus();
+          // Only auto-focus if not on mobile/touch device
+          if (!('ontouchstart' in window)) {
+            this.$refs.searchInput?.focus();
+          }
         });
       } else {
         this.searchQuery = '';

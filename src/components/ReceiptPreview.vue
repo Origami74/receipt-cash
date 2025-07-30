@@ -13,7 +13,7 @@
       </div>
     </div>
     
-    <div class="flex-1 overflow-y-auto p-4" :class="{ 'pb-2': step === 'qr-display' }">
+    <div class="flex-1 overflow-y-auto p-4">
       <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
           <div>Items</div>
@@ -24,13 +24,6 @@
               class="text-sm text-blue-500 hover:text-blue-600"
             >
               Add Item
-            </button>
-            <button
-              v-if="step === 'qr-display'"
-              @click="selectAllItems"
-              class="text-sm text-blue-500 hover:text-blue-600"
-            >
-              Select All
             </button>
           </div>
         </div>
@@ -154,81 +147,28 @@
         </div>
       </div>
       
-      <div v-if="step === 'qr-display'" class="mt-4" ref="qrSection">
-        <div class="bg-white rounded-lg shadow p-6 text-center">
-          <!-- Prominent instructional text -->
-          <div class="mb-6">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Share This Receipt</h2>
-            <p class="text-lg text-gray-700 font-semibold mb-1">
-              Send this QR code to the people who need to pay
-            </p>
-            <p class="text-sm text-gray-600">
-              They can scan it or use the link to pay their share
-            </p>
-          </div>
-          
-          <!-- Enhanced QR code with orange border -->
-          <div class="qr-container mb-6 flex justify-center">
-            <div class="p-4 border-4 border-orange-500 rounded-2xl bg-white shadow-lg">
-              <QRCodeVue
-                :value="receiptLink"
-                :size="320"
-                level="H"
-                render-as="svg"
-                class="mx-auto"
-              />
-            </div>
-          </div>
-          
-          <!-- Enhanced buttons with icons -->
-          <div class="flex flex-col gap-3">
-            <button @click="copyLink" class="btn-secondary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
-              <!-- Copy icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy Link
-            </button>
-            <button @click="shareToSocial" class="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base font-medium">
-              <!-- Share icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-              </svg>
-              Share
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
     
-    <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-      <button 
-        v-if="step === 'qr-display'"
-        @click="resetProcess" 
-        class="w-full btn-secondary"
-      >
-        Done
-      </button>
-    </div>
     
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import nostrService from '../services/nostr';
-import cashuService from '../services/cashu';
-import paymentService from '../services/payment';
-import receiptMonitoringService from '../services/receiptMonitoringService';
-import receiptKeyManager from '../utils/receiptKeyManager';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import nostrService from '../services/flows/shared/nostr';
+import cashuService from '../services/flows/shared/cashuService';
+import btcPriceService from '../services/btcPriceService';
+import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
+import receiptKeyManager from '../services/keyManagementService';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
-import { formatCurrency } from '../utils/currency';
-import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricing';
-import { saveReceiveAddress, getReceiveAddress } from '../utils/storage';
-import { showNotification } from '../utils/notification';
+import { formatCurrency } from '../utils/currencyUtils';
+import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
+import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
+import { showNotification } from '../services/notificationService';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
@@ -248,6 +188,8 @@ export default {
   },
   emits: ['select-all'],
   setup(props, { emit }) {
+    const router = useRouter();
+    
     const receipt = ref({
       ...props.receiptData,
       items: props.receiptData.items.map(item => ({
@@ -257,7 +199,6 @@ export default {
       }))
     });
     const step = ref('payment-request');
-    const qrSection = ref(null);
     const paymentRequest = ref('');
     const paymentRequestValid = ref(true);
     const paymentRequestError = ref('');
@@ -273,8 +214,6 @@ export default {
     // Developer split with 0.1% precision (default 2.1%)
     const developerSplit = ref(2.1);
     
-    const hostUrl = computed(() => `https://${location.host}`);
-    const receiptLink = computed(() => `${hostUrl.value}?receipt=${eventId.value}&key=${eventEncryptionPrivateKey.value}`);
     
     onMounted(async () => {
       // Set currency to receipt's currency
@@ -288,7 +227,7 @@ export default {
       
       // Fetch current BTC price for live preview
       try {
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for preview:', error);
         showNotification('Failed to fetch BTC price for preview', 'error');
@@ -319,7 +258,7 @@ export default {
     const onCurrencyChange = async () => {
       try {
         // Fetch new BTC price for the selected currency
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for new currency:', error);
         showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
@@ -401,7 +340,8 @@ export default {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
-          total: item.price * item.quantity
+          total: item.price * item.quantity,
+          title: item.merchant
         }));
         
         const receiptWithDevSplit = {
@@ -412,7 +352,7 @@ export default {
           splitPercentage: parseFloat(developerSplit.value)
         };
         
-        const btcPrice = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        const btcPrice = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
         
         // Extract preferred mints from payment request if it's a Cashu request
         const preferredMints = (addressType.value === 'cashu' && receiveAddress.value)
@@ -445,15 +385,15 @@ export default {
         
         console.log('Started payer monitoring for receipt:', publishedReceiptEvent.id);
         
-        step.value = 'qr-display';
-        
-        // Auto-scroll to QR section after DOM update
-        nextTick(() => {
-          if (qrSection.value) {
-            qrSection.value.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start'
-            });
+        // Navigate directly to the receipt view to show the QR
+        router.push({
+          name: 'ReceiptView',
+          params: {
+            eventId: publishedReceiptEvent.id,
+            decryptionKey: publishedReceiptEvent.encryptionPrivateKey
+          },
+          query: {
+            showQR: 'true'
           }
         });
       } catch (error) {
@@ -462,31 +402,7 @@ export default {
       }
     };
     
-    const copyLink = () => {
-      const link = receiptLink.value;
-      
-      if (!navigator || !navigator.clipboard) {
-        console.error('Clipboard API not available');
-        showNotification('Clipboard not available', 'error');
-        return;
-      }
-      
-      navigator.clipboard.writeText(link)
-        .then(() => {
-          showNotification('Link copied to clipboard', 'success');
-        })
-        .catch(err => {
-          showNotification('Failed to copy link', 'error');
-          console.error('Failed to copy link:', err);
-        });
-    };
     
-    const resetProcess = () => {
-      step.value = 'receipt-display';
-      paymentRequest.value = '';
-      eventId.value = '';
-      eventEncryptionPrivateKey.value = '';
-    };
 
     const pasteFromClipboard = async () => {
       try {
@@ -498,36 +414,7 @@ export default {
       }
     };
     
-    const shareToSocial = async () => {
-      try {
-        const shareData = {
-          title: 'Be my sugardad? 🥺',
-          text: `Hey sugar! 💅\n\nI just spent ${formatPrice(receipt.value.total_amount || 0)} and I'm feeling a little... broke.\n\nWould you help me out? Pretty please? 🥺\n\nYou can pay your share here: `,
-          url: receiptLink.value
-        };
-
-        if (navigator.share) {
-          await navigator.share(shareData);
-        } else {
-          if (!navigator || !navigator.clipboard) {
-            console.error('Clipboard API not available');
-            showNotification('Clipboard not available', 'error');
-            return;
-          }
-          await navigator.clipboard.writeText(`${shareData.text}\n\n${shareData.url}`);
-          showNotification('Link copied to clipboard', 'success');
-        }
-      } catch (error) {
-        if (error.name !== 'AbortError') {
-          console.error('Error sharing:', error);
-          showNotification('Failed to share', 'error');
-        }
-      }
-    };
     
-    const selectAllItems = () => {
-      emit('select-all');
-    };
     
     return {
       receipt,
@@ -543,24 +430,17 @@ export default {
       handleAddressValidation,
       eventId,
       eventEncryptionPrivateKey,
-      hostUrl,
       calculateSubtotal: getSubtotal,
       formatPrice,
       formatSats,
       convertToSats,
       createRequest,
-      copyLink,
-      resetProcess,
       pasteFromClipboard,
-      shareToSocial,
-      selectAllItems,
-      receiptLink,
       developerSplit,
       currentBtcPrice,
       selectedCurrency,
       onCurrencyChange,
       formatCurrency,
-      qrSection,
       // Editing functions
       startEditing,
       saveEdit,

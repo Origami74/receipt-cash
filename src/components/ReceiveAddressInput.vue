@@ -46,7 +46,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
-import addressValidation, { AddressType } from '../services/addressValidation';
+import addressValidation, { AddressType } from '../utils/receiveAddressValidationUtils';
 
 export default {
   name: 'ReceiveAddressInput',

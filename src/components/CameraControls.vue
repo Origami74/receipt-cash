@@ -93,8 +93,8 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { showNotification } from '../utils/notification';
-import receiptService from '../services/receipt';
+import { showNotification } from '../services/notificationService';
+import receiptService from '../services/aiService';
 
 export default {
   name: 'CameraControls',

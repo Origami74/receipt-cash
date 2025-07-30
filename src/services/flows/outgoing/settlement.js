@@ -1,5 +1,5 @@
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'; // Import NDKEvent directly
-import nostrService from './nostr'; // Import nostrService for access to NDK, keys, etc.
+import nostrService from '../shared/nostr';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 

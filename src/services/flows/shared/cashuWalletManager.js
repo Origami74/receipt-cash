@@ -19,7 +19,6 @@ class CashuWalletManager {
     
     if (this.wallets.has(normalizedUrl)) {
       const existingWallet = this.wallets.get(normalizedUrl);
-      console.log(`Reusing existing wallet for mint: ${mintUrl}`);
       return existingWallet;
     }
 

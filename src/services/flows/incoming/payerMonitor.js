@@ -1,15 +1,21 @@
-import { NDKEvent, NDKKind, NDKUser } from '@nostr-dev-kit/ndk';
+import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip44 } from 'nostr-tools';
 import { MintQuoteState } from '@cashu/cashu-ts';
-import cashuWalletManager from './cashuWalletManager';
-import nostrService from './nostr';
-import settlementService from './settlement';
-import cashuService from '../services/cashu';
-import receiptKeyManager from '../utils/receiptKeyManager';
-import { showNotification } from '../utils/notification';
+import cashuWalletManager from '../shared/cashuWalletManager';
+import nostrService from '../shared/nostr';
+import settlementService from '../outgoing/settlement';
+import cashuService from '../shared/cashuService';
+import { showNotification } from '../../notificationService';
+import {storeChangeForMint} from '../../storageService'
+import { globalEventStore, globalPool } from '../../nostr/applesauce';
+import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../../nostr/constants';
+import { unlockGiftWrap } from 'applesauce-core/helpers';
+import { onlyEvents } from 'applesauce-relay';
+import { mapEventsToStore } from 'applesauce-core';
 import { Buffer } from 'buffer';
-import { validateReceiveAddress } from './addressValidation';
-import {storeChangeForMint} from '../utils/storage'
+import { SimpleSigner } from 'applesauce-signers';
+import { includeHashtags } from 'applesauce-factory/operations/event';
+import { EventFactory } from 'applesauce-factory';
 
 /**
  * PayerMonitor - Monitors settlement events and processes payments for payers
@@ -292,34 +298,22 @@ class PayerMonitor {
     
     // Calculate 'since' time: settlement event creation time minus 1 day for safety
     const settlementCreatedAt = event.created_at || Math.floor(Date.now() / 1000);
-    const oneDayBefore = settlementCreatedAt - (24 * 60 * 60); // 24 hours before
+    const threeDaysBefore = settlementCreatedAt - (72 * 60 * 60); // 3 days before (NIP says 2days, we do + 24h account for timezone issues)
     
     console.log('Monitoring Cashu payments to receipt pubkey:', receiptPubkey);
     console.log('Expected payment memo:', `${receiptEventId}-${settlementEventId}`);
-    console.log('Monitoring since:', new Date(oneDayBefore * 1000).toISOString());
+    console.log('Monitoring since:', new Date(threeDaysBefore * 1000).toISOString());
     
     // Don't even start monitoring if we already have a confirmation
     if (this.publishedConfirmations.has(event.id)) {
       console.log('Confirmation already exists for settlement:', event.id, '- skipping Cashu monitoring');
       return;
     }
+
     
-    try {
-      const ndk = await nostrService.getNdk();
-      
-      // Create subscription for incoming DMs (kind 14 - gift wraps)
-      const dmFilter = {
-        kinds: [1059], // Gift wrapped messages (NIP-17) - using kind 1059 which is correct
-        '#p': [receiptPubkey], // Messages to our receipt pubkey
-        since: oneDayBefore // Settlement time minus 1 day for safety
-      };
-      
-      console.log('Setting up Cashu payment subscription with filter:', dmFilter);
-      const subscription = ndk.subscribe(dmFilter);
-      
-      // Handle incoming events
-      subscription.on('event', async (dmEvent) => {
-        try {
+
+    const handleGiftWrappedEvent = async (giftWrappedEvent) => {
+      try {
           // Stop processing if we already published a confirmation
           if (this.publishedConfirmations.has(event.id)) {
             console.log('Confirmation already published for settlement:', event.id);
@@ -327,17 +321,15 @@ class PayerMonitor {
             return;
           }
           
-          console.log('Received potential Cashu payment DM, kind:', dmEvent.kind);
+          console.log('Received potential Cashu payment DM, kind:', giftWrappedEvent.kind);
+
+          // TODO: don't do this for each event
+          const privateKeyBytes = Uint8Array.from(Buffer.from(receiptInfo.publishingPrivateKey, 'hex'));
+          const receiptSigner = new SimpleSigner(privateKeyBytes);
           
-          // Try to decrypt the gift wrap using NDK's unwrapping
-          const { NDKPrivateKeySigner, giftUnwrap, NDKUser } = await import('@nostr-dev-kit/ndk');
-          const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
-          
-          // Unwrap the gift to get the inner rumor
-          const rumor = await giftUnwrap(dmEvent, new NDKUser({pubkey: dmEvent.pubkey}), receiptSigner);
-          
+          const rumor = await unlockGiftWrap(giftWrappedEvent, receiptSigner)
+
           if (rumor && rumor.kind === 14) {
-            console.log('Successfully unwrapped gift wrap, found kind 14 DM');
             
             // Parse the message content
             try {
@@ -347,15 +339,12 @@ class PayerMonitor {
               if (messageContent.id && messageContent.proofs && messageContent.mint) {
                 const expectedMemo = `${receiptEventId}-${settlementEventId}`;
                 
-                console.log('Found Cashu payment message, ID:', messageContent.id);
-                console.log('Expected memo:', expectedMemo);
-                
                 // Check if the payment ID matches our expected memo format
                 if (messageContent.id === expectedMemo) {
                   console.log('Found matching Cashu payment! Processing...');
                   
                   // Stop the subscription since we found our payment
-                  subscription.stop();
+                  dmSubscription.remove();
                   
                   // Process the received Cashu tokens
                   await this.processSettlementInCashu(messageContent, event, settlementData);
@@ -366,24 +355,24 @@ class PayerMonitor {
               // Not a JSON message or not a Cashu payment, continue
               console.log('Message not a Cashu payment:', parseError.message);
             }
+          } else{
+            console.log(`rumor kind was ${rumor.kind}`)
           }
         } catch (decryptError) {
           // Failed to decrypt, might not be for us or different format
           console.log('Failed to unwrap gift:', decryptError.message);
         }
-      });
-      
-      // Store subscription for cleanup
-      if (!this.monitoringIntervals.has(receiptEventId)) {
-        this.monitoringIntervals.set(receiptEventId, []);
-      }
-      this.monitoringIntervals.get(receiptEventId).push(subscription);
-      
-      console.log('Cashu payment subscription started for settlement:', settlementEventId);
-      
-    } catch (error) {
-      console.error('Error setting up Cashu payment subscription:', error);
     }
+
+    const dmSubscription = globalPool
+      .subscription(DEFAULT_RELAYS, {
+        kinds: [KIND_GIFTWRAPPED_MSG],
+        '#p': [receiptPubkey],
+        since: threeDaysBefore
+      })
+      .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+      .subscribe(handleGiftWrappedEvent);
+
   }
   
   /**
@@ -528,7 +517,7 @@ class PayerMonitor {
    */
   async storeProofsForRecovery(transactionId, proofs, mintUrl, category) {
     try {
-      const { saveProofs } = await import('../utils/storage');
+      const { saveProofs } = await import('../../storageService');
       
       saveProofs(transactionId, category, proofs, 'pending', mintUrl);
       
@@ -545,7 +534,7 @@ class PayerMonitor {
    */
   async markProofsAsForwarded(transactionId) {
     try {
-      const { updateProofStatus } = await import('../utils/storage');
+      const { updateProofStatus } = await import('../../storageService');
       
       // Mark all categories as 'forwarded' instead of deleting
       const categories = ['claimed', 'payer', 'developer'];
@@ -567,7 +556,7 @@ class PayerMonitor {
    */
   async clearStoredProofs(transactionId) {
     try {
-      const { clearProofs } = await import('../utils/storage');
+      const { clearProofs } = await import('../../storageService');
       clearProofs(transactionId);
       console.log(`Cleared stored proofs for transaction: ${transactionId}`);
       
@@ -664,8 +653,8 @@ class PayerMonitor {
    */
   async payoutPayer(proofs, mintUrl) {
     try {
-      const { getReceiveAddress } = await import('../utils/storage');
-      const { validateReceiveAddress } = await import('./addressValidation');
+      const { getReceiveAddress } = await import('../../storageService');
+      const { validateReceiveAddress } = await import('../../../utils/receiveAddressValidationUtils');
       
       const receiveAddress = getReceiveAddress();
       
@@ -751,6 +740,8 @@ class PayerMonitor {
    */
   async publishConfirmation(event) {
     try {
+    console.log(`publishing settlement confirmation event ${event.id}`)
+
       const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
       const settlerPubkey = event.tags.find(tag => tag[0] === 'p')?.[1];
       
@@ -760,34 +751,35 @@ class PayerMonitor {
         console.error('No receipt private key found for publishing confirmation');
         return;
       }
+
+      const privateKeyBytes = Uint8Array.from(Buffer.from(receiptInfo.publishingPrivateKey, 'hex'));
+      const receiptSigner = new SimpleSigner(privateKeyBytes);
+
+      const factory = new EventFactory({
+        signer: receiptSigner,
+      });
       
-      // Mark this settlement as confirmed to prevent duplicate processing
-      this.publishedConfirmations.add(event.id);
       
-      // Create a signer with the receipt private key
-      const { NDKPrivateKeySigner } = await import('@nostr-dev-kit/ndk');
-      const receiptSigner = new NDKPrivateKeySigner(receiptInfo.publishingPrivateKey);
-      
-      const ndk = await nostrService.getNdk();
-      
-      // Create NDK event for confirmation
-      const confirmationEvent = new NDKEvent(ndk);
-      confirmationEvent.kind = 9569;
-      confirmationEvent.created_at = Math.floor(Date.now() / 1000);
-      confirmationEvent.content = "";
-      confirmationEvent.tags = [
-        ['e', receiptEventId],
-        ['e', event.id],
-        ['p', settlerPubkey]
-      ];
-      
-      // Sign with the receipt private key
-      await confirmationEvent.sign(receiptSigner);
-      
-      // Publish the event
-      await confirmationEvent.publish();
-      
-      console.log('Published confirmation for settlement:', event.id);
+      const draft = await factory.build(
+        { 
+          kind: KIND_SETTLEMENT_CONFIRMATION,
+          tags: [
+            ['e', receiptEventId],
+            ['e', event.id],
+            ['p', settlerPubkey]
+          ]
+        },
+      );
+      // Sign the draft event with the signer
+      const signed = await factory.sign(draft);
+
+      globalPool
+      .publish(DEFAULT_RELAYS, signed)
+      .subscribe({
+        complete: () => {
+          globalEventStore.add(event);
+        },
+      });
       
     } catch (error) {
       console.error('Error publishing confirmation:', error);

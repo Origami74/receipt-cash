@@ -21,6 +21,7 @@
         min="0"
         max="1000"
         step="1"
+        inputmode="none"
         class="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-custom"
         @input="updateValue"
         @mousedown="startDragging"

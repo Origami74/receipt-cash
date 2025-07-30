@@ -1,14 +1,7 @@
 import NDK, { NDKEvent, NDKPrivateKeySigner, NDKRelay, NDKRelayAuthPolicies, NDKUser, giftWrap } from '@nostr-dev-kit/ndk';
 import { generateSecretKey, getPublicKey, nip44, nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-
-// Default relays as fallback
-const DEFAULT_RELAYS = [
-  'wss://nos.lol',
-  'wss://relay.getalby.com',
-  'wss://relay.damus.io',
-  'wss://relay.primal.net'
-];
+import { DEFAULT_RELAYS } from '../../nostr/constants';
 
 // Initialize NDK with default relays
 const ndk = new NDK({
@@ -108,7 +101,6 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       merchant: receiptData.merchant,
       date: receiptData.date,
       items: itemsInSats,
-      tax: receiptData.tax?.amount ? Math.round((receiptData.tax.amount * 100000000) / btcPrice) : 0, // Store only sats tax
       currency: receiptData.currency, // Keep currency for reference
       total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0, // Store only sats total
       preferredMints: finalPreferredMints, // Array of preferred mints (first is default)

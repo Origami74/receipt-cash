@@ -33,56 +33,19 @@
 
     <!-- Receipts List -->
     <div v-else class="flex-1 overflow-y-auto p-4">
-      <div v-if="receipts.length === 0" class="text-center py-8">
+      <div v-if="receiptEvents.length === 0" class="text-center py-8">
         <div class="text-gray-500 text-lg">No receipts found</div>
         <div class="text-gray-400 text-sm mt-2">Published receipts will appear here</div>
       </div>
       
       <div v-else class="space-y-4">
-        <div
-          v-for="receipt in receipts"
-          :key="receipt.id"
-          class="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
-          @click="viewReceipt(receipt)"
-        >
-          <div class="flex justify-between items-start mb-2">
-            <div>
-              <h3 class="font-semibold text-lg">{{ receipt.merchant || 'Unknown Merchant' }}</h3>
-              <p class="text-sm text-gray-500">{{ formatDate(receipt.created_at) }}</p>
-            </div>
-            <div class="text-right">
-              <div class="font-bold">{{ formatSats(receipt.totalAmount) }} sats</div>
-              <div class="text-sm text-gray-500">{{ toFiat(receipt.totalAmount, receipt.currency, receipt.btcPrice) }}</div>
-            </div>
-          </div>
-
-          <!-- Settlement Progress -->
-          <div class="mt-3">
-            <div class="flex justify-between text-sm text-gray-600 mb-1">
-              <span>Settlement Progress</span>
-              <span>{{ receipt.settledAmount || 0 }} / {{ receipt.totalAmount }} sats</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                class="bg-green-500 h-2 rounded-full transition-all duration-300"
-                :style="{ width: getSettlementProgress(receipt) + '%' }"
-              ></div>
-            </div>
-          </div>
-
-          <!-- Status Badge -->
-          <div class="mt-2 flex justify-between items-center">
-            <span 
-              class="px-2 py-1 rounded-full text-xs font-medium"
-              :class="getStatusClass(receipt)"
-            >
-              {{ getStatusText(receipt) }}
-            </span>
-            <div class="text-xs text-gray-500">
-              {{ receipt.itemCount || 0 }} items
-            </div>
-          </div>
-        </div>
+        <!-- Display receipt events using the new component -->
+        <ReceiptItem
+          v-for="[receiptEvent, parsedContent, contentDecryptionKey] in receiptEvents"
+          :key="receiptEvent.id"
+          :receiptEvent="[receiptEvent, parsedContent, contentDecryptionKey]"
+        />
+        
       </div>
     </div>
   </div>
@@ -91,96 +54,75 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { formatSats } from '../utils/pricing';
-import { formatCurrency } from '../utils/currency';
-import receiptKeyManager from '../utils/receiptKeyManager';
-import nostrService from '../services/nostr';
+import receiptKeyManager from '../services/keyManagementService.js';
+import nostrService from '../services/flows/shared/nostr.js';
 import { Buffer } from 'buffer';
+import { SimpleSigner } from 'applesauce-signers';
+import { globalEventStore, globalPool } from '../services/nostr/applesauce';
+import { onlyEvents } from 'applesauce-relay';
+import { mapEventsToStore } from 'applesauce-core';
+import ReceiptItem from '../components/ReceiptItem.vue';
+import { safeParseReceiptContent } from '../parsing/receiptparser.js';
+import { nip44 } from 'nostr-tools';
+import { DEFAULT_RELAYS } from '../services/nostr/constants.js';
 
 export default {
   name: 'ReceiptHistoryView',
+  components: {
+    ReceiptItem
+  },
   setup() {
     const router = useRouter();
     const loading = ref(true);
     const error = ref(null);
-    const receipts = ref([]);
+    const receiptEvents = ref([]);
 
     const goBack = () => {
       router.push('/');
     };
 
-    const calculateSettledAmount = async (receiptEventId, receiptEvent) => {
+    const receiptIdentities = [];
+
+    const handleReceiptEvent = async (receiptEvent) => {
+      console.log("receiptEvent", receiptEvent);
+      
       try {
-        // Get NDK instance
-        const ndk = await nostrService.getNdk();
-        
-        // Get the receipt author's public key from the receipt event
-        const receiptAuthorPubkey = receiptEvent.authorPubkey;
-        if (!receiptAuthorPubkey) {
-          console.warn('No author pubkey found in receipt event');
-          return 0;
-        }
-        
-        // Query for confirmation events (kind 9569) for this receipt
-        const confirmationEvents = await ndk.fetchEvents({
-          kinds: [9569],
-          authors: [receiptAuthorPubkey],
-          '#e': [receiptEventId],
-          limit: 100
-        });
-        
-        console.log(`Found ${confirmationEvents.size} confirmations for receipt ${receiptEventId}`);
-        
-        // For each confirmation, get the settlement event it references
-        let totalSettledAmount = 0;
-        const processedSettlements = new Set();
-        
-        for (const confirmationEvent of confirmationEvents) {
-          const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
-          if (eTags.length >= 2) {
-            const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
-            
-            // Skip if we've already processed this settlement
-            if (processedSettlements.has(settlementEventId)) {
-              continue;
-            }
-            processedSettlements.add(settlementEventId);
-            
-            try {
-              // Fetch the settlement event to get the settled items
-              const settlementEvent = await ndk.fetchEvent(settlementEventId);
-              if (settlementEvent) {
-                // We need the receipt encryption key to decrypt the settlement
-                const encryptionKey = receiptKeyManager.getEncryptionKey(receiptEventId);
-                if (encryptionKey) {
-                  const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
-                  const { nip44 } = await import('nostr-tools');
-                  
-                  const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
-                  const { settledItems } = JSON.parse(decryptedContent);
-                  
-                  // Calculate the total amount for this settlement
-                  const settlementAmount = settledItems.reduce((sum, item) => {
-                    const quantity = item.selectedQuantity || item.quantity || 0;
-                    const price = item.price || 0;
-                    return sum + (quantity * price);
-                  }, 0);
-                  
-                  totalSettledAmount += settlementAmount;
-                  console.log(`Added ${settlementAmount} sats from settlement ${settlementEventId}`);
-                }
-              }
-            } catch (error) {
-              console.error('Error processing settlement event:', error);
-            }
+        // Find the matching signer for this event's author
+        let matchingIdentity = null;
+        for (const identity of receiptIdentities) {
+          const signerPubkey = await identity.receiptSigner.getPublicKey();
+          if (signerPubkey === receiptEvent.pubkey) {
+            matchingIdentity = identity;
+            break;
           }
         }
         
-        return totalSettledAmount;
+        if (!matchingIdentity) {
+          console.warn("No matching identity found for event author:", receiptEvent.pubkey);
+          return;
+        }
+        
+        // Get the encryption private key as Uint8Array
+        const contentDecryptionKey = Uint8Array.from(Buffer.from(matchingIdentity.contentSigner.key));
+        
+        // Decrypt using symmetric approach (not two-party)
+        //  TODO: remove dpeendency on nostr tools and do this with AppleSauce (Threw invalid MAC eerors)
+        const decryptedContent = await nip44.decrypt(receiptEvent.content, contentDecryptionKey);
+        
+        console.log("Decrypted content:", decryptedContent);
+        
+        // Validate and parse the decrypted receipt content
+        const parsedContent = safeParseReceiptContent(decryptedContent);
+        
+        if (parsedContent) {
+          // Save as tuple: [event, parsedContent, contentDecryptionKey]
+          receiptEvents.value.push([receiptEvent, parsedContent, contentDecryptionKey]);
+        } else {
+          console.warn("Invalid receipt content after decryption, skipping event:", receiptEvent.id);
+        }
         
       } catch (error) {
-        console.error('Error calculating settled amount:', error);
-        return 0;
+        console.error("Error processing event:", error, "Event ID:", receiptEvent.id);
       }
     };
 
@@ -191,48 +133,43 @@ export default {
         
         // Get all stored receipt keys
         const allKeys = receiptKeyManager.getAllReceiptKeys();
-        const receiptData = [];
-        
-        // Fetch receipt data from Nostr for each stored key
+
+        // Create a list with signers and encryption keys for each entry
         for (const [eventId, keyData] of allKeys) {
           try {
-            // Get the encryption key for this receipt
-            const encryptionKey = receiptKeyManager.getEncryptionKey(eventId);
-            if (!encryptionKey) {
-              console.warn(`No encryption key found for receipt ${eventId}`);
-              continue;
-            }
+            // Convert private key hex to Uint8Array for SimpleSigner
+            const privateKeyBytes = Uint8Array.from(Buffer.from(keyData.receiptPrivateKey, 'hex'));
+            const receiptSigner = new SimpleSigner(privateKeyBytes);
+
+            const contentPrivateKeyBytes = Uint8Array.from(Buffer.from(keyData.encryptionPrivateKey, 'hex'));
+            const contentSigner = new SimpleSigner(contentPrivateKeyBytes);
             
-            // Fetch the receipt event from Nostr
-            const receiptEvent = await nostrService.fetchReceiptEvent(eventId, encryptionKey);
-            
-            // Calculate settlement progress by checking confirmations
-            const settledAmount = await calculateSettledAmount(eventId, receiptEvent);
-            
-            // Add receipt to list with metadata
-            receiptData.push({
-              id: eventId,
-              eventId: eventId,
-              decryptionKey: encryptionKey,
-              merchant: receiptEvent.merchant || 'Unknown Merchant',
-              created_at: keyData.timestamp ? Math.floor(keyData.timestamp / 1000) : Math.floor(Date.now() / 1000),
-              totalAmount: receiptEvent.total || 0,
-              currency: receiptEvent.currency || 'USD',
-              btcPrice: receiptEvent.btcPrice || 0,
-              itemCount: receiptEvent.items ? receiptEvent.items.length : 0,
-              settledAmount: settledAmount,
-              status: settledAmount > 0 ? (settledAmount >= receiptEvent.total ? 'fully_settled' : 'partially_settled') : 'pending'
+            receiptIdentities.push({
+              eventId,
+              receiptSigner: receiptSigner,
+              contentSigner: contentSigner
             });
-          } catch (eventError) {
-            console.error(`Error fetching receipt ${eventId}:`, eventError);
-            // Continue with other receipts even if one fails
+          } catch (error) {
+            console.error(`Error processing keys for event ${eventId}:`, error);
+            // Continue with other keys even if one fails
           }
         }
         
-        // Sort by timestamp, newest first
-        receiptData.sort((a, b) => b.created_at - a.created_at);
-        
-        receipts.value = receiptData;
+        console.log('receiptIdentities:', receiptIdentities);
+
+
+        // Get all receipt pubkeys for subscription
+        const receiptPubkeys = await Promise.all(receiptIdentities.flatMap(async id => await id.receiptSigner.getPublicKey()))
+
+        console.log(receiptPubkeys)
+
+        globalPool
+          .subscription(DEFAULT_RELAYS, {
+            kinds: [9567],
+            authors: receiptPubkeys,
+          })
+          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+          .subscribe(handleReceiptEvent);
         
       } catch (err) {
         console.error('Error loading receipts:', err);
@@ -242,39 +179,6 @@ export default {
       }
     };
 
-    const viewReceipt = (receipt) => {
-      // Navigate to the receipt view
-      router.push(`/?receipt=${receipt.id}&key=${receipt.decryptionKey}`);
-    };
-
-    const formatDate = (timestamp) => {
-      return new Date(timestamp * 1000).toLocaleDateString();
-    };
-
-    const toFiat = (satsAmount, currency, btcPrice) => {
-      if (!btcPrice) return '0.00';
-      const fiatAmount = (satsAmount * btcPrice) / 100000000;
-      return formatCurrency(fiatAmount, currency);
-    };
-
-    const getSettlementProgress = (receipt) => {
-      if (!receipt.totalAmount) return 0;
-      return Math.round((receipt.settledAmount || 0) / receipt.totalAmount * 100);
-    };
-
-    const getStatusClass = (receipt) => {
-      const progress = getSettlementProgress(receipt);
-      if (progress === 100) return 'bg-green-100 text-green-800';
-      if (progress > 0) return 'bg-yellow-100 text-yellow-800';
-      return 'bg-gray-100 text-gray-800';
-    };
-
-    const getStatusText = (receipt) => {
-      const progress = getSettlementProgress(receipt);
-      if (progress === 100) return 'Fully Settled';
-      if (progress > 0) return 'Partially Settled';
-      return 'Pending Settlement';
-    };
 
     onMounted(() => {
       loadReceipts();
@@ -283,16 +187,9 @@ export default {
     return {
       loading,
       error,
-      receipts,
+      receiptEvents,
       goBack,
-      loadReceipts,
-      viewReceipt,
-      formatDate,
-      formatSats,
-      toFiat,
-      getSettlementProgress,
-      getStatusClass,
-      getStatusText
+      loadReceipts
     };
   }
 };

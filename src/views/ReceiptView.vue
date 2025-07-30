@@ -117,15 +117,6 @@ export default {
   setup(props) {
     const router = useRouter();
     const route = useRoute();
-    
-    // Fallback to route params if props are not available (for direct URL access)
-    const eventId = props.eventId || route.params.eventId;
-    const decryptionKey = props.decryptionKey || route.params.decryptionKey;
-    
-    // Validate required parameters
-    if (!eventId || !decryptionKey) {
-      console.error('Missing eventId or decryptionKey:', { eventId, decryptionKey, props, routeParams: route.params });
-    }
     const title = ref('');
     const date = ref('');
     const items = ref([]);

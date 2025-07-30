@@ -25,6 +25,14 @@
             </svg>
             <span>Scan Receipt</span>
           </button>
+          
+          <!-- Logo in the center -->
+          <img
+            src="/receipt-cash-logo.png"
+            alt="Receipt.Cash Logo"
+            class="w-8 h-8"
+          />
+          
           <button @click="showSettings = true" class="btn text-gray-700 hover:text-gray-900">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -170,46 +178,17 @@
         </div>
       </div>
       
-      <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-        <div class="space-y-2">
-          <!-- Show payment buttons when payment is not successful -->
-          <template v-if="!paymentSuccess">
-            <button
-              @click="payWithLightning"
-              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500"
-              :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
-            >
-              <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
-                ⏳ Settlement request sent...
-              </span>
-              <span v-else>
-                ⚡️ Pay with Lightning
-              </span>
-            </button>
-            <button
-              @click="payWithCashu"
-              class="w-full py-2 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600"
-              :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
-            >
-              <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
-                ⏳ Settlement request sent...
-              </span>
-              <span v-else>
-                🥜 Pay with Cashu
-              </span>
-            </button>
-          </template>
-          
-          <!-- Show scan receipt button when payment is successful -->
-          <button
-            v-if="paymentSuccess"
-            @click="goToHome"
-            class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg"
-          >
-            📱 Scan a Receipt
-          </button>
-        </div>
-      </div>
+      <PaymentActionButtons
+        :selectedItems="selectedItems"
+        :paymentInProgress="paymentInProgress"
+        :paymentSuccess="paymentSuccess"
+        :currentPaymentType="currentPaymentType"
+        :lightningPaymentLocked="lightningPaymentLocked"
+        :cashuPaymentLocked="cashuPaymentLocked"
+        @pay-lightning="payWithLightning"
+        @pay-cashu="payWithCashu"
+        @scan-receipt="goToHome"
+      />
     </template>
     
     <!-- Payment Modals -->
@@ -250,23 +229,23 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import confetti from 'canvas-confetti';
-import receiptService from '../services/receipt';
-import settlementService from '../services/settlement';
-import nostrService from '../services/nostr';
+import settlementService from '../services/flows/outgoing/settlement';
+import nostrService from '../services/flows/shared/nostr';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import Notification from '../components/Notification.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
-import { showNotification, useNotification } from '../utils/notification';
-import { formatSats, convertFromSats } from '../utils/pricing';
-import paymentService from '../services/payment';
-import cashuService from '../services/cashu';
-import cashuWalletManager from '../services/cashuWalletManager';
+import PaymentActionButtons from '../components/PaymentActionButtons.vue';
+import { showNotification, useNotification } from '../services/notificationService';
+import { formatSats, convertFromSats, getDevPercentageEmoji, formatDevPercentage } from '../utils/pricingUtils';
+import btcPriceService from '../services/btcPriceService';
+import cashuService from '../services/flows/shared/cashuService';
+import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { saveMintQuote } from '../utils/storage';
+import { saveMintQuote } from '../services/storageService';
 
 export default {
   name: 'SettlementView',
@@ -275,7 +254,8 @@ export default {
     LightningPaymentModal,
     Notification,
     SettingsMenu,
-    CurrencySelector
+    CurrencySelector,
+    PaymentActionButtons
   },
   props: {
     eventId: {
@@ -368,12 +348,9 @@ export default {
     });
 
     const selectedSubtotal = computed(() => {
-      return paymentService.calculateSelectedSubtotal(selectedItems.value);
+      return selectedItems.value.filter(item => item.selectedQuantity > 0)
+        .reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
     });
-
-    const formatPrice = (amount) => {
-      return paymentService.formatPrice(amount, currency.value);
-    };
 
     const selectAllItems = () => {
       const allUnsettled = items.value.filter(item => !item.settled);
@@ -411,6 +388,48 @@ export default {
         items.value[index].selectedQuantity--;
       }
     };
+
+
+/**
+ * Fetches a receipt from the Nostr network
+ * @param {String} eventId - The event ID of the receipt
+ * @param {String} decryptionKey - The key to decrypt the receipt
+ * @returns {Promise<Object>} The receipt data
+ */
+const fetchReceipt = async (eventId, decryptionKey) => {
+  if (!eventId) {
+    throw new Error('Invalid event ID');
+  }
+
+  if (!decryptionKey) {
+    throw new Error('Missing decryption key');
+  }
+  
+  try {
+    // Fetch receipt data from Nostr network
+    const receiptData = await nostrService.fetchReceiptEvent(eventId, decryptionKey);
+    
+    // Fetch current BTC price in the receipt's currency
+    const btcPrice = await btcPriceService.fetchBtcPrice(receiptData.currency);
+    
+    // Prepare receipt data with additional fields for UI
+    const receipt = {
+      ...receiptData,
+      btcPrice,
+      // Add UI-specific fields to items
+      items: receiptData.items.map(item => ({
+        ...item,
+        selectedQuantity: 0,
+        settled: false
+      }))
+    };
+    
+    return receipt;
+  } catch (error) {
+    console.error('Error fetching receipt:', error);
+    throw error;
+  }
+};
     
     // Fetch receipt data from service
     const fetchReceiptData = async () => {
@@ -418,7 +437,7 @@ export default {
         loading.value = true;
         
         // Use receipt service to fetch data
-        const receiptData = await receiptService.fetchReceipt(
+        const receiptData = await fetchReceipt(
           props.eventId,
           props.decryptionKey
         );
@@ -450,7 +469,7 @@ export default {
 
         // Fetch current BTC price for the selected currency
         try {
-          currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+          currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
         } catch (error) {
           console.error('Error fetching current BTC price:', error);
           // Fall back to receipt's stored BTC price
@@ -477,7 +496,7 @@ export default {
     const onCurrencyChange = async () => {
       try {
         // Fetch new BTC price for the selected currency
-        currentBtcPrice.value = await paymentService.fetchBtcPrice(selectedCurrency.value);
+        currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
         console.error('Error fetching BTC price for new currency:', error);
         showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
@@ -987,7 +1006,6 @@ export default {
       payWithLightning: payWithLightningReversed,
       payWithCashu: payWithCashuReversed,
       selectAllItems,
-      formatPrice,
       lightningInvoice,
       showLightningModal,
       showCashuModal,
