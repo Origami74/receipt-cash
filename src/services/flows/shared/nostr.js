@@ -1,7 +1,7 @@
 import NDK, { NDKEvent, NDKPrivateKeySigner, NDKRelay, NDKRelayAuthPolicies, NDKUser, giftWrap } from '@nostr-dev-kit/ndk';
 import { generateSecretKey, getPublicKey, nip44, nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { DEFAULT_RELAYS } from '../../nostr/constants';
+import { DEFAULT_RELAYS, KIND_RECEIPT } from '../../nostr/constants';
 
 // Initialize NDK with default relays
 const ndk = new NDK({
@@ -117,7 +117,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     
     // Create the Nostr event
     const receiptEvent = new NDKEvent(ndk);
-    receiptEvent.kind = 9567;
+    receiptEvent.kind = KIND_RECEIPT;
     receiptEvent.content = encryptedContent;
     receiptEvent.pubkey = receiptPublicKey; // Use receipt-specific public key
     receiptEvent.created_at = Math.floor(Date.now() / 1000); // Set current timestamp
@@ -156,7 +156,7 @@ const fetchReceiptEvent = async (eventId, encryptionKey) => {
   try {
     const filter = {
       ids: [eventId],
-      kinds: [9567]
+      kinds: [KIND_RECEIPT]
     };
     
     const events = await ndk.fetchEvents(filter);

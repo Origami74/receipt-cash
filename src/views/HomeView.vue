@@ -63,9 +63,9 @@ import ReceiptPreview from '../components/ReceiptPreview.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
-import CameraControls from '../components/CameraControls.vue';
-import CameraPermissionOverlay from '../components/CameraPermissionOverlay.vue';
-import CameraQuickNav from '../components/CameraQuickNav.vue';
+import CameraControls from '../components/cameraView/CameraControls.vue';
+import CameraPermissionOverlay from '../components/cameraView/CameraPermissionOverlay.vue';
+import CameraQuickNav from '../components/cameraView/CameraQuickNav.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/aiService';
 

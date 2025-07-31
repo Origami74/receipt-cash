@@ -2,6 +2,7 @@ import nostrService from '../shared/nostr';
 import payerMonitor from './payerMonitor';
 import receiptKeyManager from '../../keyManagementService';
 import { showNotification } from '../../notificationService';
+import { KIND_RECEIPT } from '../../nostr/constants';
 
 /**
  * Background service that manages receipt monitoring initialization
@@ -73,7 +74,7 @@ class ReceiptMonitoringService {
       
       // Subscribe to receipt events (kind 9567) for our stored receipts
       const receiptFilter = {
-        kinds: [9567],
+        kinds: [KIND_RECEIPT],
         ids: receiptEventIds
       };
 

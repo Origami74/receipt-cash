@@ -52,19 +52,9 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import receiptKeyManager from '../services/keyManagementService.js';
-import nostrService from '../services/flows/shared/nostr.js';
-import { Buffer } from 'buffer';
-import { SimpleSigner } from 'applesauce-signers';
-import { globalEventStore, globalPool } from '../services/nostr/applesauce';
-import { onlyEvents } from 'applesauce-relay';
-import { mapEventsToStore } from 'applesauce-core';
+import { useReceiptSubscription } from '../composables/useReceiptSubscription.js';
 import ReceiptItem from '../components/ReceiptItem.vue';
-import { safeParseReceiptContent } from '../parsing/receiptparser.js';
-import { nip44 } from 'nostr-tools';
-import { DEFAULT_RELAYS } from '../services/nostr/constants.js';
 
 export default {
   name: 'ReceiptHistoryView',
@@ -73,116 +63,26 @@ export default {
   },
   setup() {
     const router = useRouter();
-    const loading = ref(true);
-    const error = ref(null);
-    const receiptEvents = ref([]);
 
     const goBack = () => {
       router.push('/');
     };
 
-    const receiptIdentities = [];
-
-    const handleReceiptEvent = async (receiptEvent) => {
-      console.log("receiptEvent", receiptEvent);
-      
-      try {
-        // Find the matching signer for this event's author
-        let matchingIdentity = null;
-        for (const identity of receiptIdentities) {
-          const signerPubkey = await identity.receiptSigner.getPublicKey();
-          if (signerPubkey === receiptEvent.pubkey) {
-            matchingIdentity = identity;
-            break;
-          }
-        }
-        
-        if (!matchingIdentity) {
-          console.warn("No matching identity found for event author:", receiptEvent.pubkey);
-          return;
-        }
-        
-        // Get the encryption private key as Uint8Array
-        const contentDecryptionKey = Uint8Array.from(Buffer.from(matchingIdentity.contentSigner.key));
-        
-        // Decrypt using symmetric approach (not two-party)
-        //  TODO: remove dpeendency on nostr tools and do this with AppleSauce (Threw invalid MAC eerors)
-        const decryptedContent = await nip44.decrypt(receiptEvent.content, contentDecryptionKey);
-        
-        console.log("Decrypted content:", decryptedContent);
-        
-        // Validate and parse the decrypted receipt content
-        const parsedContent = safeParseReceiptContent(decryptedContent);
-        
-        if (parsedContent) {
-          // Save as tuple: [event, parsedContent, contentDecryptionKey]
-          receiptEvents.value.push([receiptEvent, parsedContent, contentDecryptionKey]);
-        } else {
-          console.warn("Invalid receipt content after decryption, skipping event:", receiptEvent.id);
-        }
-        
-      } catch (error) {
-        console.error("Error processing event:", error, "Event ID:", receiptEvent.id);
+    // Use the shared receipt subscription composable
+    const {
+      loading,
+      error,
+      receiptEvents,
+      restartSubscription
+    } = useReceiptSubscription({
+      autoStart: true,
+      onReceiptProcessed: (receiptData) => {
+        console.log('New receipt processed in history view:', receiptData[0].id);
       }
-    };
-
-    const loadReceipts = async () => {
-      try {
-        loading.value = true;
-        error.value = null;
-        
-        // Get all stored receipt keys
-        const allKeys = receiptKeyManager.getAllReceiptKeys();
-
-        // Create a list with signers and encryption keys for each entry
-        for (const [eventId, keyData] of allKeys) {
-          try {
-            // Convert private key hex to Uint8Array for SimpleSigner
-            const privateKeyBytes = Uint8Array.from(Buffer.from(keyData.receiptPrivateKey, 'hex'));
-            const receiptSigner = new SimpleSigner(privateKeyBytes);
-
-            const contentPrivateKeyBytes = Uint8Array.from(Buffer.from(keyData.encryptionPrivateKey, 'hex'));
-            const contentSigner = new SimpleSigner(contentPrivateKeyBytes);
-            
-            receiptIdentities.push({
-              eventId,
-              receiptSigner: receiptSigner,
-              contentSigner: contentSigner
-            });
-          } catch (error) {
-            console.error(`Error processing keys for event ${eventId}:`, error);
-            // Continue with other keys even if one fails
-          }
-        }
-        
-        console.log('receiptIdentities:', receiptIdentities);
-
-
-        // Get all receipt pubkeys for subscription
-        const receiptPubkeys = await Promise.all(receiptIdentities.flatMap(async id => await id.receiptSigner.getPublicKey()))
-
-        console.log(receiptPubkeys)
-
-        globalPool
-          .subscription(DEFAULT_RELAYS, {
-            kinds: [9567],
-            authors: receiptPubkeys,
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleReceiptEvent);
-        
-      } catch (err) {
-        console.error('Error loading receipts:', err);
-        error.value = 'Failed to load receipts. Please try again.';
-      } finally {
-        loading.value = false;
-      }
-    };
-
-
-    onMounted(() => {
-      loadReceipts();
     });
+
+    // Alias for the retry button
+    const loadReceipts = restartSubscription;
 
     return {
       loading,

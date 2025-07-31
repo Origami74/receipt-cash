@@ -19,7 +19,7 @@ const routes = [
   {
     path: '/activity',
     name: 'Activity',
-    component: () => import('../views/ReceiptHistoryView.vue')
+    component: () => import('../views/ActivityView.vue')
   },
   {
     path: '/receipt/:eventId/:decryptionKey',
