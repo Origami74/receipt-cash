@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
 import { globalEventStore, globalPool } from '../services/nostr/applesauce';
@@ -16,9 +16,11 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../services/nostr/constants.js'
 export function useSettlementSubscription(options = {}) {
   const {
     autoStart = true,
+    receiptPubkeys = ref([]), // Reactive pubkeys from receipt subscription
     filterPubkeys = null, // Optional filter for specific pubkeys
     onSettlementProcessed = null, // Callback for when a settlement is processed
     onPendingSettlement = null, // Callback for pending settlements
+    onAnySettlement = null, // Callback for any settlement (for tracking purposes)
     enableBackgroundProcessing = false // For activity view background processing
   } = options;
 
@@ -38,24 +40,38 @@ export function useSettlementSubscription(options = {}) {
    */
   const handleSettlementEvent = async (settlementEvent) => {
     console.log("Processing settlement event:", settlementEvent.id);
+    console.log("Settlement event author (payer):", settlementEvent.pubkey);
+    console.log("Settlement event p-tags:", settlementEvent.tags.filter(tag => tag[0] === 'p'));
     
     if (enableBackgroundProcessing) {
       processingCount.value++;
     }
     
     try {
-      // Find the matching signer for this event's author
+      // Find the matching identity based on the #p tag (recipient), not the author (payer)
       let matchingIdentity = null;
-      for (const identity of receiptIdentities) {
-        const signerPubkey = await identity.receiptSigner.getPublicKey();
-        if (signerPubkey === settlementEvent.pubkey) {
-          matchingIdentity = identity;
-          break;
+      const pTags = settlementEvent.tags.filter(tag => tag[0] === 'p');
+      
+      for (const pTag of pTags) {
+        const targetPubkey = pTag[1]; // The pubkey this settlement is addressed to
+        console.log("Checking if we have identity for recipient pubkey:", targetPubkey);
+        
+        for (const identity of receiptIdentities) {
+          const signerPubkey = await identity.receiptSigner.getPublicKey();
+          console.log("Comparing with our identity pubkey:", signerPubkey);
+          if (signerPubkey === targetPubkey) {
+            matchingIdentity = identity;
+            console.log("Found matching identity for recipient:", targetPubkey);
+            break;
+          }
         }
+        
+        if (matchingIdentity) break;
       }
       
       if (!matchingIdentity) {
-        console.warn("No matching identity found for settlement event author:", settlementEvent.pubkey);
+        console.warn("No matching identity found for settlement recipients. Our identities:",
+          await Promise.all(receiptIdentities.map(async i => await i.receiptSigner.getPublicKey())));
         return;
       }
       
@@ -76,24 +92,31 @@ export function useSettlementSubscription(options = {}) {
         // Add to settlements array
         settlementEvents.value.push(settlementData);
         
+        // Create settlement object for callbacks
+        const settlement = {
+          id: settlementEvent.id,
+          receiptId: parsedContent.receiptId,
+          amount: parsedContent.amount,
+          currency: parsedContent.currency || 'sats',
+          timestamp: new Date(settlementEvent.created_at * 1000),
+          status: parsedContent.status || 'pending',
+          paymentMethod: parsedContent.paymentMethod || 'lightning',
+          merchant: parsedContent.merchant || 'Unknown',
+          confirmed: parsedContent.confirmed || parsedContent.status === 'confirmed'
+        };
+        
+        // Call callback for any settlement (for tracking purposes)
+        if (onAnySettlement) {
+          onAnySettlement(settlement);
+        }
+        
         // Check if this settlement is still pending (no confirmation)
-        if (!parsedContent.confirmed && parsedContent.status !== 'confirmed') {
-          const pendingSettlement = {
-            id: settlementEvent.id,
-            receiptId: parsedContent.receiptId,
-            amount: parsedContent.amount,
-            currency: parsedContent.currency || 'sats',
-            timestamp: new Date(settlementEvent.created_at * 1000),
-            status: parsedContent.status || 'pending',
-            paymentMethod: parsedContent.paymentMethod || 'lightning',
-            merchant: parsedContent.merchant || 'Unknown'
-          };
-          
-          pendingSettlements.value.push(pendingSettlement);
+        if (!settlement.confirmed) {
+          pendingSettlements.value.push(settlement);
           
           // Call pending settlement callback
           if (onPendingSettlement) {
-            onPendingSettlement(pendingSettlement);
+            onPendingSettlement(settlement);
           }
         }
         
@@ -158,43 +181,47 @@ export function useSettlementSubscription(options = {}) {
   };
 
   /**
-   * Start the settlement subscription
+   * Start the settlement subscription with given pubkeys
    */
-  const startSubscription = async () => {
+  const startSubscription = async (pubkeys = receiptPubkeys.value) => {
     try {
       loading.value = true;
       error.value = null;
       
-      // Load receipt identities
-      await loadReceiptIdentities();
+      console.log('Settlement subscription - received pubkeys:', pubkeys);
+      console.log('Settlement subscription - receiptPubkeys.value:', receiptPubkeys.value);
       
-      if (receiptIdentities.length === 0) {
-        console.log('No receipt identities found, skipping settlement subscription');
+      if (!pubkeys || pubkeys.length === 0) {
+        console.log('No pubkeys available for settlement subscription');
         return;
       }
 
-      // Get all receipt pubkeys for subscription
-      let receiptPubkeys = await Promise.all(
-        receiptIdentities.map(async id => await id.receiptSigner.getPublicKey())
-      );
-      
       // Apply pubkey filter if provided
+      let filteredPubkeys = pubkeys;
       if (filterPubkeys) {
-        receiptPubkeys = receiptPubkeys.filter(pubkey => filterPubkeys.includes(pubkey));
+        filteredPubkeys = pubkeys.filter(pubkey => filterPubkeys.includes(pubkey));
+        console.log('Applied pubkey filter, result:', filteredPubkeys);
       }
       
-      if (receiptPubkeys.length === 0) {
+      if (filteredPubkeys.length === 0) {
         console.log('No matching pubkeys found after filtering for settlements');
         return;
       }
 
-      console.log('Starting settlement subscription for pubkeys:', receiptPubkeys);
+      console.log('Starting settlement subscription for pubkeys:', filteredPubkeys);
+      console.log('Settlement subscription filter:', {
+        kinds: [KIND_SETTLEMENT],
+        "#p": filteredPubkeys,
+      });
+
+      // Load receipt identities for decryption (still needed for processing)
+      await loadReceiptIdentities();
 
       // Create settlement subscription
       currentSubscription = globalPool
         .subscription(DEFAULT_RELAYS, {
           kinds: [KIND_SETTLEMENT],
-          authors: receiptPubkeys,
+          "#p": filteredPubkeys,
         })
         .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
         .subscribe(handleSettlementEvent);
@@ -221,11 +248,11 @@ export function useSettlementSubscription(options = {}) {
   /**
    * Restart the subscription
    */
-  const restartSubscription = async () => {
+  const restartSubscription = async (pubkeys = receiptPubkeys.value) => {
     stopSubscription();
     settlementEvents.value = [];
     pendingSettlements.value = [];
-    await startSubscription();
+    await startSubscription(pubkeys);
   };
 
   /**
@@ -275,8 +302,20 @@ export function useSettlementSubscription(options = {}) {
     return processingCount.value > 0;
   };
 
-  // Auto-start if enabled
-  if (autoStart) {
+  // Watch for pubkey changes and restart subscription
+  watch(receiptPubkeys, (newPubkeys, oldPubkeys) => {
+    console.log('Settlement subscription - pubkeys changed:', {
+      old: oldPubkeys,
+      new: newPubkeys
+    });
+    if (newPubkeys && newPubkeys.length > 0) {
+      console.log('Receipt pubkeys changed, restarting settlement subscription');
+      restartSubscription(newPubkeys);
+    }
+  }, { immediate: false });
+
+  // Auto-start if enabled and pubkeys are available
+  if (autoStart && receiptPubkeys.value.length > 0) {
     startSubscription();
   }
 

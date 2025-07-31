@@ -10,7 +10,7 @@ import debugLogger from './services/debugService';
 
 // Initialize Nostr
 nostrService.connect();
-receiptMonitoringService.initialize();
+// receiptMonitoringService.initialize();
 
 // Start cleanup services
 

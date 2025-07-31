@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
 import { globalEventStore, globalPool } from '../services/nostr/applesauce';
@@ -26,7 +26,8 @@ export function useReceiptSubscription(options = {}) {
   const error = ref(null);
   const receiptEvents = ref([]);
   const processingCount = ref(0); // For background processing tracking
-  const receiptIdentities = [];
+  const receiptIdentities = ref([]); // Make this reactive
+  const receiptPubkeys = ref([]); // Reactive pubkeys for other composables
   
   // Subscription management
   let currentSubscription = null;
@@ -44,7 +45,7 @@ export function useReceiptSubscription(options = {}) {
     try {
       // Find the matching signer for this event's author
       let matchingIdentity = null;
-      for (const identity of receiptIdentities) {
+      for (const identity of receiptIdentities.value) {
         const signerPubkey = await identity.receiptSigner.getPublicKey();
         if (signerPubkey === receiptEvent.pubkey) {
           matchingIdentity = identity;
@@ -99,12 +100,16 @@ export function useReceiptSubscription(options = {}) {
   const loadReceiptIdentities = async () => {
     try {
       // Clear existing identities
-      receiptIdentities.length = 0;
+      receiptIdentities.value = [];
+      receiptPubkeys.value = [];
       
       // Get all stored receipt keys
       const allKeys = receiptKeyManager.getAllReceiptKeys();
 
       // Create a list with signers and encryption keys for each entry
+      const identities = [];
+      const pubkeys = [];
+      
       for (const [eventId, keyData] of allKeys) {
         try {
           // Convert private key hex to Uint8Array for SimpleSigner
@@ -114,19 +119,32 @@ export function useReceiptSubscription(options = {}) {
           const contentPrivateKeyBytes = Uint8Array.from(Buffer.from(keyData.encryptionPrivateKey, 'hex'));
           const contentSigner = new SimpleSigner(contentPrivateKeyBytes);
           
-          receiptIdentities.push({
+          const identity = {
             eventId,
             receiptSigner: receiptSigner,
             contentSigner: contentSigner
-          });
+          };
+          
+          identities.push(identity);
+          
+          // Get pubkey and add to reactive array
+          const pubkey = await receiptSigner.getPublicKey();
+          pubkeys.push(pubkey);
+          
         } catch (error) {
           console.error(`Error processing keys for event ${eventId}:`, error);
           // Continue with other keys even if one fails
         }
       }
       
-      console.log('Receipt identities loaded:', receiptIdentities.length);
-      return receiptIdentities;
+      // Update reactive state
+      receiptIdentities.value = identities;
+      receiptPubkeys.value = pubkeys;
+      
+      console.log('Receipt identities loaded:', receiptIdentities.value.length);
+      console.log('Receipt pubkeys:', receiptPubkeys.value);
+      
+      return receiptIdentities.value;
       
     } catch (error) {
       console.error('Error loading receipt identities:', error);
@@ -145,33 +163,31 @@ export function useReceiptSubscription(options = {}) {
       // Load receipt identities
       await loadReceiptIdentities();
       
-      if (receiptIdentities.length === 0) {
+      if (receiptIdentities.value.length === 0) {
         console.log('No receipt identities found, skipping subscription');
         return;
       }
 
-      // Get all receipt pubkeys for subscription
-      let receiptPubkeys = await Promise.all(
-        receiptIdentities.map(async id => await id.receiptSigner.getPublicKey())
-      );
+      // Use the reactive pubkeys
+      let filteredPubkeys = receiptPubkeys.value;
       
       // Apply pubkey filter if provided
       if (filterPubkeys) {
-        receiptPubkeys = receiptPubkeys.filter(pubkey => filterPubkeys.includes(pubkey));
+        filteredPubkeys = filteredPubkeys.filter(pubkey => filterPubkeys.includes(pubkey));
       }
       
-      if (receiptPubkeys.length === 0) {
+      if (filteredPubkeys.length === 0) {
         console.log('No matching pubkeys found after filtering');
         return;
       }
 
-      console.log('Starting subscription for pubkeys:', receiptPubkeys);
+      console.log('Starting subscription for pubkeys:', filteredPubkeys);
 
       // Create subscription
       currentSubscription = globalPool
         .subscription(DEFAULT_RELAYS, {
           kinds: [KIND_RECEIPT],
-          authors: receiptPubkeys,
+          authors: filteredPubkeys,
         })
         .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
         .subscribe(handleReceiptEvent);
@@ -234,6 +250,7 @@ export function useReceiptSubscription(options = {}) {
     error,
     receiptEvents,
     processingCount,
+    receiptPubkeys, // Expose reactive pubkeys for other composables
     
     // Methods
     startSubscription,

@@ -16,7 +16,7 @@
 
     <!-- Status Cards Section -->
     <div class="bg-white border-b p-4">
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4 mb-4">
         <!-- Active Receipts Card -->
         <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200"
              :class="{ 'animate-pulse': hasNewReceipt }">
@@ -34,7 +34,31 @@
           </div>
         </div>
 
-        <!-- Outgoing Payments Card -->
+        <!-- Active Settlements Card -->
+        <div class="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-medium text-purple-900">Active Settlements</h3>
+              <p class="text-2xl font-bold text-purple-700">{{ settlementCount() }}</p>
+              <p class="text-xs text-purple-600">
+                <span class="font-medium">{{ confirmedSettlements }}</span> confirmed •
+                <span class="font-medium">{{ unconfirmedSettlements }}</span> pending
+              </p>
+            </div>
+            <div class="w-10 h-10 bg-purple-200 rounded-full flex items-center justify-center">
+              <svg v-if="unconfirmedSettlements > 0" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-700 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outgoing Payments Card (Full Width) -->
+      <div class="grid grid-cols-1 gap-4">
         <div class="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
           <div class="flex items-center justify-between">
             <div>
@@ -201,6 +225,7 @@ import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useReceiptSubscription } from '../composables/useReceiptSubscription.js';
 import { useSettlementSubscription } from '../composables/useSettlementSubscription.js';
+import { useSettlementConfirmation } from '../composables/useSettlementConfirmation.js';
 
 export default {
   name: 'ActivityView',
@@ -219,6 +244,7 @@ export default {
       error,
       receiptEvents,
       processingCount: receiptProcessingCount,
+      receiptPubkeys, // Get reactive pubkeys to share with other composables
       restartSubscription: restartReceiptSubscription
     } = useReceiptSubscription({
       autoStart: true,
@@ -242,16 +268,23 @@ export default {
       }
     });
 
-    // Use settlement subscription for tracking outgoing payments
+    // Use settlement subscription for tracking outgoing payments - connects to receipt pubkeys
     const {
+      settlementEvents,
       pendingSettlements,
       processingCount: settlementProcessingCount,
-      restartSubscription: restartSettlementSubscription
+      restartSubscription: restartSettlementSubscription,
+      settlementCount
     } = useSettlementSubscription({
-      autoStart: true,
+      receiptPubkeys, // Pass reactive pubkeys from receipt subscription
+      autoStart: false, // Let the watcher handle starting when pubkeys are available
       enableBackgroundProcessing: true,
+      onAnySettlement: (settlement) => {
+        // Track ALL settlements in the confirmation system (both pending and confirmed)
+        trackSettlement(settlement.id, settlement);
+      },
       onPendingSettlement: (settlement) => {
-        // Add to activity feed
+        // Add to activity feed for pending settlements
         addToActivityFeed({
           id: `settlement_${settlement.id}`,
           type: 'processing',
@@ -275,6 +308,28 @@ export default {
             settlementId: settlementEvent.id
           });
         }
+      }
+    });
+
+    // Use settlement confirmation composable for tracking confirmations
+    const {
+      totalSettlements,
+      confirmedSettlements,
+      unconfirmedSettlements,
+      trackSettlement,
+      restartSubscription: restartConfirmationSubscription
+    } = useSettlementConfirmation({
+      autoStart: true,
+      onConfirmationReceived: (confirmationData) => {
+        // Add to activity feed
+        addToActivityFeed({
+          id: `confirmation_${confirmationData.confirmationEvent.id}`,
+          type: 'settlement_confirmed',
+          title: 'Settlement Confirmed',
+          description: `Settlement ${confirmationData.settlementId} has been confirmed`,
+          timestamp: confirmationData.timestamp,
+          settlementId: confirmationData.settlementId
+        });
       }
     });
 
@@ -326,6 +381,12 @@ export default {
     const restartMonitoring = async () => {
       await restartReceiptSubscription();
       await restartSettlementSubscription();
+      await restartConfirmationSubscription();
+    };
+
+    // Track settlements when they are created
+    const trackNewSettlement = (settlementData) => {
+      trackSettlement(settlementData.id, settlementData);
     };
 
     return {
@@ -339,6 +400,11 @@ export default {
       activityFeed,
       pendingSettlements,
       pendingSettlementsCount,
+      settlementEvents, // Expose settlement events for debugging
+      settlementCount, // Expose settlement count function
+      totalSettlements,
+      confirmedSettlements,
+      unconfirmedSettlements,
       goBack,
       restartMonitoring,
       formatTime
