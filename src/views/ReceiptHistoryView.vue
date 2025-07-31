@@ -53,7 +53,7 @@
 
 <script>
 import { useRouter } from 'vue-router';
-import { useReceiptSubscription } from '../composables/useReceiptSubscription.js';
+import { getSharedReceiptSubscription } from '../services/sharedComposables.js';
 import ReceiptItem from '../components/ReceiptItem.vue';
 
 export default {
@@ -68,18 +68,13 @@ export default {
       router.push('/');
     };
 
-    // Use the shared receipt subscription composable
+    // Use the shared receipt subscription instance
     const {
       loading,
       error,
       receiptEvents,
       restartSubscription
-    } = useReceiptSubscription({
-      autoStart: true,
-      onReceiptProcessed: (receiptData) => {
-        console.log('New receipt processed in history view:', receiptData[0].id);
-      }
-    });
+    } = getSharedReceiptSubscription();
 
     // Alias for the retry button
     const loadReceipts = restartSubscription;

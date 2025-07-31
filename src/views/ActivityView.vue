@@ -223,9 +223,7 @@
 <script>
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useReceiptSubscription } from '../composables/useReceiptSubscription.js';
-import { useSettlementSubscription } from '../composables/useSettlementSubscription.js';
-import { useSettlementConfirmation } from '../composables/useSettlementConfirmation.js';
+import { getSharedReceiptSubscription, getSharedSettlementSubscription, getSharedSettlementConfirmation } from '../services/sharedComposables.js';
 
 export default {
   name: 'ActivityView',
@@ -238,100 +236,35 @@ export default {
       router.push('/');
     };
 
-    // Use the shared receipt subscription composable with background processing enabled
+    // Get shared composable instances (these will reuse existing instances)
+    const receiptSub = getSharedReceiptSubscription();
+    const settlementSub = getSharedSettlementSubscription();
+    const confirmationSub = getSharedSettlementConfirmation();
+
+    // Extract the reactive properties we need
     const {
       loading,
       error,
       receiptEvents,
       processingCount: receiptProcessingCount,
-      receiptPubkeys, // Get reactive pubkeys to share with other composables
       restartSubscription: restartReceiptSubscription
-    } = useReceiptSubscription({
-      autoStart: true,
-      enableBackgroundProcessing: true,
-      onReceiptProcessed: (receiptData) => {
-        const [receiptEvent, parsedContent] = receiptData;
-        
-        // Flash animation for new receipts
-        hasNewReceipt.value = true;
-        setTimeout(() => { hasNewReceipt.value = false; }, 2000);
-        
-        // Add to activity feed
-        addToActivityFeed({
-          id: `receipt_${receiptEvent.id}`,
-          type: 'receipt_created',
-          title: 'New Receipt Monitored',
-          description: `Receipt "${parsedContent.merchant || 'Unknown'}" is now being monitored for payments`,
-          timestamp: new Date(),
-          receiptId: receiptEvent.id
-        });
-      }
-    });
+    } = receiptSub;
 
-    // Use settlement subscription for tracking outgoing payments - connects to receipt pubkeys
     const {
       settlementEvents,
       pendingSettlements,
       processingCount: settlementProcessingCount,
       restartSubscription: restartSettlementSubscription,
       settlementCount
-    } = useSettlementSubscription({
-      receiptPubkeys, // Pass reactive pubkeys from receipt subscription
-      autoStart: false, // Let the watcher handle starting when pubkeys are available
-      enableBackgroundProcessing: true,
-      onAnySettlement: (settlement) => {
-        // Track ALL settlements in the confirmation system (both pending and confirmed)
-        trackSettlement(settlement.id, settlement);
-      },
-      onPendingSettlement: (settlement) => {
-        // Add to activity feed for pending settlements
-        addToActivityFeed({
-          id: `settlement_${settlement.id}`,
-          type: 'processing',
-          title: 'Settlement Initiated',
-          description: `Payment of ${settlement.amount} ${settlement.currency} to ${settlement.merchant} is being processed`,
-          timestamp: settlement.timestamp,
-          settlementId: settlement.id
-        });
-      },
-      onSettlementProcessed: (settlementData) => {
-        const [settlementEvent, parsedContent] = settlementData;
-        
-        if (parsedContent.confirmed || parsedContent.status === 'confirmed') {
-          // Add confirmation to activity feed
-          addToActivityFeed({
-            id: `settlement_confirmed_${settlementEvent.id}`,
-            type: 'payment_received',
-            title: 'Settlement Confirmed',
-            description: `Payment of ${parsedContent.amount} ${parsedContent.currency || 'sats'} has been confirmed`,
-            timestamp: new Date(),
-            settlementId: settlementEvent.id
-          });
-        }
-      }
-    });
+    } = settlementSub;
 
-    // Use settlement confirmation composable for tracking confirmations
     const {
       totalSettlements,
       confirmedSettlements,
       unconfirmedSettlements,
       trackSettlement,
       restartSubscription: restartConfirmationSubscription
-    } = useSettlementConfirmation({
-      autoStart: true,
-      onConfirmationReceived: (confirmationData) => {
-        // Add to activity feed
-        addToActivityFeed({
-          id: `confirmation_${confirmationData.confirmationEvent.id}`,
-          type: 'settlement_confirmed',
-          title: 'Settlement Confirmed',
-          description: `Settlement ${confirmationData.settlementId} has been confirmed`,
-          timestamp: confirmationData.timestamp,
-          settlementId: confirmationData.settlementId
-        });
-      }
-    });
+    } = confirmationSub;
 
     // Computed values
     const pendingSettlementsCount = computed(() => pendingSettlements.value.length);
