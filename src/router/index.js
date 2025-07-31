@@ -7,8 +7,18 @@ const routes = [
     component: () => import('../views/HomeView.vue')
   },
   {
-    path: '/history',
-    name: 'ReceiptHistory',
+    path: '/my-receipts',
+    name: 'MyReceipts',
+    component: () => import('../views/ReceiptHistoryView.vue')
+  },
+  {
+    path: '/paid-receipts',
+    name: 'PaidReceipts',
+    component: () => import('../views/ReceiptHistoryView.vue')
+  },
+  {
+    path: '/activity',
+    name: 'Activity',
     component: () => import('../views/ReceiptHistoryView.vue')
   },
   {
@@ -22,6 +32,11 @@ const routes = [
     name: 'PaymentView',
     component: () => import('../views/PaymentView.vue'),
     props: true
+  },
+  {
+    path: '/settlement',
+    name: 'Settlement',
+    component: () => import('../views/SettlementView.vue')
   }
 ];
 

@@ -31,11 +31,16 @@
           <camera-controls
             @toggle-flash="toggleFlash"
             @capture-receipt="captureReceipt"
-            @toggle-settings="toggleSettings"
+            @toggle-settings="$emit('toggle-settings')"
             @image-uploaded="handleImageUpload"
-            @view-history="viewHistory"
           />
         </div>
+        
+        <!-- Camera Quick Nav outside of camera-overlay for proper z-index -->
+        <camera-quick-nav
+          @toggle-activity="handleToggleActivity"
+          @toggle-settings="$emit('toggle-settings')"
+        />
       </div>
       
       <receipt-preview
@@ -47,10 +52,6 @@
     
     <Spinner v-if="isProcessing" message="Processing receipt..." />
     
-    <SettingsMenu
-      :is-open="isSettingsOpen"
-      @close="isSettingsOpen = false"
-    />
   </div>
 </template>
 
@@ -62,22 +63,23 @@ import ReceiptPreview from '../components/ReceiptPreview.vue';
 import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
-import SettingsMenu from '../components/SettingsMenu.vue';
 import CameraControls from '../components/CameraControls.vue';
 import CameraPermissionOverlay from '../components/CameraPermissionOverlay.vue';
+import CameraQuickNav from '../components/CameraQuickNav.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/aiService';
 
 export default {
   name: 'HomeView',
+  emits: ['toggle-settings'],
   components: {
     ReceiptPreview,
     SettlementView,
     Notification,
     Spinner,
-    SettingsMenu,
     CameraControls,
-    CameraPermissionOverlay
+    CameraPermissionOverlay,
+    CameraQuickNav
   },
   setup() {
     const route = useRoute();
@@ -89,7 +91,6 @@ export default {
     const receiptId = computed(() => route.query.receipt);
     const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
-    const isSettingsOpen = ref(false);
     const cameraInitializing = ref(false);
     
     // Use the global notification system
@@ -257,8 +258,9 @@ export default {
       }
     };
     
-    const toggleSettings = () => {
-      isSettingsOpen.value = !isSettingsOpen.value;
+    const handleToggleActivity = () => {
+      console.log('Activity toggle requested from camera quick nav');
+      // TODO: Implement activity functionality
     };
 
     // Watch for changes to receiptId
@@ -333,10 +335,6 @@ export default {
       }
     };
 
-    const viewHistory = () => {
-      // Navigate to the historical receipts view
-      router.push('/history');
-    };
 
     return {
       videoElement,
@@ -347,15 +345,13 @@ export default {
       receiptId,
       decryptionKey,
       isProcessing,
-      isSettingsOpen,
       cameraInitializing,
       toggleFlash,
       captureReceipt,
       resetCapture,
-      toggleSettings,
+      handleToggleActivity,
       handleQrCodeResult,
-      handleImageUpload,
-      viewHistory
+      handleImageUpload
     };
   }
 };

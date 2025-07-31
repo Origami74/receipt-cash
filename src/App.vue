@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full">
+  <div class="h-full flex flex-col">
     <!-- Experimental warning banner -->
     <ExperimentalBanner />
     
@@ -20,16 +20,35 @@
       @submitted="handleReportSubmitted"
     />
     
-    <router-view />
+    <!-- Main content area with conditional bottom padding for tab bar -->
+    <div class="flex-1" :class="{ 'pb-20': shouldShowTabBar }">
+      <router-view @toggle-settings="handleToggleSettings" />
+    </div>
+    
+    <!-- Global Settings Menu -->
+    <SettingsMenu
+      :is-open="isSettingsOpen"
+      @close="isSettingsOpen = false"
+    />
+    
+    <!-- Bottom Tab Bar - hidden on home/camera view -->
+    <BottomTabBar
+      v-if="shouldShowTabBar"
+      @toggle-monitor="handleToggleMonitor"
+      @toggle-settings="handleToggleSettings"
+    />
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { showNotification, useNotification } from './services/notificationService';
 import Notification from './components/Notification.vue';
 import ExperimentalBanner from './components/ExperimentalBanner.vue';
 import ReportModal from './components/ReportModal.vue';
+import BottomTabBar from './components/BottomTabBar.vue';
+import SettingsMenu from './components/SettingsMenu.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
 import { checkForVersionUpdate } from './services/updaterService';
@@ -39,12 +58,21 @@ export default {
   components: {
     Notification,
     ExperimentalBanner,
-    ReportModal
+    ReportModal,
+    BottomTabBar,
+    SettingsMenu
   },
   setup() {
+    const route = useRoute();
     const { notification, clearNotification } = useNotification();
     const showReportModal = ref(false);
     const currentErrorMessage = ref('');
+    const isSettingsOpen = ref(false);
+    
+    // Hide tab bar on home/camera view
+    const shouldShowTabBar = computed(() => {
+      return route.path !== '/';
+    });
     
     // Initialize debug logging by default
     onMounted(async () => {
@@ -87,13 +115,28 @@ export default {
       console.log('Report submitted successfully');
     };
     
+    // Handle monitor toggle from bottom tab bar
+    const handleToggleMonitor = () => {
+      console.log('Monitor toggle requested');
+      // TODO: Implement monitor functionality
+    };
+    
+    // Handle settings toggle from bottom tab bar
+    const handleToggleSettings = () => {
+      isSettingsOpen.value = !isSettingsOpen.value;
+    };
+    
     return {
       notification,
       clearNotification,
       showReportModal,
       currentErrorMessage,
       openReportModal,
-      handleReportSubmitted
+      handleReportSubmitted,
+      shouldShowTabBar,
+      handleToggleMonitor,
+      handleToggleSettings,
+      isSettingsOpen
     };
   }
 }

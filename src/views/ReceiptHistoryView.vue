@@ -9,7 +9,7 @@
           </svg>
           <span>Back</span>
         </button>
-        <h1 class="text-xl font-bold">Receipt History</h1>
+        <h1 class="text-xl font-bold">My Receipts</h1>
         <div class="w-16"></div> <!-- Spacer for center alignment -->
       </div>
     </div>
