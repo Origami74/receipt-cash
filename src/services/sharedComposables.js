@@ -61,9 +61,18 @@ export function getSharedSettlementSubscription() {
 export function getSharedSettlementConfirmation() {
   if (!sharedSettlementConfirmation) {
     console.log('Creating shared settlement confirmation instance');
+    const receiptSub = getSharedReceiptSubscription();
+    
+    console.log('Receipt pubkeys when creating confirmation subscription:', receiptSub.receiptPubkeys.value);
+    
     sharedSettlementConfirmation = useSettlementConfirmation({
-      autoStart: true
+      autoStart: false, // Let the watcher handle starting when pubkeys are available
+      receiptPubkeys: receiptSub.receiptPubkeys // Connect to shared receipt pubkeys
     });
+    
+    console.log('Settlement confirmation subscription created');
+  } else {
+    console.log('Reusing existing settlement confirmation instance');
   }
   return sharedSettlementConfirmation;
 }

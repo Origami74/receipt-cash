@@ -42,11 +42,11 @@
               <p class="text-2xl font-bold text-purple-700">{{ settlementCount() }}</p>
               <p class="text-xs text-purple-600">
                 <span class="font-medium">{{ confirmedSettlements }}</span> confirmed •
-                <span class="font-medium">{{ unconfirmedSettlements }}</span> pending
+                <span class="font-medium">{{ pendingSettlements.length }}</span> pending
               </p>
             </div>
             <div class="w-10 h-10 bg-purple-200 rounded-full flex items-center justify-center">
-              <svg v-if="unconfirmedSettlements > 0" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-700 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg v-if="pendingSettlements.length > 0" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-700 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -147,9 +147,12 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center">
                   <div class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-600 mr-2"></div>
+                  <div class="text-2xl mr-3">
+                    {{ settlement.paymentMethod === 'cashu' ? '🥜' : '⚡️' }}
+                  </div>
                   <div>
-                    <p class="text-sm font-medium text-orange-900">{{ settlement.merchant }}</p>
-                    <p class="text-xs text-orange-700">{{ settlement.amount }} {{ settlement.currency }} • {{ settlement.paymentMethod }}</p>
+                    <p class="text-sm font-medium text-orange-900">No Title</p>
+                    <p class="text-xs text-orange-700">{{ formatSats(calculateSettlementAmount(settlement)) }} sats • {{ settlement.paymentMethod }}</p>
                   </div>
                 </div>
                 <span class="text-xs text-orange-600">{{ formatTime(settlement.timestamp) }}</span>
@@ -224,6 +227,7 @@
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { getSharedReceiptSubscription, getSharedSettlementSubscription, getSharedSettlementConfirmation } from '../services/sharedComposables.js';
+import { formatSats } from '../utils/pricingUtils.js';
 
 export default {
   name: 'ActivityView',
@@ -296,6 +300,18 @@ export default {
       return `${days}d ago`;
     };
 
+    // Calculate settlement amount from settled items (always calculate, never use pre-calculated amount)
+    const calculateSettlementAmount = (settlement) => {
+      // Always calculate from settled items for accuracy
+      if (settlement.settledItems && Array.isArray(settlement.settledItems)) {
+        return settlement.settledItems.reduce((total, item) => {
+          return total + (item.price * item.selectedQuantity);
+        }, 0);
+      }
+      
+      return 0;
+    };
+
     // Add some sample activities on mount for demonstration
     const initializeSampleActivities = () => {
       addToActivityFeed({
@@ -340,7 +356,9 @@ export default {
       unconfirmedSettlements,
       goBack,
       restartMonitoring,
-      formatTime
+      formatTime,
+      calculateSettlementAmount,
+      formatSats
     };
   }
 };

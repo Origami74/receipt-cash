@@ -32,11 +32,6 @@ const routes = [
     name: 'PaymentView',
     component: () => import('../views/PaymentView.vue'),
     props: true
-  },
-  {
-    path: '/settlement',
-    name: 'Settlement',
-    component: () => import('../views/SettlementView.vue')
   }
 ];
 

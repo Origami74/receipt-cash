@@ -14,6 +14,7 @@ const originalConsole = {
   log: console.log,
   error: console.error,
   warn: console.warn,
+  debug: console.debug,
   info: console.info
 };
 

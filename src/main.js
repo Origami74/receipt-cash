@@ -9,7 +9,7 @@ import proofCleanup from './services/flows/shared/proofCleanup';
 import debugLogger from './services/debugService';
 
 // Initialize Nostr
-nostrService.connect();
+// nostrService.connect();
 // receiptMonitoringService.initialize();
 
 // Start cleanup services

@@ -8,6 +8,7 @@ import { nip44 } from 'nostr-tools';
 import receiptKeyManager from '../services/keyManagementService.js';
 import { safeParseSettlementContent } from '../parsing/settlementparser.js';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../services/nostr/constants.js';
+import { getTagValue } from 'applesauce-core/helpers';
 
 /**
  * Composable for managing settlement subscriptions
@@ -39,9 +40,9 @@ export function useSettlementSubscription(options = {}) {
    * Process individual settlement events
    */
   const handleSettlementEvent = async (settlementEvent) => {
-    console.log("Processing settlement event:", settlementEvent.id);
-    console.log("Settlement event author (payer):", settlementEvent.pubkey);
-    console.log("Settlement event p-tags:", settlementEvent.tags.filter(tag => tag[0] === 'p'));
+    console.debug("Processing settlement event:", settlementEvent.id);
+    console.debug("Settlement event author (payer):", settlementEvent.pubkey);
+    console.debug("Settlement event p-tags:", settlementEvent.tags.filter(tag => tag[0] === 'p'));
     
     if (enableBackgroundProcessing) {
       processingCount.value++;
@@ -54,14 +55,14 @@ export function useSettlementSubscription(options = {}) {
       
       for (const pTag of pTags) {
         const targetPubkey = pTag[1]; // The pubkey this settlement is addressed to
-        console.log("Checking if we have identity for recipient pubkey:", targetPubkey);
+        console.debug("Checking if we have identity for recipient pubkey:", targetPubkey);
         
         for (const identity of receiptIdentities) {
           const signerPubkey = await identity.receiptSigner.getPublicKey();
-          console.log("Comparing with our identity pubkey:", signerPubkey);
+          console.debug("Comparing with our identity pubkey:", signerPubkey);
           if (signerPubkey === targetPubkey) {
             matchingIdentity = identity;
-            console.log("Found matching identity for recipient:", targetPubkey);
+            console.debug("Found matching identity for recipient:", targetPubkey);
             break;
           }
         }
@@ -81,7 +82,8 @@ export function useSettlementSubscription(options = {}) {
       // Decrypt using symmetric approach
       const decryptedContent = await nip44.decrypt(settlementEvent.content, contentDecryptionKey);
       
-      console.log("Decrypted settlement content:", decryptedContent);
+      console.log("❗️ Decrypted settlement content:", decryptedContent);
+      console.log("🚀 settlement tags:", settlementEvent.tags);
       
       // Validate and parse the decrypted settlement content
       const parsedContent = safeParseSettlementContent(decryptedContent);
@@ -91,18 +93,15 @@ export function useSettlementSubscription(options = {}) {
         
         // Add to settlements array
         settlementEvents.value.push(settlementData);
-        
+
         // Create settlement object for callbacks
         const settlement = {
           id: settlementEvent.id,
           receiptId: parsedContent.receiptId,
-          amount: parsedContent.amount,
-          currency: parsedContent.currency || 'sats',
+          settledItems: parsedContent.settledItems, // Include settled items for calculation
           timestamp: new Date(settlementEvent.created_at * 1000),
           status: parsedContent.status || 'pending',
-          paymentMethod: parsedContent.paymentMethod || 'lightning',
-          merchant: parsedContent.merchant || 'Unknown',
-          confirmed: parsedContent.confirmed || parsedContent.status === 'confirmed'
+          paymentMethod: getTagValue(settlementEvent, "payment"),
         };
         
         // Call callback for any settlement (for tracking purposes)
@@ -125,7 +124,7 @@ export function useSettlementSubscription(options = {}) {
           onSettlementProcessed(settlementData);
         }
         
-        console.log("Settlement processed successfully:", settlementEvent.id);
+        console.debug("Settlement processed successfully:", settlementEvent.id);
       } else {
         console.warn("Invalid settlement content after decryption, skipping event:", settlementEvent.id);
       }

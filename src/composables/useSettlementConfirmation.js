@@ -122,12 +122,19 @@ export function useSettlementConfirmation(options = {}) {
   /**
    * Start the confirmation subscription
    */
-  const startSubscription = async () => {
+  const startSubscription = async (pubkeys = receiptPubkeys.value) => {
     try {
       loading.value = true;
       error.value = null;
       
       console.log('Starting settlement confirmation subscription');
+      console.log('Confirmation subscription pubkeys:', pubkeys);
+
+      if (!pubkeys || pubkeys.length === 0) {
+        console.log('No pubkeys available for confirmation subscription');
+        loading.value = false;
+        return;
+      }
 
       // Create subscription for confirmation events
       // This would need to be adjusted based on the specific confirmation event kinds

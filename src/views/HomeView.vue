@@ -60,7 +60,6 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import QrScanner from 'qr-scanner';
 import ReceiptPreview from '../components/ReceiptPreview.vue';
-import SettlementView from './SettlementView.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
 import CameraControls from '../components/cameraView/CameraControls.vue';
@@ -74,7 +73,6 @@ export default {
   emits: ['toggle-settings'],
   components: {
     ReceiptPreview,
-    SettlementView,
     Notification,
     Spinner,
     CameraControls,
