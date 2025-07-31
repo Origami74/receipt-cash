@@ -50,9 +50,9 @@
           class="flex flex-col items-center justify-center transition-colors duration-200"
           :class="isActive('/activity') ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'"
         >
-          <!-- Lightning Bolt Icon -->
+          <!-- Hourglass/Timer Icon -->
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
           </svg>
           <span class="text-xs font-medium">Activity</span>
         </router-link>

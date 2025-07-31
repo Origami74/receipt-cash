@@ -54,7 +54,7 @@
         title="Activity"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
         </svg>
       </button>
 

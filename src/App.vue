@@ -21,7 +21,7 @@
     />
     
     <!-- Main content area with conditional bottom padding for tab bar -->
-    <div class="flex-1" :class="{ 'pb-20': shouldShowTabBar }">
+    <div class="flex-1 overflow-auto" :class="{ 'pb-20': shouldShowTabBar }">
       <router-view @toggle-settings="handleToggleSettings" />
     </div>
     
