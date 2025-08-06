@@ -97,7 +97,7 @@ export function useSettlementSubscription(options = {}) {
         // Create settlement object for callbacks
         const settlement = {
           id: settlementEvent.id,
-          receiptId: parsedContent.receiptId,
+          receiptId: getTagValue(settlementEvent, "e"), // Extract receipt ID from event tags
           settledItems: parsedContent.settledItems, // Include settled items for calculation
           timestamp: new Date(settlementEvent.created_at * 1000),
           status: parsedContent.status || 'pending',

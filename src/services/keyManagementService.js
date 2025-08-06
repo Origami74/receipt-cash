@@ -59,6 +59,27 @@ class ReceiptKeyManager {
   }
   
   /**
+   * Get receipt key data by public key
+   * @param {String} pubkey - The public key to search for
+   * @returns {Object|null} The key data or null if not found
+   */
+  getReceiptKeyByPubkey(pubkey) {
+    for (const [eventId, keyData] of this.receiptKeys) {
+      try {
+        const privateKeyBytes = Uint8Array.from(Buffer.from(keyData.receiptPrivateKey, 'hex'));
+        const derivedPubkey = getPublicKey(privateKeyBytes);
+        if (derivedPubkey === pubkey) {
+          return keyData;
+        }
+      } catch (error) {
+        console.error('Error deriving pubkey for event:', eventId, error);
+        continue;
+      }
+    }
+    return null;
+  }
+  
+  /**
    * Get all active receipt keys
    * @returns {Map} Map of receipt event IDs to key data
    */
