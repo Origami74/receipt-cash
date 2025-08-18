@@ -258,15 +258,16 @@ const sendNip17Dm = async (recipientPubkey, message, relays = []) => {
       ['p', recipientPubkey]
     ];
     event.created_at = Math.floor(Date.now() / 1000 - Math.random() * 172800) // Random time up to 2 days in past
-    event.sign(randomKeySigner)
+    await event.sign(randomKeySigner)
 
     const giftWrapped = await giftWrap(event, new NDKUser({pubkey: recipientPubkey}), randomKeySigner, {scheme: "nip44"})
     await giftWrapped.publish()
 
     console.log('NIP-17 message sent successfully');
+    return true;
   } catch (error) {
     console.error('Error sending NIP-17 message:', error);
-    throw error;
+    return false;
   }
 };
 
