@@ -1,18 +1,18 @@
 import cashuWalletManager from './cashuWalletManager';
 import { getProofs, clearProofs } from '../../storageService';
-import payerMonitor from '../incoming/payerMonitor';
 
 /**
  * ProofCleanup - Background service to safely clean up claimed proofs
- * 
+ *
  * This service runs periodically to check if forwarded proofs have been
  * claimed by recipients, and only then deletes them from storage.
  */
 class ProofCleanup {
-  constructor() {
+  constructor(payerMonitorInstance = null) {
     this.isRunning = false;
     this.cleanupInterval = null;
     this.CLEANUP_INTERVAL = 1 * 30 * 1000; // 30 s
+    this.payerMonitor = payerMonitorInstance;
   }
 
   /**
@@ -99,13 +99,18 @@ class ProofCleanup {
                 console.log(`Dev proofs are older than 24 hours (${Math.round(proofAge / (60 * 60 * 1000))} hours), paying out to developer...`);
                 
                 try {
-                  await payerMonitor.payoutDev(categoryData.proofs, categoryData.mintUrl);
-                  
-                  // Clear the dev proofs after successful payout
-                  clearProofs(transactionId, category);
-                  console.log(`Successfully paid out and cleared dev proofs for transaction ${transactionId}`);
-                  totalCleaned++;
-                  continue; // Skip the normal cleanup check for this category
+                  if (!this.payerMonitor) {
+                    console.error('No payerMonitor instance available for dev payout');
+                    // Continue with normal cleanup logic
+                  } else {
+                    await this.payerMonitor.payoutDev(categoryData.proofs, categoryData.mintUrl);
+                    
+                    // Clear the dev proofs after successful payout
+                    clearProofs(transactionId, category);
+                    console.log(`Successfully paid out and cleared dev proofs for transaction ${transactionId}`);
+                    totalCleaned++;
+                    continue; // Skip the normal cleanup check for this category
+                  }
                 } catch (error) {
                   console.error(`Failed to payout dev proofs for transaction ${transactionId}:`, error);
                   // Continue with normal cleanup logic on error
@@ -172,7 +177,5 @@ class ProofCleanup {
   }
 }
 
-// Create singleton instance
-const proofCleanup = new ProofCleanup();
-
-export default proofCleanup;
+// Export the class to be instantiated with payerMonitor
+export default ProofCleanup;

@@ -2,6 +2,7 @@ import nostrService from '../shared/nostr';
 import payerMonitor from './payerMonitor';
 import receiptKeyManager from '../../keyManagementService';
 import { showNotification } from '../../notificationService';
+import ProofCleanup from '../shared/proofCleanup';
 
 /**
  * Background service that manages receipt monitoring initialization
@@ -14,6 +15,7 @@ class ReceiptMonitoringService {
     this.monitoredReceipts = new Set();
     this.initializationRetries = 0;
     this.maxRetries = 3;
+    this.proofCleanup = null;
   }
 
   /**
@@ -28,6 +30,13 @@ class ReceiptMonitoringService {
 
     try {
       console.log('Initializing receipt monitoring service...');
+      
+      // Initialize and start proof cleanup with payerMonitor instance
+      if (!this.proofCleanup) {
+        this.proofCleanup = new ProofCleanup(payerMonitor);
+        this.proofCleanup.start();
+        console.log('Proof cleanup service started with payerMonitor instance');
+      }
       
       // Start subscribing to receipt events
       await this.startReceiptSubscription();
@@ -227,12 +236,17 @@ class ReceiptMonitoringService {
   }
 
   /**
-   * Cleanup subscriptions
+   * Cleanup subscriptions and services
    */
   cleanup() {
     if (this.receiptSubscription) {
       this.receiptSubscription.stop();
       this.receiptSubscription = null;
+    }
+    
+    if (this.proofCleanup) {
+      this.proofCleanup.stop();
+      this.proofCleanup = null;
     }
   }
 }
