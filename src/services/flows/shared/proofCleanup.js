@@ -1,6 +1,6 @@
 import cashuWalletManager from './cashuWalletManager';
 import { getProofs, clearProofs } from '../../storageService';
-import PayerMonitor from '../incoming/payerMonitor';
+import payerMonitor from '../incoming/payerMonitor';
 
 /**
  * ProofCleanup - Background service to safely clean up claimed proofs
@@ -99,7 +99,6 @@ class ProofCleanup {
                 console.log(`Dev proofs are older than 24 hours (${Math.round(proofAge / (60 * 60 * 1000))} hours), paying out to developer...`);
                 
                 try {
-                  const payerMonitor = new PayerMonitor();
                   await payerMonitor.payoutDev(categoryData.proofs, categoryData.mintUrl);
                   
                   // Clear the dev proofs after successful payout
