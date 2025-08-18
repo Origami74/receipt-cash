@@ -1,5 +1,6 @@
 import cashuWalletManager from './cashuWalletManager';
 import { getProofs, clearProofs } from '../../storageService';
+import PayerMonitor from '../incoming/payerMonitor';
 
 /**
  * ProofCleanup - Background service to safely clean up claimed proofs
@@ -12,7 +13,6 @@ class ProofCleanup {
     this.isRunning = false;
     this.cleanupInterval = null;
     this.CLEANUP_INTERVAL = 1 * 30 * 1000; // 30 s
-    this.PROOF_EXPIRY_TIME = 24 * 60 * 60 * 1000; // 24 hours
   }
 
   /**
@@ -87,20 +87,39 @@ class ProofCleanup {
             // Check if proofs have been claimed
             const shouldClean = await this.checkProofsClaimed(categoryData.proofs, categoryData.mintUrl);
             
+            // Add 2 second delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Check if dev proofs are older than 24 hours and payout if needed
+            if (category === 'developer' && categoryData.proofs && categoryData.proofs.length > 0) {
+              const proofAge = Date.now() - (categoryData.lastUpdated || transaction.timestamp);
+              const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+              
+              if (proofAge > twentyFourHours) {
+                console.log(`Dev proofs are older than 24 hours (${Math.round(proofAge / (60 * 60 * 1000))} hours), paying out to developer...`);
+                
+                try {
+                  const payerMonitor = new PayerMonitor();
+                  await payerMonitor.payoutDev(categoryData.proofs, categoryData.mintUrl);
+                  
+                  // Clear the dev proofs after successful payout
+                  clearProofs(transactionId, category);
+                  console.log(`Successfully paid out and cleared dev proofs for transaction ${transactionId}`);
+                  totalCleaned++;
+                  continue; // Skip the normal cleanup check for this category
+                } catch (error) {
+                  console.error(`Failed to payout dev proofs for transaction ${transactionId}:`, error);
+                  // Continue with normal cleanup logic on error
+                }
+              }
+            }
+            
             if (shouldClean) {
               console.log(`Cleaning up ${category} proofs for transaction ${transactionId}`);
               clearProofs(transactionId, category);
               totalCleaned++;
             }
           }
-        }
-        
-        // Also clean up very old proofs regardless of status (emergency cleanup)
-        const transactionAge = Date.now() - transaction.timestamp;
-        if (transactionAge > this.PROOF_EXPIRY_TIME) {
-          console.log(`Emergency cleanup: removing expired proofs for transaction ${transactionId} (age: ${Math.round(transactionAge / (60 * 60 * 1000))}h)`);
-          clearProofs(transactionId);
-          totalCleaned++;
         }
       }
       

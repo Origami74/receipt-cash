@@ -15,7 +15,7 @@ receiptMonitoringService.initialize();
 // Start cleanup services
 
 // temp disable cleanup becasue of rate limiting by the mint
-// proofCleanup.start();
+proofCleanup.start();
 
 
 // Initialize debug logging if it was previously enabled
