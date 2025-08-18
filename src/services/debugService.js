@@ -100,7 +100,10 @@ function captureLog(level, args) {
     
     // Format the log message
     const formattedArgs = args.map(arg => {
-      if (typeof arg === 'object') {
+      if (arg instanceof Error) {
+        // Handle Error objects specially to avoid "{}" from JSON.stringify
+        return `${arg.name}: ${arg.message}`;
+      } else if (typeof arg === 'object' && arg !== null) {
         try {
           return JSON.stringify(arg);
         } catch (e) {
