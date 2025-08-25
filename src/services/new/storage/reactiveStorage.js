@@ -17,5 +17,6 @@ function persist(key, subject) {
 export const defaultRelays = new BehaviorSubject(DEFAULT_RELAYS);
 persist(KEY_DEFAULT_RELAYS, defaultRelays);
 
-// Re-export receipt keys management from dedicated file
-export { receiptKeysManager, receiptKeys } from '../storage/receiptKeysStorageManager.js';
+// Re-export storage managers from dedicated files
+export { ownedReceiptsStorageManager } from './ownedReceiptsStorageManager.js';
+export { ownedSettlementsStorageManager } from './ownedSettlementsStorageManager.js';

@@ -171,7 +171,7 @@ import { saveReceiveAddress, getReceiveAddress } from '../services/storageServic
 import { showNotification } from '../services/notificationService';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { receiptKeysManager } from '../services/new/storage/receiptKeysStorageManager';
+import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager';
 
 export default {
   name: 'ReceiptPreview',
@@ -378,7 +378,7 @@ export default {
         );
 
         // new
-        receiptKeysManager.addKey({
+        ownedReceiptsStorageManager.addItem({
           privateKey: receiptPrivateKey,
           pubkey: publishedReceiptEvent.pubkey,
           eventId: publishedReceiptEvent.id,

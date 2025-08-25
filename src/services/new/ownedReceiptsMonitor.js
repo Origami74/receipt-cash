@@ -1,4 +1,4 @@
-import { receiptKeysManager } from './storage/receiptKeysStorageManager.js';
+import { ownedReceiptsStorageManager } from './storage/ownedReceiptsStorageManager.js';
 
 class OwnedReceiptsMonitor {
   constructor() {
@@ -15,37 +15,37 @@ class OwnedReceiptsMonitor {
     this.isMonitoring = true;
     console.log('🚀 Starting OwnedReceiptsMonitor...');
 
-    // Subscribe to all existing keys (initial load)
-    const keysSubscription = receiptKeysManager.keys$.subscribe(keys => {
-      if (keys.length > 0) {
-        console.log(`📦 Existing receipt keys loaded: ${keys.length} keys`);
-        keys.forEach(key => {
-          console.log(`  📝 Receipt key: ${JSON.stringify(key)}`);
+    // Subscribe to all existing receipts (initial load)
+    const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe(receipts => {
+      if (receipts.length > 0) {
+        console.log(`📦 Existing owned receipts loaded: ${receipts.length} receipts`);
+        receipts.forEach(receipt => {
+          console.log(`  📝 Receipt eventId: ${receipt.eventId}`);
         });
       } else {
-        console.log('📭 No existing receipt keys found');
+        console.log('📭 No existing owned receipts found');
       }
     });
 
-    // Subscribe to newly added keys
-    const keyAddedSubscription = receiptKeysManager.keyAdded$.subscribe(({ key, keys }) => {
-      console.log(`✨ New receipt key added: ${key}`);
-      console.log(`📊 Total keys now: ${keys.length}`);
+    // Subscribe to newly added receipts
+    const receiptAddedSubscription = ownedReceiptsStorageManager.receiptAdded$.subscribe(({ item: receipt, items: receipts }) => {
+      console.log(`✨ New owned receipt added: ${receipt.eventId}`);
+      console.log(`📊 Total receipts now: ${receipts.length}`);
       
-      // Here you could start monitoring this specific receipt key
-      this._startMonitoringKey(key);
+      // Here you could start monitoring this specific receipt
+      this._startMonitoringReceipt(receipt);
     });
 
-    // Subscribe to removed keys
-    const keyRemovedSubscription = receiptKeysManager.keyRemoved$.subscribe(({ key, keys }) => {
-      console.log(`🗑️ Receipt key removed: ${key}`);
-      console.log(`📊 Total keys now: ${keys.length}`);
+    // Subscribe to removed receipts
+    const receiptRemovedSubscription = ownedReceiptsStorageManager.receiptRemoved$.subscribe(({ item: receipt, items: receipts }) => {
+      console.log(`🗑️ Owned receipt removed: ${receipt.eventId}`);
+      console.log(`📊 Total receipts now: ${receipts.length}`);
       
-      // Here you could stop monitoring this specific receipt key
-      this._stopMonitoringKey(key);
+      // Here you could stop monitoring this specific receipt
+      this._stopMonitoringReceipt(receipt);
     });
 
-    this.subscriptions = [keysSubscription, keyAddedSubscription, keyRemovedSubscription];
+    this.subscriptions = [receiptsSubscription, receiptAddedSubscription, receiptRemovedSubscription];
   }
 
   stop() {
@@ -64,14 +64,14 @@ class OwnedReceiptsMonitor {
     console.log('✅ OwnedReceiptsMonitor stopped');
   }
 
-  _startMonitoringKey(key) {
-    // TODO: Implement actual receipt monitoring for this key
-    console.log(`🔍 Started monitoring receipt key: ${key}`);
+  _startMonitoringReceipt(receipt) {
+    // TODO: Implement actual receipt monitoring for this receipt
+    console.log(`🔍 Started monitoring receipt: ${receipt.eventId}`);
   }
 
-  _stopMonitoringKey(key) {
-    // TODO: Implement cleanup for this key's monitoring
-    console.log(`⛔ Stopped monitoring receipt key: ${key}`);
+  _stopMonitoringReceipt(receipt) {
+    // TODO: Implement cleanup for this receipt's monitoring
+    console.log(`⛔ Stopped monitoring receipt: ${receipt.eventId}`);
   }
 }
 
