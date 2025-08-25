@@ -3,7 +3,7 @@ import { presistEventsToCache } from "applesauce-core/helpers";
 import { RelayPool } from "applesauce-relay";
 import { createEventLoader, createTagValueLoader } from "applesauce-loaders/loaders";
 import { KIND_RECEIPT, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from "./constants";
-import { openDB } from "nostr-idb";
+import { addEvents, getEventsForFilters, openDB } from "nostr-idb";
 
 // Create a relay pool
 export const globalPool = new RelayPool();
@@ -31,11 +31,5 @@ export const settlementLoader = createTagValueLoader(globalPool, "e", {
     cacheRequest,
     kinds: [KIND_SETTLEMENT],
 });
-
-// // Deduplicated confirmation events
-// result.subscribe((x) => {
-
-// })
-
 
 // TODO: AI write docs on cache

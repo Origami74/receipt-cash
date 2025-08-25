@@ -1,19 +1,21 @@
 import { ownedReceiptsStorageManager } from './storage/ownedReceiptsStorageManager.js';
+import { ReceiptPaymentCollector } from './receiptPaymentCollector.js';
 
-class OwnedReceiptsMonitor {
+class ReceiptLifecycleManager {
   constructor() {
     this.isMonitoring = false;
     this.subscriptions = [];
+    this.paymentCollectors = new Map(); // receiptEventId -> ReceiptPaymentCollector
   }
 
   start() {
     if (this.isMonitoring) {
-      console.log('🔄 OwnedReceiptsMonitor already running');
+      console.log('🔄 ReceiptLifecycleManager already running');
       return;
     }
 
     this.isMonitoring = true;
-    console.log('🚀 Starting OwnedReceiptsMonitor...');
+    console.log('🚀 Starting ReceiptLifecycleManager...');
 
     // Subscribe to all existing receipts (initial load)
     const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe(receipts => {
@@ -21,6 +23,7 @@ class OwnedReceiptsMonitor {
         console.log(`📦 Existing owned receipts loaded: ${receipts.length} receipts`);
         receipts.forEach(receipt => {
           console.log(`  📝 Receipt eventId: ${receipt.eventId}`);
+          this._startMonitoringReceipt(receipt);
         });
       } else {
         console.log('📭 No existing owned receipts found');
@@ -50,33 +53,58 @@ class OwnedReceiptsMonitor {
 
   stop() {
     if (!this.isMonitoring) {
-      console.log('⏹️ OwnedReceiptsMonitor already stopped');
+      console.log('⏹️ ReceiptLifecycleManager already stopped');
       return;
     }
 
-    console.log('🛑 Stopping OwnedReceiptsMonitor...');
+    console.log('🛑 Stopping ReceiptLifecycleManager...');
+    
+    // Stop all payment collectors
+    this.paymentCollectors.forEach((collector, receiptEventId) => {
+      collector.stop();
+    });
+    this.paymentCollectors.clear();
     
     // Unsubscribe from all observables
     this.subscriptions.forEach(subscription => subscription.unsubscribe());
     this.subscriptions = [];
     
     this.isMonitoring = false;
-    console.log('✅ OwnedReceiptsMonitor stopped');
+    console.log('✅ ReceiptLifecycleManager stopped');
   }
 
   _startMonitoringReceipt(receipt) {
-    // TODO: Implement actual receipt monitoring for this receipt
-    console.log(`🔍 Started monitoring receipt: ${receipt.eventId}`);
+    const receiptEventId = receipt.eventId;
+    
+    // Don't start if already monitoring this receipt
+    if (this.paymentCollectors.has(receiptEventId)) {
+      console.log(`🔄 Already monitoring receipt: ${receiptEventId}`);
+      return;
+    }
+
+    console.log(`🔍 Starting payment collector for receipt: ${receiptEventId}`);
+    
+    // Create and start a payment collector for this receipt
+    const paymentCollector = new ReceiptPaymentCollector(receiptEventId, receipt.pubkey);
+    paymentCollector.start();
+    
+    this.paymentCollectors.set(receiptEventId, paymentCollector);
   }
 
   _stopMonitoringReceipt(receipt) {
-    // TODO: Implement cleanup for this receipt's monitoring
-    console.log(`⛔ Stopped monitoring receipt: ${receipt.eventId}`);
+    const receiptEventId = receipt.eventId;
+    const paymentCollector = this.paymentCollectors.get(receiptEventId);
+    
+    if (paymentCollector) {
+      console.log(`⛔ Stopping payment collector for receipt: ${receiptEventId}`);
+      paymentCollector.stop();
+      this.paymentCollectors.delete(receiptEventId);
+    }
   }
 }
 
 // Export a singleton instance
-export const ownedReceiptsMonitor = new OwnedReceiptsMonitor();
+export const receiptLifecycleManager = new ReceiptLifecycleManager();
 
-// Auto-start the monitor
-ownedReceiptsMonitor.start();
+// Auto-start the manager
+receiptLifecycleManager.start();

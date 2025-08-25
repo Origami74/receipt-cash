@@ -7,7 +7,7 @@ import nostrService from './services/flows/shared/nostr';
 import receiptMonitoringService from './services/flows/incoming/receiptMonitoringService';
 import proofCleanup from './services/flows/shared/proofCleanup';
 import debugLogger from './services/debugService';
-import { ownedReceiptsMonitor } from './services/new/ownedReceiptsMonitor';
+import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
 
 // Initialize Nostr
 // nostrService.connect();
@@ -18,7 +18,7 @@ import { ownedReceiptsMonitor } from './services/new/ownedReceiptsMonitor';
 // temp disable cleanup becasue of rate limiting by the mint
 // proofCleanup.start();
 
-ownedReceiptsMonitor.start()
+receiptLifecycleManager.start()
 
 
 // Initialize debug logging if it was previously enabled
