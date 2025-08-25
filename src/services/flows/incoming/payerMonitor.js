@@ -1,4 +1,3 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk';
 import { nip44 } from 'nostr-tools';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import cashuWalletManager from '../shared/cashuWalletManager';
@@ -14,7 +13,6 @@ import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { Buffer } from 'buffer';
 import { SimpleSigner } from 'applesauce-signers';
-import { includeHashtags } from 'applesauce-factory/operations/event';
 import { EventFactory } from 'applesauce-factory';
 
 /**

@@ -171,6 +171,7 @@ import { saveReceiveAddress, getReceiveAddress } from '../services/storageServic
 import { showNotification } from '../services/notificationService';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
+import { receiptKeysManager } from '../services/new/storage/receiptKeysStorageManager';
 
 export default {
   name: 'ReceiptPreview',
@@ -370,11 +371,19 @@ export default {
         eventEncryptionPrivateKey.value = publishedReceiptEvent.encryptionPrivateKey;
         
         const receiptPrivateKey = new Uint8Array(Buffer.from(publishedReceiptEvent.receiptPrivateKey, 'hex'));
-        receiptKeyManager.storeReceiptKey(
+        receiptKeyManager.storeReceiptKey( // old
           publishedReceiptEvent.id,
           receiptPrivateKey,
           publishedReceiptEvent.encryptionPrivateKey
         );
+
+        // new
+        receiptKeysManager.addKey({
+          privateKey: receiptPrivateKey,
+          pubkey: publishedReceiptEvent.pubkey,
+          eventId: publishedReceiptEvent.id,
+          sharedEncryptionKey: publishedReceiptEvent.encryptionPrivateKey
+        })
         
         await receiptMonitoringService.addReceiptToMonitoring(
           publishedReceiptEvent.id,
