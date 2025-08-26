@@ -14,9 +14,9 @@ class MoneyStorageManager {
         if (!item?.settlementEventId) throw new Error('Item must have a settlementEventId');
         if (!item?.proofs && Array.isArray(item.proofs)) throw new Error('Item must have a proofs array');
         
-        return `${item.receiptEventId.toString()}-${item.settlementEventId}`
+        return `${item.receiptEventId}-${item.settlementEventId}`
     };
-    
+
     this.incoming = new ReactiveMapStorageManager(KEY_MONEY_INCOMING, keyExtractor);
     this.dev = new ReactiveMapStorageManager(KEY_MONEY_DEV, keyExtractor);
     this.payer = new ReactiveMapStorageManager(KEY_MONEY_PAYER, keyExtractor);

@@ -8,6 +8,7 @@ import receiptMonitoringService from './services/flows/incoming/receiptMonitorin
 import proofCleanup from './services/flows/shared/proofCleanup';
 import debugLogger from './services/debugService';
 import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
+import { incomingPaymentSplitter } from './services/new/incomingPaymentSplitter';
 
 // Initialize Nostr
 // nostrService.connect();
@@ -19,6 +20,7 @@ import { receiptLifecycleManager } from './services/new/receiptLifecycleManager'
 // proofCleanup.start();
 
 receiptLifecycleManager.start()
+incomingPaymentSplitter.start()
 
 
 // Initialize debug logging if it was previously enabled
