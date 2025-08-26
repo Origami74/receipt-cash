@@ -68,16 +68,12 @@ class ReceiptPaymentCollector {
     console.log(`🔍 Subscribing to settlement events for receipt: ${this.receipt.eventId}`);
 
      const sub = globalPool
-          .subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT],
-            "#e": [this.receipt.eventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe((event) => this._handleSettlementEvent(this, event))
-
-    // const sub = settlementLoader({value: this.receipt.eventId}).subscribe((settlementEvent) => {
-    //     this._handleSettlementEvent(settlementEvent);
-    // });
+        .subscription(DEFAULT_RELAYS, {
+          kinds: [KIND_SETTLEMENT],
+          "#e": [this.receipt.eventId],
+        })
+        .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+        .subscribe((event) => this._handleSettlementEvent(this, event))
 
     this.nostrSubscriptions.push(sub)
 
@@ -149,7 +145,7 @@ class ReceiptPaymentCollector {
   }
 
   _handleConfirmationEvent(receiptPaymentCollector, confirmationEvent) {
-    console.log(`✅ Confirmation received for settlement: ${JSON.stringify(confirmationEvent)}`);
+    // console.debug(`✅ Confirmation received for settlement`);
     
     let settlementEventId;
     let settlementState;

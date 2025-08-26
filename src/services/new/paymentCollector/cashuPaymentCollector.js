@@ -7,6 +7,7 @@ import { mapEventsToStore } from "applesauce-core";
 import { getGiftWrapRumor, unlockGiftWrap } from "applesauce-core/helpers";
 import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
+import { moneyStorageManager } from "../storage/moneyStorageManager";
 
 /**
  * Collects cashu payments for a specific receipt
@@ -84,11 +85,27 @@ class CashuPaymentCollector {
         return;
       }
 
-      // await saveProofs...
+      const incomingPayment = {
+        receiptEventId: this.receipt.eventId,
+        settlementEventId: cashuDM.settlementId,
+        proofs: cashuDM.proofs,
+        mintUrl: cashuDM.mint
+      }
+
+      // TODO: check if confirmed in the meanwhile
+
+      if(moneyStorageManager.incoming.hasItem(incomingPayment)){
+        console.info('Incoming proofs already stored, ignoring...')
+        return
+      }
+
+      // TODO: Check if proof spent
+
+      await moneyStorageManager.incoming.setItem(incomingPayment)
 
       await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId)
       
-      console.debug("Successfully decrypted DM:", cashuDM);
+      console.debug("💾 Successfully saved incoming payment from cashu DM:", cashuDM);
       
     } catch (decryptError) {
       console.warn(`⚠️ Failed to decrypt cashu dm for receipt ${decryptError}`)
