@@ -1,9 +1,9 @@
 import { onlyEvents } from 'applesauce-relay';
-import { globalEventStore, globalPool, settlementLoader } from '../nostr/applesauce.js';
-import { cashuPaymentCollector } from './cashuPaymentCollector.js';
-import { lightningPaymentCollector } from './lightningPaymentCollector.js';
+import { globalEventStore, globalPool, settlementLoader } from '../../nostr/applesauce.js';
+import { cashuPaymentCollector } from '../paymentCollector/cashuPaymentCollector.js';
+import { lightningPaymentCollector } from '../paymentCollector/lightningPaymentCollector.js';
 import { mapEventsToStore } from 'applesauce-core';
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../nostr/constants.js';
+import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../../nostr/constants.js';
 import { getTagValue } from 'applesauce-core/helpers';
 
 /**
@@ -12,25 +12,24 @@ import { getTagValue } from 'applesauce-core/helpers';
  * - Lightning: One collector per settlement
  */
 class ReceiptPaymentCollector {
-  constructor(receiptEventId, receiptEventPubKey) {
-    this.receiptEventId = receiptEventId;
-    this.receiptEventPubKey = receiptEventPubKey;
+  constructor(receipt) {
+    this.receipt = receipt;
     this.isActive = false;
     this.nostrSubscriptions = [];
     this.lightningCollectors = new Map(); // settlementEventId -> collector
     this.cashuCollector = null; // Single collector for all cashu settlements
-    this.unconfirmedCashuCount = 0;
-    this.settlementStates = new Map(); // settlementEventId -> { isConfirmed, isCashu }
+    this.unconfirmedCashuSettlementIds = new Set();
+    this.settlementStates = new Map(); // settlementEventId -> { isConfirmed, paymentType }
   }
 
   start() {
     if (this.isActive) {
-      console.log(`🔄 ReceiptPaymentCollector for ${this.receiptEventId} already active`);
+      console.log(`🔄 ReceiptPaymentCollector for ${this.receipt.eventId} already active`);
       return;
     }
 
     this.isActive = true;
-    console.log(`🚀 Starting ReceiptPaymentCollector for receipt: ${this.receiptEventId}`);
+    console.log(`🚀 Starting ReceiptPaymentCollector for receipt: ${this.receipt.eventId}`);
 
     // Subscribe to settlement events for this receipt using Nostr
     this._subscribeToSettlementEvents();
@@ -41,7 +40,7 @@ class ReceiptPaymentCollector {
       return;
     }
 
-    console.log(`🛑 Stopping ReceiptPaymentCollector for receipt: ${this.receiptEventId}`);
+    console.log(`🛑 Stopping ReceiptPaymentCollector for receipt: ${this.receipt.eventId}`);
     
     // Stop cashu collector if active
     if (this.cashuCollector) {
@@ -57,29 +56,37 @@ class ReceiptPaymentCollector {
 
     // Close all Nostr subscriptions
     this.nostrSubscriptions.forEach(subscription => {
-      subscription.close();
+      subscription.unsubscribe();
     });
     this.nostrSubscriptions = [];
     
     this.isActive = false;
-    console.log(`✅ ReceiptPaymentCollector stopped for receipt: ${this.receiptEventId}`);
+    console.log(`✅ ReceiptPaymentCollector stopped for receipt: ${this.receipt.eventId}`);
   }
 
   _subscribeToSettlementEvents() {
-    console.log(`🔍 Subscribing to settlement events for receipt: ${this.receiptEventId}`);
+    console.log(`🔍 Subscribing to settlement events for receipt: ${this.receipt.eventId}`);
 
-    const sub = settlementLoader({value: this.receiptEventId}).subscribe((settlementEvent) => {
-        this._handleSettlementEvent(settlementEvent);
-    });
+     const sub = globalPool
+          .subscription(DEFAULT_RELAYS, {
+            kinds: [KIND_SETTLEMENT],
+            "#e": [this.receipt.eventId],
+          })
+          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+          .subscribe((event) => this._handleSettlementEvent(this, event))
+
+    // const sub = settlementLoader({value: this.receipt.eventId}).subscribe((settlementEvent) => {
+    //     this._handleSettlementEvent(settlementEvent);
+    // });
 
     this.nostrSubscriptions.push(sub)
 
-    console.log(`📡 Settlement subscription created for receipt: ${this.receiptEventId}`);
+    console.log(`📡 Settlement subscription created for receipt: ${this.receipt.eventId}`);
   }
 
-  _handleSettlementEvent(settlementEvent) {
+  _handleSettlementEvent(receiptPaymentCollector, settlementEvent) {
     const settlementEventId = settlementEvent.id;
-    console.log(`💰 Settlement event received for receipt ${this.receiptEventId}: ${settlementEventId}`);
+    console.log(`💰 Settlement event received for receipt ${receiptPaymentCollector.receipt.eventId}: ${settlementEventId}`);
     
     // Determine if this is a cashu or lightning settlement
     const paymentType = getTagValue(settlementEvent, 'payment')
@@ -108,11 +115,11 @@ class ReceiptPaymentCollector {
   }
 
   _handleCashuSettlement(settlementEventId) {
-    this.unconfirmedCashuCount++;
-    console.log(`📈 Unconfirmed cashu settlements: ${this.unconfirmedCashuCount} (settlement: ${settlementEventId})`);
+    this.unconfirmedCashuSettlementIds.add(settlementEventId)
+    console.log(`📈 Unconfirmed cashu settlements: ${this.unconfirmedCashuSettlementIds.size} (settlement: ${settlementEventId})`);
     
     // Start cashu collector if not already running (one collector for all cashu settlements)
-    if (!this.cashuCollector && this.unconfirmedCashuCount > 0) {
+    if (!this.cashuCollector && this.unconfirmedCashuSettlementIds.size > 0) {
       this._startCashuPaymentCollector();
     }
   }
@@ -130,44 +137,56 @@ class ReceiptPaymentCollector {
     const sub = globalPool
           .subscription(DEFAULT_RELAYS, {
             kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: [this.receiptEventPubKey],
+            authors: [this.receipt.pubkey],
             "#e": [settlementEventId],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe((event) => {
-            console.log("confirmation event", event);
-            settlementConfirmationEvents.value.push(event);
-          })
+          .subscribe((event) => this._handleConfirmationEvent(this, event))
     
     this.nostrSubscriptions.push(sub);
 
     console.log(`📡 Confirmation subscription created for settlement: ${settlementEventId}`);
   }
 
-  _handleConfirmationEvent(settlementEventId, confirmationEvent) {
-    console.log(`✅ Confirmation received for settlement: ${settlementEventId}`);
+  _handleConfirmationEvent(receiptPaymentCollector, confirmationEvent) {
+    console.log(`✅ Confirmation received for settlement: ${JSON.stringify(confirmationEvent)}`);
     
-    const settlementState = this.settlementStates.get(settlementEventId);
+    let settlementEventId;
+    let settlementState;
+    confirmationEvent.tags.forEach(tag => {
+      if(tag[0] === "e"){
+        const eventId = tag[1]
+
+        if(!eventId){
+          return
+        }
+
+        settlementEventId = eventId
+        settlementState = receiptPaymentCollector.settlementStates.get(eventId)
+      }
+      
+    });
+
     if (!settlementState) {
       return;
     }
 
     settlementState.isConfirmed = true;
     
-    if (settlementState.isCashu) {
+    if (settlementState.paymentType === 'cashu') {
       // Handle cashu confirmation
-      this.unconfirmedCashuCount = Math.max(0, this.unconfirmedCashuCount - 1);
-      console.log(`📉 Unconfirmed cashu settlements: ${this.unconfirmedCashuCount}`);
+      receiptPaymentCollector.unconfirmedCashuSettlementIds.delete(settlementEventId)
+      console.log(`📉 Unconfirmed cashu settlements: ${receiptPaymentCollector.unconfirmedCashuSettlementIds.size}`);
       
       // Stop cashu collector if no more unconfirmed cashu settlements
-      if (this.unconfirmedCashuCount === 0 && this.cashuCollector) {
+      if (receiptPaymentCollector.unconfirmedCashuSettlementIds.size === 0 && receiptPaymentCollector.cashuCollector) {
         console.log(`🛑 No more unconfirmed cashu settlements, stopping cashu collector`);
-        this.cashuCollector.stop();
-        this.cashuCollector = null;
+        receiptPaymentCollector.cashuCollector.stop();
+        receiptPaymentCollector.cashuCollector = null;
       }
     } else {
       // Handle lightning confirmation - stop the specific collector
-      this._stopLightningCollectorForSettlement(settlementEventId);
+      receiptPaymentCollector._stopLightningCollectorForSettlement(settlementEventId);
     }
   }
 
@@ -176,8 +195,8 @@ class ReceiptPaymentCollector {
       return; // Already running
     }
 
-    console.log(`🥜 Starting CashuPaymentCollector for receipt: ${this.receiptEventId}`);
-    this.cashuCollector = cashuPaymentCollector.create(this.receiptEventId);
+    console.log(`🥜 Starting CashuPaymentCollector for receipt: ${this.receipt.eventId}`);
+    this.cashuCollector = cashuPaymentCollector.create(this.receipt);
     this.cashuCollector.start();
   }
 
@@ -187,7 +206,7 @@ class ReceiptPaymentCollector {
     }
 
     console.log(`⚡ Starting LightningPaymentCollector for settlement: ${settlementEventId}`);
-    const collector = lightningPaymentCollector.create(this.receiptEventId, settlementEventId);
+    const collector = lightningPaymentCollector.create(this.receipt, settlementEventId);
     collector.start();
     this.lightningCollectors.set(settlementEventId, collector);
   }

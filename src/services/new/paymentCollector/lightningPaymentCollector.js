@@ -4,8 +4,8 @@
  * One collector per settlement
  */
 class LightningPaymentCollector {
-  constructor(receiptEventId, settlementEventId) {
-    this.receiptEventId = receiptEventId;
+  constructor(receipt, settlementEventId) {
+    this.receipt = receipt;
     this.settlementEventId = settlementEventId;
     this.isActive = false;
     this.nostrSubscriptions = [];
@@ -18,7 +18,7 @@ class LightningPaymentCollector {
     }
 
     this.isActive = true;
-    console.log(`⚡ Starting LightningPaymentCollector for receipt: ${this.receiptEventId}, settlement: ${this.settlementEventId}`);
+    console.log(`⚡ Starting LightningPaymentCollector for receipt: ${this.receipt.eventId}, settlement: ${this.settlementEventId}`);
 
     // TODO: Implement lightning payment monitoring
     // This would monitor for:
@@ -37,7 +37,7 @@ class LightningPaymentCollector {
     
     // Close all Nostr subscriptions
     this.nostrSubscriptions.forEach(subscription => {
-      subscription.close();
+      subscription.unsubscribe();
     });
     this.nostrSubscriptions = [];
     
@@ -62,7 +62,7 @@ class LightningPaymentCollector {
 
 // Factory for creating lightning payment collectors
 export const lightningPaymentCollector = {
-  create(receiptEventId, settlementEventId) {
-    return new LightningPaymentCollector(receiptEventId, settlementEventId);
+  create(receipt, settlementEventId) {
+    return new LightningPaymentCollector(receipt, settlementEventId);
   }
 };

@@ -22,6 +22,7 @@ class OwnedReceiptsStorageManager extends ReactiveArrayStorageManager {
    * @returns {boolean} - True if added, false if already exists
    */
   addReceipt(receipt) {
+    console.log(`addreceipt called with ${JSON.stringify(receipt)}`)
     return this.addItem(receipt);
   }
 

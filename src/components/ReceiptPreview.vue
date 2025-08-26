@@ -378,8 +378,8 @@ export default {
         );
 
         // new
-        ownedReceiptsStorageManager.addItem({
-          privateKey: receiptPrivateKey,
+        ownedReceiptsStorageManager.addReceipt({
+          privateKey: publishedReceiptEvent.receiptPrivateKey,
           pubkey: publishedReceiptEvent.pubkey,
           eventId: publishedReceiptEvent.id,
           sharedEncryptionKey: publishedReceiptEvent.encryptionPrivateKey

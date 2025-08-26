@@ -134,6 +134,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     
     return {
       id: receiptEvent.id,
+      pubkey: receiptEvent.pubkey,
       encryptionPrivateKey: encryptionPrivateKeyHex,
       receiptPrivateKey: receiptPrivateKeyHex, // Return receipt private key for monitoring
       receiptPublicKey: receiptPublicKey

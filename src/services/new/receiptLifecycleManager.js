@@ -1,5 +1,5 @@
 import { ownedReceiptsStorageManager } from './storage/ownedReceiptsStorageManager.js';
-import { ReceiptPaymentCollector } from './receiptPaymentCollector.js';
+import { ReceiptPaymentCollector } from './paymentCollector/receiptPaymentCollector.js';
 
 class ReceiptLifecycleManager {
   constructor() {
@@ -85,7 +85,7 @@ class ReceiptLifecycleManager {
     console.log(`🔍 Starting payment collector for receipt: ${receiptEventId}`);
     
     // Create and start a payment collector for this receipt
-    const paymentCollector = new ReceiptPaymentCollector(receiptEventId, receipt.pubkey);
+    const paymentCollector = new ReceiptPaymentCollector(receipt);
     paymentCollector.start();
     
     this.paymentCollectors.set(receiptEventId, paymentCollector);
