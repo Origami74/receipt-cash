@@ -116,8 +116,6 @@ class IncomingPaymentSplitter {
       // Check if proofs are already spent
       const spentStatus = await this._checkProofSpentStatus(payment.proofs, payment.mintUrl);
       
-      console.log(`spentStatus: ${JSON.stringify(spentStatus)}`)
-
       // Update payment with spent status if changed
       if (spentStatus.hasSpentProofs && !payment.isSpent) {
         console.log(`💸 Marking payment as spent (${spentStatus.spentCount}/${spentStatus.totalCount} proofs spent)`);
@@ -301,6 +299,3 @@ class IncomingPaymentSplitter {
 
 // Export singleton instance
 export const incomingPaymentSplitter = new IncomingPaymentSplitter();
-
-// Auto-start the splitter
-incomingPaymentSplitter.start();

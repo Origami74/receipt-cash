@@ -622,7 +622,7 @@ export default {
 
     // Handle confirmation events
     const handleConfirmationEvent = async (confirmationEvent) => {
-      console.log("New confirmation event:", confirmationEvent)
+      // console.log("New confirmation event:", confirmationEvent)
       try {
         // Extract all event IDs from the confirmation event
         const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');

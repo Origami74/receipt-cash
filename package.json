@@ -23,6 +23,7 @@
     "applesauce-loaders": "^3.0.0",
     "applesauce-relay": "^3.0.0",
     "applesauce-signers": "^3.0.0",
+    "applesauce-actions": "^3.0.0",
     "canvas-confetti": "^1.9.3",
     "nostr-idb": "^2.4.0",
     "pinia": "^2.1.7",
