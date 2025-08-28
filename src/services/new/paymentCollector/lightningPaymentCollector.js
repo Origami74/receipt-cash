@@ -5,6 +5,9 @@ import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageMana
 import { moneyStorageManager } from '../storage/moneyStorageManager.js';
 import { getTagValue } from 'applesauce-core/helpers';
 import { Buffer } from 'buffer';
+import { sumProofs } from '../../../utils/cashuUtils.js';
+import { SimpleSigner } from 'applesauce-signers';
+import { confirmSettlement } from '../settlementConfirmer.js';
 
 /**
  * Collects lightning payments for a specific settlement
@@ -19,6 +22,9 @@ class LightningPaymentCollector {
     this.nostrSubscriptions = [];
     this.mintQuoteMonitor = null;
     this.websocketSupported = null;
+
+    const receiptPrivateKeyBytes = Uint8Array.from(Buffer.from(receipt.privateKey, 'hex'));
+    this.signer = new SimpleSigner(receiptPrivateKeyBytes)
   }
 
   async start() {
@@ -234,9 +240,11 @@ class LightningPaymentCollector {
       
       moneyStorageManager.incoming.setItem(moneyEntry);
       
-      const totalAmount = proofs.reduce((sum, proof) => sum + proof.amount, 0);
+      const totalAmount = sumProofs(proofs)
       console.log(`💰 Stored ${totalAmount} sats to incoming money storage for settlement: ${this.settlementEvent.id}`);
-      
+    
+      await confirmSettlement(this.signer, this.receipt.eventId, this.settlementEvent.id)
+
       // Stop monitoring first
       this._stopMintQuoteMonitoring();
     } catch (error) {
