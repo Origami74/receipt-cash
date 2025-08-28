@@ -4,63 +4,46 @@
       Items
     </div>
     <div v-for="(item, index) in itemsWithSettlements" :key="index" class="receipt-item">
-      <div class="flex items-center">
-        <div class="ml-4 flex-1">
-          <div class="flex items-center justify-between">
-            <div>{{ item.name }}</div>
+      <div class="flex items-start w-full">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium">{{ item.name }}</div>
+            <div class="font-medium text-right">
+              <div>{{ formatSats(item.price * item.quantity) }} sats</div>
+              <div class="text-xs text-gray-500">{{ toFiat(item.price * item.quantity) }}</div>
+            </div>
           </div>
           
           <!-- Enhanced Settlement Progress Bar -->
-          <div class="w-full bg-gray-200 rounded-full h-2 my-2">
+          <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
             <div class="flex h-full rounded-full overflow-hidden">
-              <!-- Confirmed settlements (green) -->
+              <!-- Confirmed settlements (green) - always fill 100% width if fully settled -->
               <div
                 v-if="item.confirmedQuantity > 0"
-                :style="{ width: (Math.min(item.confirmedQuantity, item.quantity) / item.quantity * 100) + '%' }"
+                :style="{ width: item.confirmedQuantity >= item.quantity ? '100%' : (item.confirmedQuantity / item.quantity * 100) + '%' }"
                 :class="item.confirmedQuantity >= item.quantity ? 'bg-green-500' : 'bg-green-400'"
                 class="transition-all duration-300"
               ></div>
-              <!-- Unconfirmed settlements (orange) -->
+              <!-- Unconfirmed settlements (orange) - only show if not fully settled -->
               <div
-                v-if="item.unconfirmedQuantity > 0"
+                v-if="item.unconfirmedQuantity > 0 && item.confirmedQuantity < item.quantity"
                 :style="{ width: (item.unconfirmedQuantity / item.quantity * 100) + '%' }"
                 class="bg-orange-400 transition-all duration-300"
-              ></div>
-              <!-- Over-payment indicator (red stripe) -->
-              <div
-                v-if="(item.confirmedQuantity + item.unconfirmedQuantity) > item.quantity"
-                :style="{ width: (((item.confirmedQuantity + item.unconfirmedQuantity) - item.quantity) / item.quantity * 100) + '%' }"
-                class="bg-red-400 transition-all duration-300"
               ></div>
             </div>
           </div>
           
           <div class="text-sm text-gray-500">
-            <!-- Settlement status -->
+            <!-- Settlement status with confirmation counter -->
             <span
-              :class="{
-                'text-green-600 font-medium': item.confirmedQuantity >= item.quantity,
-                'text-orange-600 font-medium': item.unconfirmedQuantity > 0 && item.confirmedQuantity < item.quantity,
-                'text-gray-500': item.confirmedQuantity === 0 && item.unconfirmedQuantity === 0
-              }"
+              :class="item.confirmedQuantity >= item.quantity ? 'text-green-600 font-medium' : 'text-gray-500'"
             >
-              <span v-if="item.confirmedQuantity >= item.quantity">✓ Fully Settled</span>
-              <span v-else-if="item.unconfirmedQuantity > 0 && item.confirmedQuantity < item.quantity">⏳ Settlement Pending</span>
-              <span v-else-if="item.confirmedQuantity + item.unconfirmedQuantity > 0">⚡ Partially Settled</span>
-              <span v-else>⏸ No Settlements</span>
-              {{ item.confirmedQuantity + item.unconfirmedQuantity }}/{{ item.quantity }}
-              <span v-if="(item.confirmedQuantity + item.unconfirmedQuantity) > item.quantity" class="text-red-600">
-                - Overpaid by {{ (item.confirmedQuantity + item.unconfirmedQuantity) - item.quantity }}
-              </span>
+              ({{ item.confirmedQuantity }}/{{ item.quantity }})<span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
             </span>
             × {{ formatSats(item.price) }} sats
             <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
           </div>
         </div>
-      </div>
-      <div class="font-medium text-right">
-        <div>{{ formatSats(item.price * item.quantity) }} sats</div>
-        <div class="text-xs text-gray-500">{{ toFiat(item.price * item.quantity) }}</div>
       </div>
     </div>
   </div>
