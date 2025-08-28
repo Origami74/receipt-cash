@@ -65,93 +65,93 @@ export function useCashuPaymentOrchestrator(options = {}) {
    * Process a Cashu payment
    */
   const processCashuPayment = async (payment, settlement) => {
-    if (enableBackgroundProcessing) {
-      processingCount.value++;
-    }
+    // if (enableBackgroundProcessing) {
+    //   processingCount.value++;
+    // }
     
-    try {
-      console.log('Processing Cashu payment for settlement:', settlement.id);
+    // try {
+    //   console.log('Processing Cashu payment for settlement:', settlement.id);
       
-      const { cashuMessage } = payment;
+    //   const { cashuMessage } = payment;
       
-      // Calculate expected amount from settlement data
-      const expectedAmount = settlement.settledItems.reduce((sum, item) =>
-        sum + (item.price * item.selectedQuantity), 0);
+    //   // Calculate expected amount from settlement data
+    //   const expectedAmount = settlement.settledItems.reduce((sum, item) =>
+    //     sum + (item.price * item.selectedQuantity), 0);
       
-      // Verify the received amount matches expectation
-      const receivedAmount = cashuMessage.proofs.reduce((sum, proof) => sum + proof.amount, 0);
+    //   // Verify the received amount matches expectation
+    //   const receivedAmount = cashuMessage.proofs.reduce((sum, proof) => sum + proof.amount, 0);
       
-      console.log('Expected amount:', expectedAmount, 'sats');
-      console.log('Received amount:', receivedAmount, 'sats');
+    //   console.log('Expected amount:', expectedAmount, 'sats');
+    //   console.log('Received amount:', receivedAmount, 'sats');
       
-      if (receivedAmount !== expectedAmount) {
-        console.warn('Amount mismatch - Expected:', expectedAmount, 'Received:', receivedAmount);
-        // Continue processing anyway, but log the discrepancy
-      }
+    //   if (receivedAmount !== expectedAmount) {
+    //     console.warn('Amount mismatch - Expected:', expectedAmount, 'Received:', receivedAmount);
+    //     // Continue processing anyway, but log the discrepancy
+    //   }
       
-      // Store proofs to wallet for processing
-      const wallet = await cashuWalletManager.getWallet(cashuMessage.mint);
+    //   // Store proofs to wallet for processing
+    //   const wallet = await cashuWalletManager.getWallet(cashuMessage.mint);
       
-      // Validate proofs with the mint
-      const stateCheckResult = await wallet.checkProofsStates(cashuMessage.proofs);
-      const validProofs = cashuMessage.proofs.filter((proof, index) => stateCheckResult[index].state !== 'SPENT');
+    //   // Validate proofs with the mint
+    //   const stateCheckResult = await wallet.checkProofsStates(cashuMessage.proofs);
+    //   const validProofs = cashuMessage.proofs.filter((proof, index) => stateCheckResult[index].state !== 'SPENT');
       
-      console.log('Valid proofs:', validProofs.length, 'of', cashuMessage.proofs.length);
+    //   console.log('Valid proofs:', validProofs.length, 'of', cashuMessage.proofs.length);
       
-      if (validProofs.length === 0) {
-        throw new Error('All received proofs are already spent');
-      }
+    //   if (validProofs.length === 0) {
+    //     throw new Error('All received proofs are already spent');
+    //   }
 
-      if (validProofs.length <= cashuMessage.proofs) {
-        throw new Error('Token partially spent');
-      }
+    //   if (validProofs.length <= cashuMessage.proofs) {
+    //     throw new Error('Token partially spent');
+    //   }
       
-      // Store proofs in wallet for future use
-      await wallet.receive(cashuMessage);
+    //   // Store proofs in wallet for future use
+    //   await wallet.receive(cashuMessage);
       
-      console.log('Cashu payment processed successfully');
-      showNotification(`Received ${receivedAmount} sats payment`, 'success');
+    //   console.log('Cashu payment processed successfully');
+    //   showNotification(`Received ${receivedAmount} sats payment`, 'success');
       
-      // Call processed callback
-      if (onPaymentProcessed) {
-        onPaymentProcessed({
-          payment,
-          settlement,
-          cashuMessage,
-          receivedAmount,
-          validProofs
-        });
-      }
+    //   // Call processed callback
+    //   if (onPaymentProcessed) {
+    //     onPaymentProcessed({
+    //       payment,
+    //       settlement,
+    //       cashuMessage,
+    //       receivedAmount,
+    //       validProofs
+    //     });
+    //   }
       
-      // Remove any previous errors for this payment
-      processingErrors.value = processingErrors.value.filter(e => e.paymentId !== payment.id);
+    //   // Remove any previous errors for this payment
+    //   processingErrors.value = processingErrors.value.filter(e => e.paymentId !== payment.id);
       
-    } catch (error) {
-      console.error('Error processing Cashu payment:', error);
+    // } catch (error) {
+    //   console.error('Error processing Cashu payment:', error);
       
-      // Store error for tracking
-      const errorInfo = {
-        paymentId: payment.id,
-        settlementId: settlement.id,
-        error: error.message,
-        timestamp: new Date()
-      };
+    //   // Store error for tracking
+    //   const errorInfo = {
+    //     paymentId: payment.id,
+    //     settlementId: settlement.id,
+    //     error: error.message,
+    //     timestamp: new Date()
+    //   };
       
-      // Replace existing error for this payment or add new one
-      const existingErrorIndex = processingErrors.value.findIndex(e => e.paymentId === payment.id);
-      if (existingErrorIndex >= 0) {
-        processingErrors.value[existingErrorIndex] = errorInfo;
-      } else {
-        processingErrors.value.push(errorInfo);
-      }
+    //   // Replace existing error for this payment or add new one
+    //   const existingErrorIndex = processingErrors.value.findIndex(e => e.paymentId === payment.id);
+    //   if (existingErrorIndex >= 0) {
+    //     processingErrors.value[existingErrorIndex] = errorInfo;
+    //   } else {
+    //     processingErrors.value.push(errorInfo);
+    //   }
       
-      showNotification('Failed to process Cashu payment: ' + error.message, 'error');
-      throw error;
-    } finally {
-      if (enableBackgroundProcessing) {
-        processingCount.value = Math.max(0, processingCount.value - 1);
-      }
-    }
+    //   showNotification('Failed to process Cashu payment: ' + error.message, 'error');
+    //   throw error;
+    // } finally {
+    //   if (enableBackgroundProcessing) {
+    //     processingCount.value = Math.max(0, processingCount.value - 1);
+    //   }
+    // }
   };
 
   /**

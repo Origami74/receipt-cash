@@ -152,7 +152,7 @@ class IncomingPaymentSplitter {
       const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEvent.id)
 
       // !! TODO: investigate, probably wrongly chose encryption key to properly follow nip44 encryption scheme.
-      const decryptionKeyBytes = Uint8Array.from(Buffer.from(ownedReceipt.sharedEncryptionKey, 'hex'));
+      const decryptionKeyBytes = Uint8Array.from(Buffer.from(ownedReceipt.privateKey, 'hex'));
       const receiptContentPlain = await nip44.decrypt(receiptEvent.content, decryptionKeyBytes);
       // const signer = new SimpleSigner(privateKeyBytes);
       // const receiptContent = await signer.nip44.decrypt(decryptionKey, receiptEvent.content)

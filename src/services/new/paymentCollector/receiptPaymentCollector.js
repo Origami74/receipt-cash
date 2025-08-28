@@ -106,7 +106,7 @@ class ReceiptPaymentCollector {
     if (paymentType === 'cashu') {
       this._handleCashuSettlement(settlementEventId);
     } else {
-      this._handleLightningSettlement(settlementEventId);
+      this._handleLightningSettlement(settlementEvent);
     }
   }
 
@@ -120,11 +120,11 @@ class ReceiptPaymentCollector {
     }
   }
 
-  _handleLightningSettlement(settlementEventId) {
-    console.log(`⚡ Lightning settlement detected: ${settlementEventId}`);
+  _handleLightningSettlement(settlementEvent) {
+    console.log(`⚡ Lightning settlement detected: ${settlementEvent.id}`);
     
     // Start a dedicated lightning collector for this specific settlement
-    this._startLightningPaymentCollector(settlementEventId);
+    this._startLightningPaymentCollector(settlementEvent);
   }
 
   _subscribeToConfirmationEvents(settlementEventId) {
@@ -180,9 +180,11 @@ class ReceiptPaymentCollector {
         receiptPaymentCollector.cashuCollector.stop();
         receiptPaymentCollector.cashuCollector = null;
       }
-    } else {
+    } else if (settlementState.paymentType === 'lightning') {
       // Handle lightning confirmation - stop the specific collector
       receiptPaymentCollector._stopLightningCollectorForSettlement(settlementEventId);
+    } else{
+      console.error(`❌ Received confirmation event with unknown paymentType ${settlementState.paymentType}`)
     }
   }
 
@@ -196,15 +198,15 @@ class ReceiptPaymentCollector {
     this.cashuCollector.start();
   }
 
-  _startLightningPaymentCollector(settlementEventId) {
-    if (this.lightningCollectors.has(settlementEventId)) {
+  _startLightningPaymentCollector(settlementEvent) {
+    if (this.lightningCollectors.has(settlementEvent.id)) {
       return; // Already running for this settlement
     }
 
-    console.log(`⚡ Starting LightningPaymentCollector for settlement: ${settlementEventId}`);
-    const collector = lightningPaymentCollector.create(this.receipt, settlementEventId);
+    console.log(`⚡ Starting LightningPaymentCollector for settlement: ${settlementEvent.id}`);
+    const collector = lightningPaymentCollector.create(this.receipt, settlementEvent);
     collector.start();
-    this.lightningCollectors.set(settlementEventId, collector);
+    this.lightningCollectors.set(settlementEvent.id, collector);
   }
 
   _stopLightningCollectorForSettlement(settlementEventId) {

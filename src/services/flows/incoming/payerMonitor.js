@@ -153,55 +153,55 @@ class PayerMonitor {
    * @param {Object} settlementData - The decrypted settlement data
    */
   async processLightningSettlement(event, settlementData) {
-    try {
-      const encryptedMintQuote = event.tags.find(tag => tag[0] === 'mint_quote')?.[1];
-      const encryptedMintUrl = event.tags.find(tag => tag[0] === 'mint_url')?.[1];
-      const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
+    // try {
+    //   const encryptedMintQuote = event.tags.find(tag => tag[0] === 'mint_quote')?.[1];
+    //   const encryptedMintUrl = event.tags.find(tag => tag[0] === 'mint_url')?.[1];
+    //   const receiptEventId = event.tags.find(tag => tag[0] === 'e')?.[1];
 
-      if (!encryptedMintQuote) {
-        console.error('No mint quote found in lightning settlement');
-        return;
-      }
+    //   if (!encryptedMintQuote) {
+    //     console.error('No mint quote found in lightning settlement');
+    //     return;
+    //   }
       
-      // Get receipt info with publishing private key
-      const receiptInfo = this.activeReceipts.get(receiptEventId);
-      if (!receiptInfo || !receiptInfo.publishingPrivateKey) {
-        console.error('No receipt publishing private key found for decryption');
-        return;
-      }
+    //   // Get receipt info with publishing private key
+    //   const receiptInfo = this.activeReceipts.get(receiptEventId);
+    //   if (!receiptInfo || !receiptInfo.publishingPrivateKey) {
+    //     console.error('No receipt publishing private key found for decryption');
+    //     return;
+    //   }
       
-      // Decrypt mint quote ID and mint URL using conversation key
-      let mintQuoteId;
-      let mintUrl = null;
-      try {
-        // Get the settler's pubkey from the settlement event
-        const settlerPubkey = event.pubkey;
+    //   // Decrypt mint quote ID and mint URL using conversation key
+    //   let mintQuoteId;
+    //   let mintUrl = null;
+    //   try {
+    //     // Get the settler's pubkey from the settlement event
+    //     const settlerPubkey = event.pubkey;
         
-        // Create conversation key for NIP-44 decryption
-        console.log("publishingPrivateKey", receiptInfo.publishingPrivateKey)
-        const conversationKey = nip44.getConversationKey(receiptInfo.publishingPrivateKey, settlerPubkey);
+    //     // Create conversation key for NIP-44 decryption
+    //     console.log("publishingPrivateKey", receiptInfo.publishingPrivateKey)
+    //     const conversationKey = nip44.getConversationKey(receiptInfo.publishingPrivateKey, settlerPubkey);
         
-        // Decrypt the mint quote ID
-        mintQuoteId = await nip44.decrypt(encryptedMintQuote, conversationKey);
+    //     // Decrypt the mint quote ID
+    //     mintQuoteId = await nip44.decrypt(encryptedMintQuote, conversationKey);
         
-        // Decrypt the mint URL if available
-        if (encryptedMintUrl) {
-          mintUrl = await nip44.decrypt(encryptedMintUrl, conversationKey);
-          console.log('Decrypted mint URL:', mintUrl);
-        }
-      } catch (error) {
-        console.error('Error decrypting mint quote or URL:', error);
-        return;
-      }
+    //     // Decrypt the mint URL if available
+    //     if (encryptedMintUrl) {
+    //       mintUrl = await nip44.decrypt(encryptedMintUrl, conversationKey);
+    //       console.log('Decrypted mint URL:', mintUrl);
+    //     }
+    //   } catch (error) {
+    //     console.error('Error decrypting mint quote or URL:', error);
+    //     return;
+    //   }
       
-      console.log('Monitoring Lightning payment for mint quote:', mintQuoteId);
+    //   console.log('Monitoring Lightning payment for mint quote:', mintQuoteId);
       
-      // Start monitoring the mint quote with specific mint URL
-      this.monitorMintQuote(mintQuoteId, event, settlementData, mintUrl);
+    //   // Start monitoring the mint quote with specific mint URL
+    //   this.monitorMintQuote(mintQuoteId, event, settlementData, mintUrl);
       
-    } catch (error) {
-      console.error('Error processing Lightning settlement:', error);
-    }
+    // } catch (error) {
+    //   console.error('Error processing Lightning settlement:', error);
+    // }
   }
   
   /**

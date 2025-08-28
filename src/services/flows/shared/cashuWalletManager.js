@@ -28,10 +28,11 @@ class CashuWalletManager {
       mint.connectWebSocket();
       const wallet = new CashuWallet(mint);
 
+      this.wallets.set(normalizedUrl, wallet);
+
       // Load mint information including keysets - required for operations like send()
       await wallet.loadMint();
       
-      this.wallets.set(normalizedUrl, wallet);
       console.log(`Wallet created and cached for mint: ${mintUrl}`);
       return wallet;
     } catch (error) {

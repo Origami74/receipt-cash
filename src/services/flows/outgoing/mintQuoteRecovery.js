@@ -71,7 +71,6 @@ class MintQuoteRecoveryService {
       // Claim the ecash tokens
       const wallet = await cashuWalletManager.getWallet(mintQuote.mintUrl);
       const proofs = await wallet.mintProofs(mintQuote.mintQuote.amount, mintQuote.mintQuote.quote);
-
       if (!proofs || proofs.length === 0) {
         throw new Error('Failed to mint proofs from quote');
       }
