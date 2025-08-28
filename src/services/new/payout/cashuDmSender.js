@@ -6,6 +6,7 @@ import { SendWrappedMessage } from 'applesauce-actions/actions';
 import { EventFactory } from 'applesauce-factory';
 import { ActionHub } from 'applesauce-actions';
 import { moneyStorageManager } from '../storage/moneyStorageManager.js';
+import { createPaymentMessage, decodeRequest, extractNostrTransport } from '../../../utils/cashuUtils.js';
 
 /**
  * Cashu DM Sender Service
@@ -62,14 +63,14 @@ class CashuDmSender {
       console.log(`💸 Sending Cashu payment with ${proofs.length} proofs using mint: ${mintUrl}`);
       console.log(`📋 Payment request: ${paymentRequest.slice(0, 20)}...`);
       
-      const transport = cashuService.extractNostrTransport(paymentRequest);
+      const transport = extractNostrTransport(paymentRequest);
       if (!transport || !transport.pubkey) {
         console.error('❌ Invalid payment request - no valid transport found');
         return false;
       }
 
       // Check if the mint URL is compatible with the payment request
-      const decodedRequest = cashuService.decodeRequest(paymentRequest);
+      const decodedRequest = decodeRequest(paymentRequest);
       if (decodedRequest && decodedRequest.mints && decodedRequest.mints.length > 0) {
         // Payment request specifies mints - check if our mint is included
         if (!decodedRequest.mints.includes(mintUrl)) {
@@ -82,7 +83,7 @@ class CashuDmSender {
         console.log('✅ Payment request accepts any mint, proceeding with:', mintUrl);
       }
 
-      const paymentMessage = cashuService.createPaymentMessage(
+      const paymentMessage = createPaymentMessage(
         transport.id,
         mintUrl, // Use the specified mint URL
         transport.unit,

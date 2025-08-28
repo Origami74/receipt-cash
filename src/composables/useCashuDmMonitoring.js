@@ -158,55 +158,55 @@ export function useCashuDmMonitoring(options = {}) {
    * Start the Cashu DM subscription
    */
   const startSubscription = async (pubkeys = receiptPubkeys.value) => {
-    try {
-      loading.value = true;
-      error.value = null;
+    // try {
+    //   loading.value = true;
+    //   error.value = null;
       
-      console.log('Cashu DM subscription - received pubkeys:', pubkeys);
+    //   console.log('Cashu DM subscription - received pubkeys:', pubkeys);
       
-      if (!pubkeys || pubkeys.length === 0) {
-        console.log('No pubkeys available for Cashu DM subscription');
-        return;
-      }
+    //   if (!pubkeys || pubkeys.length === 0) {
+    //     console.log('No pubkeys available for Cashu DM subscription');
+    //     return;
+    //   }
 
-      console.log('Starting Cashu DM subscription for pubkeys:', pubkeys);
+    //   console.log('Starting Cashu DM subscription for pubkeys:', pubkeys);
 
-      // Create subscription for gift-wrapped messages to our pubkeys
-      currentSubscription = globalPool
-        .subscription(DEFAULT_RELAYS, {
-          kinds: [KIND_GIFTWRAPPED_MSG],
-          "#p": pubkeys,
-          since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Look back 90 days
-        })
-        .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-        .subscribe(handleGiftWrappedEvent);
+    //   // Create subscription for gift-wrapped messages to our pubkeys
+    //   currentSubscription = globalPool
+    //     .subscription(DEFAULT_RELAYS, {
+    //       kinds: [KIND_GIFTWRAPPED_MSG],
+    //       "#p": pubkeys,
+    //       since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Look back 90 days
+    //     })
+    //     .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+    //     .subscribe(handleGiftWrappedEvent);
         
-    } catch (err) {
-      console.error('Error starting Cashu DM subscription:', err);
-      error.value = 'Failed to start Cashu DM monitoring. Please try again.';
-    } finally {
-      loading.value = false;
-    }
+    // } catch (err) {
+    //   console.error('Error starting Cashu DM subscription:', err);
+    //   error.value = 'Failed to start Cashu DM monitoring. Please try again.';
+    // } finally {
+    //   loading.value = false;
+    // }
   };
 
   /**
    * Stop the current subscription
    */
   const stopSubscription = () => {
-    if (currentSubscription) {
-      currentSubscription.unsubscribe();
-      currentSubscription = null;
-      console.log('Cashu DM subscription stopped');
-    }
+    // if (currentSubscription) {
+    //   currentSubscription.unsubscribe();
+    //   currentSubscription = null;
+    //   console.log('Cashu DM subscription stopped');
+    // }
   };
 
   /**
    * Restart the subscription
    */
   const restartSubscription = async (pubkeys = receiptPubkeys.value) => {
-    stopSubscription();
-    cashuPayments.value = [];
-    await startSubscription(pubkeys);
+    // stopSubscription();
+    // cashuPayments.value = [];
+    // await startSubscription(pubkeys);
   };
 
   /**

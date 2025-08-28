@@ -4,6 +4,7 @@ import cashuWalletManager from '../shared/cashuWalletManager';
 import nostrService from '../shared/nostr';
 import settlementService from '../outgoing/settlement';
 import cashuService from '../shared/cashuService';
+import { extractNostrTransport, decodeRequest, createPaymentMessage } from '../../../utils/cashuUtils';
 import { showNotification } from '../../notificationService';
 import {storeChangeForMint} from '../../storageService'
 import { globalEventStore, globalPool } from '../../nostr/applesauce';
@@ -584,14 +585,14 @@ class PayerMonitor {
 
       console.log(`Sending Cashu payment with ${proofs.length} proofs using mint: ${mintUrl}, request: ${paymentRequest}`);
       
-      const transport = cashuService.extractNostrTransport(paymentRequest);
+      const transport = extractNostrTransport(paymentRequest);
       if (!transport || !transport.pubkey) {
         console.error('Invalid payment request - no valid transport found');
         return false;
       }
 
       // Check if the mint URL is compatible with the payment request
-      const decodedRequest = cashuService.decodeRequest(paymentRequest);
+      const decodedRequest = decodeRequest(paymentRequest);
       if (decodedRequest && decodedRequest.mints && decodedRequest.mints.length > 0) {
         // Payment request specifies mints - check if our mint is included
         if (!decodedRequest.mints.includes(mintUrl)) {
@@ -604,7 +605,7 @@ class PayerMonitor {
         console.log('Payment request accepts any mint, proceeding with:', mintUrl);
       }
 
-      const paymentMessage = cashuService.createPaymentMessage(
+      const paymentMessage = createPaymentMessage(
         transport.id,
         mintUrl, // Use the specified mint URL
         transport.unit,

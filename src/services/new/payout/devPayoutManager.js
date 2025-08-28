@@ -1,3 +1,4 @@
+import cashuService from '../../flows/shared/cashuService.js';
 import { DEV_CASHU_REQ } from '../../nostr/constants.js';
 import { moneyStorageManager } from '../storage/moneyStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
@@ -69,8 +70,11 @@ class DevPayoutManager {
     if (existingDevPayments.length > 0) {
       console.log(`📦 Processing ${existingDevPayments.length} existing developer payments...`);
       
-      existingDevPayments.forEach(payment => {
-        this._processDevPayment(payment);
+      existingDevPayments.forEach(async (payment) => {
+        if(payment.isSpent === true){
+            return;
+        }
+        await this._processDevPayment(payment);
       });
     } else {
       console.log('📭 No existing developer payments to process');
@@ -87,19 +91,29 @@ class DevPayoutManager {
    * @param {number} devPayment.splitAmount - Amount in sats
    * @param {string} devPayment.splitType - Should be 'developer'
    */
-  _processDevPayment(devPayment) {
+  async _processDevPayment(devPayment) {
     try {
-      console.log(`🔄 Processing dev payment: ${devPayment.receiptEventId.slice(0, 8)}... → ${devPayment.splitAmount} sats`);
+        console.log(`🔄 Processing dev payment: ${devPayment.receiptEventId.slice(0, 8)}... → ${devPayment.splitAmount} sats`);
 
-      // Log payment details
-      console.log(`📊 Payment details:`);
-      console.log(`   💰 Amount: ${devPayment.splitAmount} sats (${devPayment.splitPercentage}% of ${devPayment.originalAmount} sats)`);
-      console.log(`   🏦 Mint: ${devPayment.mint}`);
-      console.log(`   🔗 Proofs: ${devPayment.proofs.length} proof(s)`);
-      console.log(`   📅 Processed: ${new Date(devPayment.processedAt).toLocaleString()}`);
+        // Log payment details
+        console.log(`📊 Payment details:`);
+        console.log(`   💰 Amount: ${devPayment.splitAmount} sats (${devPayment.splitPercentage}% of ${devPayment.originalAmount} sats)`);
+        console.log(`   🏦 Mint: ${devPayment.mint}`);
+        console.log(`   🔗 Proofs: ${devPayment.proofs.length} proof(s)`);
+        console.log(`   📅 Processed: ${new Date(devPayment.processedAt).toLocaleString()}`);
 
-      // Immediately forward payment to developer (1-to-1)
-      cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mint)
+        const proofsClaimed = await cashuService.checkProofsClaimed(devPayment.proofs, devPayment.mint)
+
+
+        if(proofsClaimed){
+            console.log(`   🔥 Proofs already claimed, skipping...`);
+            devPayment.isSpent = true;
+            moneyStorageManager.dev.setItem(devPayment)
+            return;
+        }
+
+        // Immediately forward payment to developer (1-to-1)
+        cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mint)
 
     } catch (error) {
       console.error(`❌ Error processing dev payment ${devPayment.receiptEventId}:`, error);

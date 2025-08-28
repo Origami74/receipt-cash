@@ -8,6 +8,9 @@ import { getGiftWrapRumor, unlockGiftWrap } from "applesauce-core/helpers";
 import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
 import { moneyStorageManager } from "../storage/moneyStorageManager";
+import cashuService from "../../flows/shared/cashuService";
+import cashuWalletManager from "../../flows/shared/cashuWalletManager";
+import { sumProofs } from "../../../utils/cashuUtils";
 
 /**
  * Collects cashu payments for a specific receipt
@@ -92,17 +95,24 @@ class CashuPaymentCollector {
         mintUrl: cashuDM.mint
       }
 
-      // TODO: check if confirmed in the meanwhile
-
       if(moneyStorageManager.incoming.hasItem(incomingPayment)){
         console.info('Incoming proofs already stored, ignoring...')
         return
       }
 
-      // TODO: Check if proof spent
+      // TODO: check if accepted mint
 
+      const wallet = await cashuWalletManager.getWallet(incomingPayment.mintUrl)
+
+      // Swap tokens so they cannot be spent after confirmation.
+      // NOTE: there is a small window between swap() and setItem() where there is a chance of proofs getting lost if processing stops right in between.
+      const {keep, send} = await wallet.swap(0, incomingPayment.proofs)
+      incomingPayment.proofs = keep;
+    
+      // Store the proofs in browser storage
       await moneyStorageManager.incoming.setItem(incomingPayment)
 
+      // Confirm for the settler that we've received their payment
       await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId)
       
       console.debug("💾 Successfully saved incoming payment from cashu DM:", cashuDM);

@@ -1,4 +1,4 @@
-import cashuService from '../services/flows/shared/cashuService';
+import { validatePaymentRequest } from './cashuUtils.js';
 
 /**
  * Address type enum
@@ -42,7 +42,7 @@ export function validateReceiveAddress(address) {
   }
 
   // Check if it's a Cashu payment request
-  const cashuValidation = cashuService.validatePaymentRequest(trimmedAddress);
+  const cashuValidation = validatePaymentRequest(trimmedAddress);
   if (cashuValidation.isValid) {
     return {
       isValid: true,
