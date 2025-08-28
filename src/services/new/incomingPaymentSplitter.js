@@ -255,7 +255,7 @@ class IncomingPaymentSplitter {
           receiptEventId: payment.receiptEventId,
           settlementEventId: payment.settlementEventId,
           proofs: devProofs,
-          mint: payment.mintUrl,
+          mintUrl: payment.mintUrl,
           splitType: 'developer',
           originalAmount: totalAmount,
           splitAmount: actualDevAmount,

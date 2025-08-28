@@ -87,7 +87,7 @@ class DevPayoutManager {
    * @param {string} devPayment.receiptEventId - Receipt event ID
    * @param {string} devPayment.settlementEventId - Settlement event ID
    * @param {Array} devPayment.proofs - Array of Cashu proofs
-   * @param {string} devPayment.mint - Mint URL
+   * @param {string} devPayment.mintUrl - Mint URL
    * @param {number} devPayment.splitAmount - Amount in sats
    * @param {string} devPayment.splitType - Should be 'developer'
    */
@@ -98,11 +98,11 @@ class DevPayoutManager {
         // Log payment details
         console.log(`📊 Payment details:`);
         console.log(`   💰 Amount: ${devPayment.splitAmount} sats (${devPayment.splitPercentage}% of ${devPayment.originalAmount} sats)`);
-        console.log(`   🏦 Mint: ${devPayment.mint}`);
+        console.log(`   🏦 Mint: ${devPayment.mintUrl}`);
         console.log(`   🔗 Proofs: ${devPayment.proofs.length} proof(s)`);
         console.log(`   📅 Processed: ${new Date(devPayment.processedAt).toLocaleString()}`);
 
-        const proofsClaimed = await cashuService.checkProofsClaimed(devPayment.proofs, devPayment.mint)
+        const proofsClaimed = await cashuService.checkProofsClaimed(devPayment.proofs, devPayment.mintUrl)
 
 
         if(proofsClaimed){
@@ -113,7 +113,7 @@ class DevPayoutManager {
         }
 
         // Immediately forward payment to developer (1-to-1)
-        cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mint)
+        cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mintUrl)
 
     } catch (error) {
       console.error(`❌ Error processing dev payment ${devPayment.receiptEventId}:`, error);

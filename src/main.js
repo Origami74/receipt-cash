@@ -3,27 +3,21 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import './style.css';
-import nostrService from './services/flows/shared/nostr';
-import receiptMonitoringService from './services/flows/incoming/receiptMonitoringService';
-import proofCleanup from './services/flows/shared/proofCleanup';
 import debugLogger from './services/debugService';
 import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
 import { incomingPaymentSplitter } from './services/new/incomingPaymentSplitter';
 import { devPayoutManager } from './services/new/payout/devPayoutManager';
 import { cashuDmSender } from './services/new/payout/cashuDmSender';
+import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
 
-// Initialize Nostr
-// nostrService.connect();
-// receiptMonitoringService.initialize();
-
-// Start cleanup services
-
-// temp disable cleanup becasue of rate limiting by the mint
-// proofCleanup.start();
-
+// Initialize services
 receiptLifecycleManager.start()
+
 incomingPaymentSplitter.start()
+
 devPayoutManager.start()
+payerPayoutManager.start()
+
 cashuDmSender.start()
 
 

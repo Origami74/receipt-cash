@@ -64,7 +64,6 @@ const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, 
    * @returns {Boolean} - True if proofs have been claimed and can be deleted
    */
   const checkProofsClaimed = async(proofs, mintUrl) => {
-    try {
       if (!proofs || proofs.length === 0) {
         return true; // No proofs to check, safe to clean up
       }
@@ -86,13 +85,6 @@ const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, 
         console.log(`${spentCount} of ${proofs.length} proofs SPENT, ${unspentCount} still UNSPENT - keeping in storage`);
         return false;
       }
-      
-    } catch (error) {
-      console.error('Error checking proof status:', error);
-      
-      // On error, don't delete proofs - better to keep them safe
-      return false;
-    }
   }
 
 /**

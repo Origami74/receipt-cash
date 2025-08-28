@@ -15,7 +15,7 @@
  * @returns {string} returns.receiptId - The receipt identifier
  * @returns {string} returns.settlementId - The settlement identifier  
  * @returns {Array} returns.proofs - Array of Cashu proofs
- * @returns {string} returns.mint - The mint URL
+ * @returns {string} returns.mintUrl - The mint URL
  * @returns {string} returns.id - The original payment ID
  */
 function parseCashuDm(rumor) {
@@ -38,7 +38,7 @@ function parseCashuDm(rumor) {
   
   // Validate required Cashu payment message fields
   if (!cashuMessage.id || !cashuMessage.proofs || !cashuMessage.mint) {
-    console.log(`📦 DM JSON missing required cashu fields (id, proofs, mint)`);
+    console.log(`📦 DM JSON missing required cashu fields (id, proofs, mintUrl)`);
     return null;
   }
   
@@ -56,13 +56,13 @@ function parseCashuDm(rumor) {
   const settlementId = idParts[1];
 
   console.log(`✅ Parsed Cashu payment: Receipt ${receiptId.slice(0, 8)}... → Settlement ${settlementId.slice(0, 8)}...`);
-  console.log(`💰 Proofs received: ${cashuMessage.proofs.length} proof(s) from mint: ${cashuMessage.mint}`);
+  console.log(`💰 Proofs received: ${cashuMessage.proofs.length} proof(s) from mintUrl: ${cashuMessage.mintUrl}`);
   
   return {
     receiptId,
     settlementId,
     proofs: cashuMessage.proofs,
-    mint: cashuMessage.mint,
+    mintUrl: cashuMessage.mint,
     id: cashuMessage.id
   };
 }

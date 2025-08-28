@@ -92,7 +92,7 @@ class CashuPaymentCollector {
         receiptEventId: this.receipt.eventId,
         settlementEventId: cashuDM.settlementId,
         proofs: cashuDM.proofs,
-        mintUrl: cashuDM.mint
+        mintUrl: cashuDM.mintUrl
       }
 
       if(moneyStorageManager.incoming.hasItem(incomingPayment)){

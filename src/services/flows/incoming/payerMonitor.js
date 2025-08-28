@@ -35,36 +35,36 @@ class PayerMonitor {
    * @param {Object} receiptData - The full receipt data for reference
    */
   async startMonitoring(receiptEventId, receiptPublishingPrivateKey, encryptionKey, receiptData) {
-    try {
-      console.log('Starting monitoring for receipt:', receiptEventId);
+    // try {
+    //   console.log('Starting monitoring for receipt:', receiptEventId);
       
-      // Store receipt info
-      this.activeReceipts.set(receiptEventId, {
-        publishingPrivateKey: receiptPublishingPrivateKey, // For decrypting mint quotes
-        encryptionKey: encryptionKey, // For decrypting settlement content
-        receiptData: receiptData, // Full receipt data including splitPercentage
-        settlements: new Map(),
-        startTime: Date.now()
-      });
+    //   // Store receipt info
+    //   this.activeReceipts.set(receiptEventId, {
+    //     publishingPrivateKey: receiptPublishingPrivateKey, // For decrypting mint quotes
+    //     encryptionKey: encryptionKey, // For decrypting settlement content
+    //     receiptData: receiptData, // Full receipt data including splitPercentage
+    //     settlements: new Map(),
+    //     startTime: Date.now()
+    //   });
       
-      // Load existing confirmations to avoid duplicate processing
-      await this.loadExistingConfirmations(receiptEventId);
+    //   // Load existing confirmations to avoid duplicate processing
+    //   await this.loadExistingConfirmations(receiptEventId);
       
-      // Subscribe to settlement events using the encryption key
-      const subscription = await settlementService.subscribeToSettlements(
-        receiptEventId,
-        encryptionKey,
-        (settlementData, event) => this.handleSettlementEvent(settlementData, event),
-        [] // Use default relays
-      );
+    //   // Subscribe to settlement events using the encryption key
+    //   const subscription = await settlementService.subscribeToSettlements(
+    //     receiptEventId,
+    //     encryptionKey,
+    //     (settlementData, event) => this.handleSettlementEvent(settlementData, event),
+    //     [] // Use default relays
+    //   );
       
-      this.settlementSubscriptions.set(receiptEventId, subscription);
+    //   this.settlementSubscriptions.set(receiptEventId, subscription);
       
-      console.log('Started monitoring settlements for receipt:', receiptEventId);
-    } catch (error) {
-      console.error('Error starting monitoring for receipt:', receiptEventId, error);
-      throw error;
-    }
+    //   console.log('Started monitoring settlements for receipt:', receiptEventId);
+    // } catch (error) {
+    //   console.error('Error starting monitoring for receipt:', receiptEventId, error);
+    //   throw error;
+    // }
   }
   
   /**
