@@ -38,7 +38,7 @@
             <span
               :class="item.confirmedQuantity >= item.quantity ? 'text-green-600 font-medium' : 'text-gray-500'"
             >
-              ({{ item.confirmedQuantity }}/{{ item.quantity }})<span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
+              (<span :class="item.confirmedQuantity > item.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ item.confirmedQuantity }}</span>/{{ item.quantity }})<span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
             </span>
             × {{ formatSats(item.price) }} sats
             <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>

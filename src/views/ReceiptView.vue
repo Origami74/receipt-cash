@@ -194,7 +194,7 @@ export default {
     const receiptLink = computed(() => {
       if (!props.eventId || !props.decryptionKey) return '';
       const baseUrl = window.location.origin;
-      return `${baseUrl}/receipt/${props.eventId}/${props.decryptionKey}`;
+      return `${baseUrl}/pay/${props.eventId}/${props.decryptionKey}`;
     });
 
     // Toggle settlement expansion
