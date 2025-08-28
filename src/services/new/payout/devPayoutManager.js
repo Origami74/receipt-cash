@@ -101,9 +101,9 @@ class DevPayoutManager {
         console.log(`   🏦 Mint: ${devPayment.mintUrl}`);
         console.log(`   🔗 Proofs: ${devPayment.proofs.length} proof(s)`);
         console.log(`   📅 Processed: ${new Date(devPayment.processedAt).toLocaleString()}`);
+        console.log(`   ↗️ IsSpent: ${devPayment.isSpent}`);
 
         const proofsClaimed = await cashuService.checkProofsClaimed(devPayment.proofs, devPayment.mintUrl)
-
 
         if(proofsClaimed){
             console.log(`   🔥 Proofs already claimed, skipping...`);

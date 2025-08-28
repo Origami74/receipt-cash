@@ -37,15 +37,7 @@ class PayerPayoutManager {
       }
     );
 
-    // Subscribe to payer payment updates
-    const payerPaymentUpdatedSubscription = moneyStorageManager.payer.itemUpdated$.subscribe(
-      ({ item: payerPayment }) => {
-        console.log(`🔄 Payer payment updated: ${payerPayment.receiptEventId.slice(0, 8)}...`);
-        this._processPayerPayment(payerPayment);
-      }
-    );
-
-    this.subscriptions.push(payerPaymentSubscription, payerPaymentUpdatedSubscription);
+    this.subscriptions.push(payerPaymentSubscription);
   }
 
   stop() {
@@ -103,6 +95,7 @@ class PayerPayoutManager {
         console.log(`   🏦 Mint: ${payerPayment.mint}`);
         console.log(`   🔗 Proofs: ${payerPayment.proofs.length} proof(s)`);
         console.log(`   📅 Processed: ${new Date(payerPayment.processedAt).toLocaleString()}`);
+        console.log(`   ↗️ IsSpent: ${payerPayment.isSpent}`);
 
         if (payerPayment.proofs.length == 0) {
             console.log(`   💰 payerPayment has no proofs, skipping`);

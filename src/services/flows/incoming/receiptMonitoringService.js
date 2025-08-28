@@ -22,33 +22,33 @@ class ReceiptMonitoringService {
    * This should be called once when the application starts
    */
   async initialize() {
-    if (this.initialized) {
-      console.log('Receipt monitoring service already initialized');
-      return;
-    }
+    // if (this.initialized) {
+    //   console.log('Receipt monitoring service already initialized');
+    //   return;
+    // }
 
-    try {
-      console.log('Initializing receipt monitoring service...');
+    // try {
+    //   console.log('Initializing receipt monitoring service...');
       
-      // Start subscribing to receipt events
-      await this.startReceiptSubscription();
+    //   // Start subscribing to receipt events
+    //   await this.startReceiptSubscription();
       
-      this.initialized = true;
-      console.log('Receipt monitoring service initialized successfully');
+    //   this.initialized = true;
+    //   console.log('Receipt monitoring service initialized successfully');
       
-    } catch (error) {
-      console.error('Error initializing receipt monitoring service:', error);
+    // } catch (error) {
+    //   console.error('Error initializing receipt monitoring service:', error);
       
-      // Retry initialization if it failed
-      this.initializationRetries++;
-      if (this.initializationRetries < this.maxRetries) {
-        console.log(`Retrying initialization (${this.initializationRetries}/${this.maxRetries})...`);
-        setTimeout(() => this.initialize(), 5000); // Retry after 5 seconds
-      } else {
-        console.error('Max initialization retries reached');
-        showNotification('Failed to initialize receipt monitoring', 'error');
-      }
-    }
+    //   // Retry initialization if it failed
+    //   this.initializationRetries++;
+    //   if (this.initializationRetries < this.maxRetries) {
+    //     console.log(`Retrying initialization (${this.initializationRetries}/${this.maxRetries})...`);
+    //     setTimeout(() => this.initialize(), 5000); // Retry after 5 seconds
+    //   } else {
+    //     console.error('Max initialization retries reached');
+    //     showNotification('Failed to initialize receipt monitoring', 'error');
+    //   }
+    // }
   }
 
   /**
