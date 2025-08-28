@@ -159,7 +159,6 @@ import { useRouter } from 'vue-router';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
 import btcPriceService from '../services/btcPriceService';
-import receiptMonitoringService from '../services/flows/incoming/receiptMonitoringService';
 import receiptKeyManager from '../services/keyManagementService';
 import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
@@ -377,20 +376,12 @@ export default {
           publishedReceiptEvent.encryptionPrivateKey
         );
 
-        // new
         ownedReceiptsStorageManager.addReceipt({
           privateKey: publishedReceiptEvent.receiptPrivateKey,
           pubkey: publishedReceiptEvent.pubkey,
           eventId: publishedReceiptEvent.id,
           sharedEncryptionKey: publishedReceiptEvent.encryptionPrivateKey
         })
-        
-        await receiptMonitoringService.addReceiptToMonitoring(
-          publishedReceiptEvent.id,
-          receiptPrivateKey,
-          publishedReceiptEvent.encryptionPrivateKey,
-          receiptWithDevSplit
-        );
         
         console.log('Started payer monitoring for receipt:', publishedReceiptEvent.id);
         
