@@ -478,6 +478,10 @@
           
           <!-- Action Buttons -->
           <div class="pt-4 border-t border-gray-200">
+            <div class="text-center mb-3">
+              <span class="text-xs text-gray-500">Version {{ appVersion }}</span>
+            </div>
+            
             <button
               @click="checkForUpdates"
               class="w-full py-2 px-4 mb-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-colors"
@@ -514,9 +518,10 @@ import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecove
 import { showNotification } from '../services/notificationService';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../services/debugService';
+import packageInfo from '../../package.json';
 import addressValidation, { AddressType } from '../utils/receiveAddressValidationUtils';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
-import { triggerManualUpdate, CURRENT_VERSION, getStoredVersion } from '../services/updaterService';
+import { triggerManualUpdate, getStoredVersion } from '../services/updaterService';
 
 export default {
   name: 'SettingsMenu',
@@ -531,6 +536,8 @@ export default {
   },
   emits: ['close'],
   setup(props, { emit }) {
+    const appVersion = ref(packageInfo.version);
+    
     // Watch for changes to isOpen prop
     watch(() => props.isOpen, (newVal) => {
       if (newVal) {
@@ -903,7 +910,7 @@ export default {
     // Check for updates manually
     const checkForUpdates = async () => {
       try {
-        const currentVersion = CURRENT_VERSION;
+        const currentVersion = packageInfo.version;
         const storedVersion = getStoredVersion();
         
         if (storedVersion === currentVersion) {
@@ -1002,6 +1009,7 @@ export default {
     };
 
     return {
+      appVersion,
       mintQuotes,
       recoveryStatuses,
       loadMintQuotes,

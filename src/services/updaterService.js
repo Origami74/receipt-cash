@@ -1,8 +1,6 @@
 // Version-based update manager
 import { showNotification } from './notificationService';
-
-// Update this version number with each release
-export const CURRENT_VERSION = '1.1.4';
+import packageInfo from '../../package.json';
 
 // Key for storing version in localStorage
 const VERSION_KEY = 'receipt-cash-version';
@@ -16,8 +14,8 @@ export const checkForVersionUpdate = async () => {
     const storedVersion = localStorage.getItem(VERSION_KEY);
     
     // If no stored version or version mismatch, force update
-    if (!storedVersion || storedVersion !== CURRENT_VERSION) {
-      console.log(`Version update required: ${storedVersion} -> ${CURRENT_VERSION}`);
+    if (!storedVersion || storedVersion !== packageInfo.version) {
+      console.log(`Version update required: ${storedVersion} -> ${packageInfo.version}`);
       
       // Show notification to user
       showNotification('Updating to latest version...', 'info');
@@ -26,7 +24,7 @@ export const checkForVersionUpdate = async () => {
       await forceAppUpdate();
       
       // Store new version
-      localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+      localStorage.setItem(VERSION_KEY, packageInfo.version);
       
       return true; // Update was performed
     }
@@ -91,5 +89,5 @@ export const triggerManualUpdate = async () => {
   
   // Always force update when manually triggered
   await forceAppUpdate();
-  localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+  localStorage.setItem(VERSION_KEY, packageInfo.version);
 };
