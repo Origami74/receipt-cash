@@ -44,6 +44,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     // Create receipt with only sats prices and preferred mints
     const fullReceiptData = {
       merchant: receiptData.merchant,
+      title: receiptData.title,
       date: receiptData.date,
       items: itemsInSats,
       currency: receiptData.currency, // Keep currency for reference

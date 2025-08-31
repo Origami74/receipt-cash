@@ -5,7 +5,7 @@
   >
     <div class="flex justify-between items-start mb-2">
       <div>
-        <h3 class="font-semibold text-lg">{{ receipt.merchant || 'Unknown Merchant' }}</h3>
+        <h3 class="font-semibold text-lg">{{ receipt.title || 'Untitled Receipt' }}</h3>
         <p class="text-sm text-gray-500">{{ formatDate(receipt.created_at) }}</p>
       </div>
       <div class="text-right">
@@ -63,7 +63,7 @@ import { useRouter } from 'vue-router';
 import { formatSats, convertFromSats } from '../utils/pricingUtils.js';
 import { formatDate } from '../utils/dateUtils';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
-import { globalEventStore, globalPool } from '../services/nostr/applesauce';
+import { globalEventLoader, globalEventStore, globalPool } from '../services/nostr/applesauce';
 import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser.js';
@@ -127,7 +127,7 @@ export default {
       return {
         id: receiptEvent.id,
         eventId: receiptEvent.id,
-        merchant: 'Unknown Merchant', // No merchant in simplified model
+        title: parsedContent.title, // No merchant in simplified model
         created_at: receiptEvent.created_at,
         totalAmount,
         currency: parsedContent.currency,
@@ -196,16 +196,14 @@ export default {
     const loadSettlements = async () => {
       try {
 
-        globalPool
-          .subscription(DEFAULT_RELAYS, {
+        globalEventLoader({
             kinds: [KIND_SETTLEMENT],
             "#e": [receiptEvent.id],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
           .subscribe(handleSettlementEvent)
 
-        globalPool
-          .subscription(DEFAULT_RELAYS, {
+        globalEventLoader({
             kinds: [KIND_SETTLEMENT_CONFIRMATION],
             authors: [receiptEvent.pubkey],
             "#e": [receiptEvent.id],

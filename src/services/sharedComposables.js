@@ -6,15 +6,11 @@
 import { useReceiptSubscription } from '../composables/useReceiptSubscription.js';
 import { useSettlementSubscription } from '../composables/useSettlementSubscription.js';
 import { useSettlementConfirmation } from '../composables/useSettlementConfirmation.js';
-import { useCashuDmMonitoring } from '../composables/useCashuDmMonitoring.js';
-import { useCashuPaymentOrchestrator } from '../composables/useCashuPaymentOrchestrator.js';
 
 // Create single shared instances that will be reused across views
 let sharedReceiptSubscription = null;
 let sharedSettlementSubscription = null;
 let sharedSettlementConfirmation = null;
-let sharedCashuDmMonitoring = null;
-let sharedCashuPaymentOrchestrator = null;
 
 /**
  * Get or create the shared receipt subscription instance
@@ -32,8 +28,6 @@ export function getSharedReceiptSubscription() {
     console.log('Auto-creating settlement subscriptions to ensure no events are missed');
     getSharedSettlementSubscription();
     getSharedSettlementConfirmation();
-    getSharedCashuDmMonitoring();
-    getSharedCashuPaymentOrchestrator();
   }
   return sharedReceiptSubscription;
 }
@@ -81,65 +75,6 @@ export function getSharedSettlementConfirmation() {
     console.log('Reusing existing settlement confirmation instance');
   }
   return sharedSettlementConfirmation;
-}
-
-/**
- * Get or create the shared Cashu DM monitoring instance
- */
-export function getSharedCashuDmMonitoring() {
-  if (!sharedCashuDmMonitoring) {
-    console.log('Creating shared Cashu DM monitoring instance');
-    const receiptSub = getSharedReceiptSubscription();
-    
-    console.log('Receipt pubkeys when creating Cashu DM monitoring:', receiptSub.receiptPubkeys.value);
-    
-    sharedCashuDmMonitoring = useCashuDmMonitoring({
-      receiptPubkeys: receiptSub.receiptPubkeys, // Connect to shared receipt pubkeys
-      autoStart: false, // Let the watcher handle starting when pubkeys are available
-      enableBackgroundProcessing: true,
-      onPaymentReceived: (payment) => {
-        console.log('Cashu payment received and stored:', payment.id);
-      }
-    });
-    
-    console.log('Cashu DM monitoring subscription created');
-  } else {
-    console.log('Reusing existing Cashu DM monitoring instance');
-  }
-  return sharedCashuDmMonitoring;
-}
-
-/**
- * Get or create the shared Cashu payment orchestrator instance
- */
-export function getSharedCashuPaymentOrchestrator() {
-  if (!sharedCashuPaymentOrchestrator) {
-    console.log('Creating shared Cashu payment orchestrator instance');
-    const receiptSub = getSharedReceiptSubscription();
-    const settlementSub = getSharedSettlementSubscription();
-    const confirmationSub = getSharedSettlementConfirmation();
-    const cashuDmSub = getSharedCashuDmMonitoring();
-    
-    sharedCashuPaymentOrchestrator = useCashuPaymentOrchestrator({
-      cashuPayments: cashuDmSub.cashuPayments, // Connect to cashu payments
-      pendingSettlements: settlementSub.pendingSettlements, // Connect to pending settlements
-      confirmations: confirmationSub.confirmations, // Connect to confirmations
-      enableBackgroundProcessing: true,
-      onPaymentProcessed: (processedData) => {
-        console.log('Cashu payment processed by orchestrator:', processedData.payment.id);
-        
-        // Mark settlement as confirmed in the settlement subscription
-        if (settlementSub.markSettlementConfirmed) {
-          settlementSub.markSettlementConfirmed(processedData.settlement.id);
-        }
-      }
-    });
-    
-    console.log('Cashu payment orchestrator created');
-  } else {
-    console.log('Reusing existing Cashu payment orchestrator instance');
-  }
-  return sharedCashuPaymentOrchestrator;
 }
 
 /**

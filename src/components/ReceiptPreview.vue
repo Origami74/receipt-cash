@@ -4,7 +4,37 @@
       <div class="flex justify-between items-center">
         <h1 class="text-xl font-bold">Receipt Preview</h1>
       </div>
-      <div class="flex justify-between items-center mt-2">
+      
+      <!-- Receipt Title Section -->
+      <div class="mt-3 mb-2">
+        <div v-if="!titleEditing" class="flex items-center gap-2">
+          <div class="text-lg font-medium text-gray-800">
+            {{ receipt.title || 'Untitled Receipt' }}
+          </div>
+          <button
+            v-if="step === 'payment-request'"
+            @click="startTitleEditing"
+            class="text-sm text-blue-500 hover:text-blue-600"
+            title="Edit title"
+          >
+            ✏️
+          </button>
+        </div>
+        <div v-else class="flex items-center gap-2">
+          <input
+            v-model="receipt.title"
+            @keyup.enter="saveTitleEdit"
+            @keyup.escape="cancelTitleEdit"
+            class="flex-1 text-lg font-medium p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter receipt title"
+            ref="titleInput"
+          />
+          <button @click="saveTitleEdit" class="text-sm text-green-600 hover:text-green-700">Save</button>
+          <button @click="cancelTitleEdit" class="text-sm text-gray-600 hover:text-gray-700">Cancel</button>
+        </div>
+      </div>
+      
+      <div class="flex justify-between items-center">
         <div class="text-sm text-gray-500">{{ receipt.date }}</div>
         <CurrencySelector
           v-model="selectedCurrency"
@@ -154,7 +184,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
@@ -192,6 +222,7 @@ export default {
     
     const receipt = ref({
       ...props.receiptData,
+      title: props.receiptData.title || '',
       items: props.receiptData.items.map(item => ({
         ...item,
         editing: false,
@@ -210,6 +241,11 @@ export default {
     const eventEncryptionPrivateKey = ref('');
     const currentBtcPrice = ref(0);
     const selectedCurrency = ref(receipt.value.currency || 'EUR');
+    
+    // Title editing
+    const titleEditing = ref(false);
+    const originalTitle = ref('');
+    const titleInput = ref(null);
     
     // Developer split with 0.1% precision (default 2.1%)
     const developerSplit = ref(2.1);
@@ -308,6 +344,29 @@ export default {
         editing: true,
         originalData: { name: 'New Item', quantity: 1, price: 0 }
       });
+    };
+    
+    // Title editing functions
+    const startTitleEditing = () => {
+      originalTitle.value = receipt.value.title || '';
+      titleEditing.value = true;
+      // Focus the input after Vue updates the DOM
+      nextTick(() => {
+        if (titleInput.value) {
+          titleInput.value.focus();
+          titleInput.value.select();
+        }
+      });
+    };
+    
+    const saveTitleEdit = () => {
+      titleEditing.value = false;
+      // The title is already bound to receipt.value.title via v-model
+    };
+    
+    const cancelTitleEdit = () => {
+      receipt.value.title = originalTitle.value;
+      titleEditing.value = false;
     };
     
     const createRequest = async () => {
@@ -446,7 +505,13 @@ export default {
       saveEdit,
       cancelEdit,
       removeItem,
-      addNewItem
+      addNewItem,
+      // Title editing
+      titleEditing,
+      titleInput,
+      startTitleEditing,
+      saveTitleEdit,
+      cancelTitleEdit
     };
   }
 };

@@ -1,16 +1,14 @@
 import { SimpleSigner } from "applesauce-signers";
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG } from "../../nostr/constants";
 import { Buffer } from 'buffer';
-import { globalEventStore, globalPool } from "../../nostr/applesauce";
+import { globalEventStore } from "../../nostr/applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { mapEventsToStore } from "applesauce-core";
-import { getGiftWrapRumor, unlockGiftWrap } from "applesauce-core/helpers";
+import { unlockGiftWrap } from "applesauce-core/helpers";
 import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
 import { moneyStorageManager } from "../storage/moneyStorageManager";
-import cashuService from "../../flows/shared/cashuService";
 import cashuWalletManager from "../../flows/shared/cashuWalletManager";
-import { sumProofs } from "../../../utils/cashuUtils";
 
 /**
  * Collects cashu payments for a specific receipt
