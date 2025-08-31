@@ -1,5 +1,5 @@
 import { decodePaymentRequest, PaymentRequest } from '@cashu/cashu-ts';
-import nostrService from '../services/flows/shared/nostr.js';
+import {createNprofile, decodeNprofile} from '../utils/nostrUtils';
 
 /**
  * Extract nostr transport information from a Cashu payment request
@@ -30,7 +30,7 @@ export const extractNostrTransport = (paymentRequest) => {
     }
     
     // Decode the nprofile to get the pubkey and relays
-    const { pubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
+    const { pubkey, relays } = decodeNprofile(nostrTransport.target);
     
     if (!pubkey) {
       return null;
@@ -138,7 +138,7 @@ export const validatePaymentRequest = (paymentRequest) => {
     
     // Validate the nprofile
     try {
-      const { pubkey, relays } = nostrService.decodeNprofile(nostrTransport.target);
+      const { pubkey, relays } = decodeNprofile(nostrTransport.target);
       if (!pubkey) {
         result.error = 'Invalid Nostr profile in transport target';
         return result;
@@ -207,11 +207,60 @@ export const sumProofs = (proofs) => {
   }, 0);
 };
 
+
+/**
+ * Create a Cashu payment request
+ * @param {String} recipientPubkey - The recipient's public key
+ * @param {Number} amount - The amount in sats
+ * @param {String} receiptId - The receipt event ID
+ * @param {String} settlementId - The settlement event ID
+ * @param {String} unit - The unit (default: 'sat')
+ * @param {Array} mints - Array of mint URLs (default: use minibits)
+ * @returns {String} The encoded payment request
+ */
+export const createPaymentRequest = (recipientPubkey, amount, receiptId, settlementId, unit = 'sat', mints = []) => {
+  try {
+    // Create combined ID and memo
+    const combinedId = `${receiptId}-${settlementId}`;
+    
+    // Create nprofile for the recipient
+    const nprofile = createNprofile(recipientPubkey);
+    
+    // Create payment request object with proper structure
+    const transport = [
+        {
+          type: 'nostr',
+          target: nprofile
+        }
+      ];
+    
+    console.log(`createPaymentRequest of ${amount} sats`)
+    // Use cashu-ts to encode the payment request
+    const request = new PaymentRequest(
+      transport,
+      combinedId,
+      amount,
+      unit,
+      mints,
+      `Payment for settlement ${settlementId} of receipt ${receiptId}`,
+      true
+    );
+    
+    console.log(request)
+    
+    return request.toEncodedRequest();
+  } catch (error) {
+    console.error('Error creating payment request:', error);
+    throw new Error('Failed to create payment request: ' + error.message);
+  }
+};
+
 // Default export for backward compatibility
 export default {
   extractNostrTransport,
   decodeRequest,
   createPaymentMessage,
+  createPaymentRequest,
   validatePaymentRequest,
   extractPreferredMints,
   sumProofs

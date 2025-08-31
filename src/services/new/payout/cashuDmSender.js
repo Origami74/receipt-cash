@@ -1,4 +1,3 @@
-import cashuService from '../../flows/shared/cashuService.js';
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
 import { SimpleSigner } from 'applesauce-signers';
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_NIP17_DM } from '../../nostr/constants.js';

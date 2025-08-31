@@ -107,15 +107,7 @@
 
 <script>
 import { ref } from 'vue';
-import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk';
-import { nip44, generateSecretKey } from 'nostr-tools';
-import { Buffer } from 'buffer';
-import { showNotification } from '../services/notificationService';
-import nostrService from '../services/flows/shared/nostr';
-import debugLogger from '../services/debugService';
-
-// Developer public key to send reports to
-const DEVELOPER_PUBKEY = 'a5db1b45079ed0a6b654857712bae6e5d62ff0345abb38571f898bb9cb70100c';
+import { submitReport } from '../services/reportingService';
 
 export default {
   name: 'ReportModal',
@@ -135,155 +127,24 @@ export default {
     const includeLogs = ref(true);
     const includeUrl = ref(false);
     const isSubmitting = ref(false);
-    
-    // Function to truncate logs to fit within NIP-44 size limits
-    const truncateLogsToFit = (logEntries, maxSize = 60000) => {
-      // Reserve space for other report content (description, metadata, etc.)
-      // NIP-44 max is 65535 bytes, we use 60000 to be safe
-      
-      let totalSize = 0;
-      let truncatedLogs = [];
-      
-      // Start from the most recent logs and work backwards
-      const reversedLogs = [...logEntries].reverse();
-      
-      for (const log of reversedLogs) {
-        let logLine = `${new Date(log.timestamp).toISOString()} [${log.level.toUpperCase()}] ${log.message}`;
-        
-        // Add stack trace for error logs
-        if (log.level === 'error' && log.stack) {
-          logLine += `\n${log.stack}`;
-        }
-        
-        const logLineSize = new TextEncoder().encode(logLine).length + 1; // +1 for newline
-        
-        if (totalSize + logLineSize > maxSize) {
-          // If this log would exceed the limit, add a truncation notice
-          if (truncatedLogs.length === 0) {
-            // If we can't fit any logs, add a minimal notice
-            truncatedLogs.push('[TRUNCATED] Logs were too large to include in report');
-          } else {
-            // Add truncation notice at the beginning
-            truncatedLogs.unshift(`[TRUNCATED] Only showing ${truncatedLogs.length} most recent log entries`);
-          }
-          break;
-        }
-        
-        totalSize += logLineSize;
-        truncatedLogs.unshift(logLine); // Add to beginning to maintain chronological order
-      }
-      
-      return truncatedLogs.join('\n');
-    };
 
-    // Submit the report to the developer using Nostr
-    const submitReport = async () => {
+    // Submit the report using the reporting service
+    const handleSubmitReport = async () => {
       isSubmitting.value = true;
       
       try {
-        // Get logs if needed
-        let logs = '';
-        if (includeLogs.value) {
-          const logEntries = debugLogger.getCapturedLogs();
-          logs = truncateLogsToFit(logEntries);
-        }
-        
-        // Get current URL if needed
-        let currentUrl = '';
-        if (includeUrl.value) {
-          currentUrl = window.location.href;
-        }
-        
-        // Create report content
-        const reportContent = {
-          type: 'bug_report',
+        await submitReport({
           description: description.value,
           errorMessage: props.errorMessage,
-          url: currentUrl,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-          logs: logs
-        };
+          includeLogs: includeLogs.value,
+          includeUrl: includeUrl.value
+        });
         
-        // Create initial report content
-        let plainContent = JSON.stringify(reportContent);
-        
-        // Check if the content is too large for NIP-44 encryption (65535 bytes limit)
-        let contentSize = new TextEncoder().encode(plainContent).length;
-        
-        // If still too large, progressively reduce log content
-        if (contentSize > 65000 && includeLogs.value) {
-          console.warn(`Report content too large (${contentSize} bytes), reducing log content...`);
-          
-          // Try with smaller log sizes
-          const logSizes = [40000, 20000, 10000, 5000, 1000];
-          
-          for (const maxLogSize of logSizes) {
-            const logEntries = debugLogger.getCapturedLogs();
-            const reducedLogs = truncateLogsToFit(logEntries, maxLogSize);
-            
-            const reducedReportContent = {
-              ...reportContent,
-              logs: reducedLogs
-            };
-            
-            const testContent = JSON.stringify(reducedReportContent);
-            contentSize = new TextEncoder().encode(testContent).length;
-            
-            if (contentSize <= 65000) {
-              reportContent.logs = reducedLogs;
-              plainContent = testContent;
-              console.log(`Successfully reduced report to ${contentSize} bytes with ${maxLogSize} byte log limit`);
-              break;
-            }
-          }
-          
-          // Final fallback - remove logs entirely if still too large
-          if (contentSize > 65000) {
-            console.warn('Removing logs entirely due to size constraints');
-            reportContent.logs = '[REMOVED] Logs were too large to include in report';
-            plainContent = JSON.stringify(reportContent);
-            contentSize = new TextEncoder().encode(plainContent).length;
-          }
-        }
-        
-        console.log(`Final report size: ${contentSize} bytes`);
-        
-        // Create and publish event
-        const ndk = await nostrService.getNdk();
-        
-        // Generate a random secret key for this report
-        const reportPrivateKey = generateSecretKey();
-        const reportSigner = new NDKPrivateKeySigner(reportPrivateKey);
-        
-        const event = new NDKEvent(ndk);
-        event.kind = 1314; // kind for bug reports (infernal-insights)
-        
-        // Get developer's public key (hex to Uint8Array)
-        const recipientPubkey = Uint8Array.from(Buffer.from(DEVELOPER_PUBKEY, 'hex'));
-        
-        // Encrypt the content using NIP-44
-        const encryptedContent = await nip44.encrypt(plainContent, recipientPubkey);
-        
-        event.content = encryptedContent;
-        event.created_at = Math.floor(Date.now() / 1000);
-        event.tags = [
-          ['n', 'receipt-cash'],
-          ['p', DEVELOPER_PUBKEY],
-          ['encrypted']
-        ];
-        
-        // Sign and publish with temporary signer
-        await event.sign(reportSigner);
-        await event.publish();
-        
-        showNotification('Report submitted successfully. Thank you!', 'success');
         description.value = '';
         emit('submitted');
         emit('close');
       } catch (error) {
         console.error('Error submitting report:', error);
-        showNotification('Failed to submit report. Please try again.', 'error');
       } finally {
         isSubmitting.value = false;
       }
@@ -294,7 +155,7 @@ export default {
       includeLogs,
       includeUrl,
       isSubmitting,
-      submitReport
+      submitReport: handleSubmitReport
     };
   }
 };

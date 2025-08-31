@@ -1,5 +1,7 @@
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'; // Import NDKEvent directly
-import nostrService from '../shared/nostr';
+import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
+import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../../nostr/constants.js';
+import { EventFactory } from 'applesauce-factory';
+import { SimpleSigner } from 'applesauce-signers';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
@@ -12,10 +14,9 @@ import { Buffer } from 'buffer';
  * @param {String} receiptAuthorPubkey - The public key of the receipt author
  * @param {String} mintQuoteId - The mint quote ID (for lightning payments)
  * @param {String} mintUrl - The mint URL (for lightning payments)
- * @param {Array} relays - Additional relays to use
  * @returns {String} The event ID
  */
-const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, mintUrl = null, relays = []) => {
+const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncryptionKey, paymentType, receiptAuthorPubkey, mintQuoteId = null, mintUrl = null) => {
   try {
     console.log('publishSettlementEvent called with:', {
       receiptEventId,
@@ -25,14 +26,12 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
       receiptAuthorPubkey,
       mintQuoteId
     });
-    // Add any relays that were passed in
-    if (relays && relays.length > 0) {
-      await nostrService.addRelays(relays);
-    }
     
-    // Get access to the ndk instance and ensure we're connected
-    const ndk = await nostrService.getNdk();
-    ndk.signer = new NDKPrivateKeySigner(generateSecretKey())
+    // Generate a temporary private key for this settlement event
+    const senderPrivateKey = generateSecretKey();
+    const signer = new SimpleSigner(senderPrivateKey);
+    const factory = new EventFactory({ signer });
+    
     // Create event content
     const content = JSON.stringify({ settledItems });
     
@@ -51,10 +50,6 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     
     // Add encrypted mint_quote and mint_url tags only for lightning payments
     if (paymentType === 'lightning' && mintQuoteId) {
-      // Get the current user's private key for NIP-44 encryption
-      const ndk = await nostrService.getNdk();
-      const senderPrivateKey = ndk.signer.privateKey;
-      
       // Create conversation key for NIP-44 encryption
       const conversationKey = nip44.getConversationKey(senderPrivateKey, receiptAuthorPubkey);
       
@@ -69,107 +64,47 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
       }
     }
 
-    // Create the Nostr event
-    const event = new NDKEvent(ndk);
-    event.kind = 9568; // DM
-    event.content = encryptedContent
-    event.tags = tags;
+    // Create the draft event using EventFactory
+    const draft = await factory.build({
+      kind: KIND_SETTLEMENT, 
+      content: encryptedContent,
+      tags: tags
+    });
     
-    // Publish the settlement event
-    await event.publish();
     
-    return event.id;
+    // Sign the event
+    const signed = await factory.sign(draft);
+    
+    // Add to local event store for caching
+    globalEventStore.add(signed);
+    
+    // Publish using the global relay pool
+    const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
+    
+    const successResponses = []
+        responses.forEach((response) => {
+            if (response.ok) {
+                successResponses.push(response)
+                console.log(`Event published successfully to ${response.from}`);
+                globalEventStore.add(signed);
+            } else {
+                console.error(`Failed to publish event to ${response.from}: ${response.message}`);
+            }
+        });
+
+        if(successResponses.length <= 1){
+            console.error(`Failed to publish event ${signed.id} to enough relays!`);
+            throw new Error("Could not publish event")
+        }
+    
+    return signed.id;
   } catch (error) {
     console.error('Error publishing settlement event:', error);
     throw error;
   }
 };
 
-/**
- * Subscribe to settlement events for a receipt
- * @param {String} receiptEventId - The ID of the receipt event
- * @param {String} receiptEncryptionKey - The encryption key from the original receipt
- * @param {Function} callback - Callback function when new settlements arrive
- * @returns {Function} Unsubscribe function
- */
-const subscribeToSettlements = async (receiptEventId, receiptEncryptionKey, callback, relays = []) => {
-  // Add any relays that were passed in
-  if (relays && relays.length > 0) {
-    await nostrService.addRelays(relays);
-  }
-  
-  // Get access to the ndk instance
-  const ndk = await nostrService.getNdk();
-  
-  const filter = {
-    kinds: [9568],
-    '#e': [receiptEventId]
-  };
-  
-  const subscription = ndk.subscribe(filter);
-  
-  // Convert keys to Uint8Array once
-  const decryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
-  
-  subscription.on('event', async (event) => {
-    try {
-      // Decrypt the content using the same key as the receipt
-      const decryptedContent = await nip44.decrypt(event.content, decryptionKey);
-      const { settledItems } = JSON.parse(decryptedContent);
-      // Call callback with both settlementData and event for enhanced processing
-      callback({ settledItems }, event);
-    } catch (error) {
-      console.error('Error processing settlement event:', error);
-    }
-  });
-  
-  return () => subscription.stop();
-};
-
-/**
- * Subscribe to confirmation events for a receipt
- * @param {String} receiptEventId - The ID of the receipt event
- * @param {String} receiptAuthorPubkey - The public key of the receipt author
- * @param {Function} callback - Callback function when confirmations arrive
- * @param {Array} relays - Additional relays to use
- * @returns {Function} Unsubscribe function
- */
-const subscribeToConfirmations = async (receiptEventId, receiptAuthorPubkey, callback, relays = []) => {
-  // Add any relays that were passed in
-  if (relays && relays.length > 0) {
-    await nostrService.addRelays(relays);
-  }
-  
-  // Get access to the ndk instance
-  const ndk = await nostrService.getNdk();
-  
-  const filter = {
-    kinds: [9569], // Confirmation events
-    authors: [receiptAuthorPubkey], // Only from the receipt author (payer)
-    '#e': [receiptEventId] // Referencing this receipt
-  };
-  
-  const subscription = ndk.subscribe(filter);
-  
-  subscription.on('event', async (confirmationEvent) => {
-    try {
-      // Extract the settlement event ID from the confirmation event
-      // The confirmation event has two 'e' tags: [receiptEventId, settlementEventId]
-      const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
-      if (eTags.length >= 2) {
-        const settlementEventId = eTags[1][1]; // Second 'e' tag is the settlement event ID
-        callback(confirmationEvent, settlementEventId);
-      }
-    } catch (error) {
-      console.error('Error processing confirmation event:', error);
-    }
-  });
-  
-  return () => subscription.stop();
-};
 
 export default {
-  publishSettlementEvent,
-  subscribeToSettlements,
-  subscribeToConfirmations
+  publishSettlementEvent
 };

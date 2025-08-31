@@ -91,7 +91,6 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import confetti from 'canvas-confetti';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
 import PaymentItemsList from '../components/PaymentItemsList.vue';
@@ -101,11 +100,9 @@ import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import { showNotification, useNotification } from '../services/notificationService';
-import { formatSats, convertFromSats } from '../utils/pricingUtils';
+import { convertFromSats } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
 import settlementService from '../services/flows/outgoing/settlement';
-import nostrService from '../services/flows/shared/nostr';
-import cashuService from '../services/flows/shared/cashuService';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import { nip44 } from 'nostr-tools';
@@ -116,7 +113,7 @@ import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
 import { saveMintQuote } from '../services/storageService';
-import { getTagValue } from 'applesauce-core/helpers';
+import {createPaymentRequest} from '../utils/cashuUtils'
 
 export default {
   name: 'PaymentView',
@@ -467,7 +464,7 @@ export default {
         settlementEventId.value = settlementId;
         
         // Create Cashu payment request
-        const newPaymentRequest = cashuService.createPaymentRequest(
+        const newPaymentRequest = createPaymentRequest(
           receiptAuthorPubkey.value,
           satAmount,
           props.eventId,
