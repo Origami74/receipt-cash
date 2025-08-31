@@ -36,7 +36,11 @@ async function cacheRequest(filters) {
 }
 
 // Create an event loader (do this once at the app level)
-export const globalEventLoader = createEventLoader(globalPool, {cacheRequest: cacheRequest});
+export const globalEventLoader = createEventLoader(globalPool, 
+  {
+    eventStore: globalEventStore,
+    cacheRequest: cacheRequest
+  });
 
 // Example get confirmation events
 export const settlementLoader = createTagValueLoader(globalPool, "e", {

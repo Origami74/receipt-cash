@@ -1,7 +1,7 @@
 import { SimpleSigner } from "applesauce-signers";
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG } from "../../nostr/constants";
 import { Buffer } from 'buffer';
-import { globalEventStore } from "../../nostr/applesauce";
+import { globalEventStore, globalPool } from "../../nostr/applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { mapEventsToStore } from "applesauce-core";
 import { unlockGiftWrap } from "applesauce-core/helpers";
