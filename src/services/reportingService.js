@@ -156,9 +156,6 @@ export const submitReport = async ({ description, errorMessage = '', includeLogs
     // Sign the event
     const signed = await factory.sign(draft);
     
-    // Add to local event store for caching
-    globalEventStore.add(signed);
-    
     // Publish using the global relay pool
     const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
     
@@ -177,6 +174,8 @@ export const submitReport = async ({ description, errorMessage = '', includeLogs
       throw new Error("Could not publish bug report to enough relays");
     }
     
+    
+    globalEventStore.add(signed);
     showNotification('Report submitted successfully. Thank you!', 'success');
     
   } catch (error) {

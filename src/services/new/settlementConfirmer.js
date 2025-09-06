@@ -30,7 +30,7 @@ export async function confirmSettlement(signer, receiptEventId, settlementEventI
             if (response.ok) {
                 successResponses.push(response)
                 console.log(`Event published successfully to ${response.from}`);
-                globalEventStore.add(signed);
+                
             } else {
                 console.error(`Failed to publish event to ${response.from}: ${response.message}`);
             }
@@ -41,7 +41,10 @@ export async function confirmSettlement(signer, receiptEventId, settlementEventI
         }
         else if(successResponses.length == 1){
             console.error(`Failed to publish event ${signed.id} to enough relays!`);
+            throw new Error("Failed to publish confirm event")
         }
+
+        globalEventStore.add(signed);
       
     } catch (error) {
       console.error('Error publishing confirmation:', error);

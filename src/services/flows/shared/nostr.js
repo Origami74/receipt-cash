@@ -70,9 +70,6 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     // Sign the event
     const signed = await factory.sign(draft);
     
-    // Add to local event store for caching
-    globalEventStore.add(signed);
-    
     // Publish using the global relay pool
     const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
     
@@ -90,6 +87,9 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       console.error(`Failed to publish receipt event ${signed.id} to enough relays!`);
       throw new Error("Could not publish receipt event");
     }
+
+    // Add to local event store for caching
+    globalEventStore.add(signed);
     
     // Convert keys to hex strings
     const encryptionPrivateKeyHex = Buffer.from(encryptionPrivateKey).toString('hex');

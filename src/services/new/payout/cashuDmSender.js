@@ -140,7 +140,6 @@ class CashuDmSender {
               if (response.ok) {
                   successResponses.push(response)
                   console.log(`Event published successfully to ${response.from}`);
-                  globalEventStore.add(gift);
               } else {
                   console.error(`Failed to publish event to ${response.from}: ${response.message}`);
               }
@@ -154,6 +153,8 @@ class CashuDmSender {
               console.error(`Failed to publish event ${gift.id} to enough relays!`);
               throw new Error(`Failed to publish event ${gift.id} to enough relays!`)
           }
+
+          globalEventStore.add(gift);
 
           return true;
         });

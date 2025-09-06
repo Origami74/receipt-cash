@@ -75,27 +75,26 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     // Sign the event
     const signed = await factory.sign(draft);
     
-    // Add to local event store for caching
-    globalEventStore.add(signed);
-    
     // Publish using the global relay pool
     const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
     
     const successResponses = []
-        responses.forEach((response) => {
-            if (response.ok) {
-                successResponses.push(response)
-                console.log(`Event published successfully to ${response.from}`);
-                globalEventStore.add(signed);
-            } else {
-                console.error(`Failed to publish event to ${response.from}: ${response.message}`);
-            }
-        });
-
-        if(successResponses.length <= 1){
-            console.error(`Failed to publish event ${signed.id} to enough relays!`);
-            throw new Error("Could not publish event")
+    responses.forEach((response) => {
+        if (response.ok) {
+            successResponses.push(response)
+            console.log(`Event published successfully to ${response.from}`);
+        } else {
+            console.error(`Failed to publish event to ${response.from}: ${response.message}`);
         }
+    });
+
+    if(successResponses.length <= 1){
+        console.error(`Failed to publish event ${signed.id} to enough relays!`);
+        throw new Error("Could not publish event")
+    }
+    
+    // Add to local event store for caching
+    globalEventStore.add(signed);
     
     return signed.id;
   } catch (error) {
