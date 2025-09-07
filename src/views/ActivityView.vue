@@ -71,8 +71,8 @@ import { useRouter } from 'vue-router';
 import { getSharedReceiptSubscription, getSharedSettlementSubscription, getSharedSettlementConfirmation } from '../services/sharedComposables.js';
 import { formatSats } from '../utils/pricingUtils.js';
 import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager.js';
-import { globalEventLoader } from '../services/nostr/applesauce.js';
-import { DEFAULT_RELAYS } from '../services/nostr/constants.js';
+import { globalEventLoader, globalEventStore, globalPool } from '../services/nostr/applesauce.js';
+import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants.js';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
@@ -80,6 +80,8 @@ import { Buffer } from 'buffer';
 import ActivityHeader from '../components/activity/ActivityHeader.vue';
 import ActivitySummaryCards from '../components/activity/ActivitySummaryCards.vue';
 import ActivityReceiptGroup from '../components/activity/ActivityReceiptGroup.vue';
+import { onlyEvents } from 'applesauce-relay';
+import { mapEventsToStore } from 'applesauce-core';
 
 export default {
   name: 'ActivityView',
@@ -96,6 +98,10 @@ export default {
     const loading = ref(true);
     const error = ref(null);
     const subscriptions = ref([]);
+    
+    // Settlement streaming data
+    const receiptSettlements = ref(new Map()); // receiptId -> settlements[]
+    const confirmationStreams = ref(new Map()); // receiptId -> subscription
 
     const goBack = () => {
       router.push('/');
@@ -149,12 +155,15 @@ export default {
               
               console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
               
+              // Start settlement confirmation stream for this receipt
+              startSettlementStreamForReceipt(receipt.eventId);
+              
               resolve({
                 id: receipt.eventId,
                 title: receiptData.title || 'Untitled Receipt',
-                status: 'processing', // Default status - will be updated based on settlements
+                status: 'processing', // Will be updated by settlement stream
                 timestamp: new Date(receiptEvent.created_at * 1000),
-                payments: [] // TODO: Load actual payment data
+                payments: [] // Will be populated by settlement stream
               });
               
             } catch (err) {
@@ -183,6 +192,185 @@ export default {
           payments: []
         };
       }
+    };
+
+    // Extract settlement ID from confirmation event
+    const extractSettlementIdFromConfirmation = (confirmationEvent) => {
+      try {
+        // Look for settlement reference in tags (typically an 'e' tag pointing to the settlement)
+        const settlementTags = confirmationEvent.tags?.filter(tag => tag[0] === 'e');
+        if (settlementTags && settlementTags.length > 1) {
+          // First 'e' tag is usually the receipt, second is usually the settlement being confirmed
+          return settlementTags[1][1];
+        }
+        
+        // Alternative: look for explicit settlement tag
+        const settlementTag = confirmationEvent.tags?.find(tag => tag[0] === 'settlement');
+        if (settlementTag && settlementTag[1]) {
+          return settlementTag[1];
+        }
+        
+        // Alternative: check content
+        if (confirmationEvent.content) {
+          try {
+            const contentObj = JSON.parse(confirmationEvent.content);
+            if (contentObj.settlementId) {
+              return contentObj.settlementId;
+            }
+          } catch (e) {
+            // Content might not be JSON
+          }
+        }
+        
+        return null;
+      } catch (error) {
+        console.error("Error extracting settlement ID from confirmation:", error);
+        return null;
+      }
+    };
+
+    // Start a settlement confirmation stream for a specific receipt
+    const startSettlementStreamForReceipt = (receiptEventId) => {
+      console.log(`🌊 Starting settlement stream for receipt: ${receiptEventId}`);
+      
+      // Initialize settlements array for this receipt
+      if (!receiptSettlements.value.has(receiptEventId)) {
+        receiptSettlements.value.set(receiptEventId, []);
+      }
+      
+      // Subscribe to confirmation events that reference this receipt
+      const confirmationSubscription = globalPool
+        .subscription(DEFAULT_RELAYS, {
+          kinds: [KIND_SETTLEMENT_CONFIRMATION],
+          '#e': [receiptEventId] // Find confirmations that reference this receipt
+        })
+        .pipe(onlyEvents())
+        .subscribe({
+          next: (confirmationEvent) => {
+            console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
+            processConfirmationEvent(receiptEventId, confirmationEvent);
+          },
+          error: (error) => {
+            console.error(`❌ Error in confirmation stream for receipt ${receiptEventId}:`, error);
+          }
+        });
+      
+      // Store subscription for cleanup
+      confirmationStreams.value.set(receiptEventId, confirmationSubscription);
+      subscriptions.value.push(confirmationSubscription);
+    };
+
+    // Process a confirmation event and start settlement stream
+    const processConfirmationEvent = (receiptEventId, confirmationEvent) => {
+      // Extract settlement ID from confirmation
+      const settlementId = extractSettlementIdFromConfirmation(confirmationEvent);
+      if (!settlementId) {
+        console.warn(`⚠️ No settlement ID found in confirmation: ${confirmationEvent.id}`);
+        return;
+      }
+      
+      console.log(`🌊 Starting settlement data stream for ${settlementId} from confirmation ${confirmationEvent.id}`);
+      
+      // Stream the referenced settlement event
+      const settlementSubscription = globalEventLoader({
+        id: settlementId,
+        relays: DEFAULT_RELAYS,
+      }).subscribe({
+        next: (settlementEvent) => {
+          if (settlementEvent) {
+            console.log(`📊 Settlement stream: loaded settlement ${settlementId}`);
+            
+            // Create settlement object
+            const settlement = {
+              id: settlementId,
+              confirmed: true, // Has confirmation
+              timestamp: new Date(settlementEvent.created_at * 1000),
+              confirmationId: confirmationEvent.id,
+              confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
+              paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
+              settledItems: [{
+                name: 'Confirmed Payment',
+                selectedQuantity: 1,
+                price: 1000, // placeholder - would decrypt content for real amount
+              }]
+            };
+            
+            // Add settlement to receipt's settlements
+            const currentSettlements = receiptSettlements.value.get(receiptEventId) || [];
+            const existingIndex = currentSettlements.findIndex(s => s.id === settlementId);
+            
+            if (existingIndex >= 0) {
+              // Update existing settlement
+              currentSettlements[existingIndex] = settlement;
+            } else {
+              // Add new settlement
+              currentSettlements.push(settlement);
+            }
+            
+            receiptSettlements.value.set(receiptEventId, currentSettlements);
+            
+            // Update the receipt in ownedReceipts with new payment data
+            updateReceiptWithSettlements(receiptEventId);
+          }
+        },
+        error: (error) => {
+          console.error(`❌ Error in settlement stream for ${settlementId}:`, error);
+        }
+      });
+      
+      subscriptions.value.push(settlementSubscription);
+    };
+
+    // Update a receipt with current settlement data
+    const updateReceiptWithSettlements = (receiptEventId) => {
+      const receiptIndex = ownedReceipts.value.findIndex(r => r.id === receiptEventId);
+      if (receiptIndex >= 0) {
+        const settlements = receiptSettlements.value.get(receiptEventId) || [];
+        const payments = convertSettlementsToPayments(settlements);
+        
+        // Determine status
+        let status = 'processing';
+        if (settlements.length > 0) {
+          const allConfirmed = settlements.every(s => s.confirmed);
+          status = allConfirmed ? 'completed' : 'processing';
+        }
+        
+        // Update receipt reactively
+        ownedReceipts.value[receiptIndex] = {
+          ...ownedReceipts.value[receiptIndex],
+          payments: payments,
+          status: status
+        };
+        
+        console.log(`🔄 Updated receipt ${receiptEventId} with ${payments.length} payments, status: ${status}`);
+      }
+    };
+
+    // Convert settlements to payment format expected by ActivityPayment component
+    const convertSettlementsToPayments = (settlements) => {
+      const payments = [];
+      
+      settlements.forEach((settlement, index) => {
+        if (settlement.settledItems && settlement.settledItems.length > 0) {
+          settlement.settledItems.forEach((item, itemIndex) => {
+            payments.push({
+              id: `${settlement.id}-${itemIndex}`,
+              settlementId: settlement.id,
+              amount: item.selectedQuantity * item.price, // Total amount for this item
+              itemName: item.name,
+              quantity: item.selectedQuantity,
+              unitPrice: item.price,
+              comment: `${item.name} (${settlement.paymentMethod})`,
+              status: settlement.confirmed ? 'completed' : 'processing',
+              timestamp: settlement.timestamp,
+              paymentMethod: settlement.paymentMethod,
+              confirmationId: settlement.confirmationId
+            });
+          });
+        }
+      });
+      
+      return payments;
     };
 
     // Load owned receipts from storage
@@ -417,6 +605,10 @@ export default {
       // Clean up subscriptions
       subscriptions.value.forEach(subscription => subscription.unsubscribe());
       subscriptions.value = [];
+      
+      // Clear confirmation streams
+      confirmationStreams.value.clear();
+      receiptSettlements.value.clear();
     });
 
     return {
