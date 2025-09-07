@@ -26,6 +26,7 @@
           <div class="mr-3">
             <div v-if="receipt.status === 'completed'" class="w-3 h-3 bg-green-500 rounded-full"></div>
             <div v-else-if="receipt.status === 'processing'" class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-600"></div>
+            <div v-else-if="receipt.status === 'pending'" class="w-3 h-3 bg-gray-400 rounded-full"></div>
             <div v-else-if="receipt.status === 'error'" class="w-3 h-3 bg-red-500 rounded-full"></div>
             <div v-else-if="isErrorState" class="w-3 h-3 bg-red-500 rounded-full"></div>
             <div v-else class="w-3 h-3 bg-gray-400 rounded-full"></div>
@@ -41,6 +42,7 @@
                 {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
                 <span v-if="receipt.status === 'processing'"> • Processing payouts</span>
                 <span v-if="receipt.status === 'completed'"> • Fully paid out</span>
+                <span v-if="receipt.status === 'pending'"> • Awaiting payments</span>
                 <span v-if="receipt.status === 'error'"> • Errors detected</span>
               </span>
               <span v-else class="text-gray-500">
@@ -149,9 +151,8 @@ export default {
     });
 
     const totalAmount = computed(() => {
-      return formatSats(
-        props.receipt.payments.reduce((total, payment) => total + payment.amount, 0)
-      );
+      // Use the receipt's original total amount, not the sum of payments
+      return formatSats(props.receipt.totalAmount || 0);
     });
 
     const receiptStatusClasses = computed(() => {
@@ -173,6 +174,8 @@ export default {
           return 'text-orange-600';
         case 'completed':
           return 'text-green-600';
+        case 'pending':
+          return 'text-gray-500';
         case 'error':
           return 'text-red-600';
         case 'not_found':
@@ -191,6 +194,8 @@ export default {
           return 'text-orange-600';
         case 'completed':
           return 'text-green-600';
+        case 'pending':
+          return 'text-gray-500';
         case 'error':
           return 'text-red-600';
         case 'not_found':

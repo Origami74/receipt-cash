@@ -29,7 +29,7 @@
         <!-- Payment Details -->
         <div class="flex-1">
           <p class="text-sm font-medium text-gray-900">
-            Payment {{ payment.type === 'lightning' ? '⚡' : payment.type === 'cashu' ? '🥜' : '' }}
+            Payment {{ payment.paymentMethod === 'lightning' ? '⚡' : payment.paymentMethod === 'cashu' ? '🥜' : '' }}
           </p>
         </div>
       </div>

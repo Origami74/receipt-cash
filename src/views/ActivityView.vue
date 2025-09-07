@@ -75,6 +75,7 @@ import { globalEventLoader, globalEventStore, globalPool } from '../services/nos
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants.js';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
+import { safeParseSettlementContent } from '../parsing/settlementparser.js';
 
 // Import new activity components
 import ActivityHeader from '../components/activity/ActivityHeader.vue';
@@ -110,7 +111,7 @@ export default {
     // Fetch receipt content from Nostr event
     const fetchReceiptContent = async (receipt) => {
       try {
-        console.log(`🔍 Fetching content for receipt: ${receipt.eventId}`);
+        // console.log(`🔍 Fetching content for receipt: ${receipt.eventId}`);
         
         return new Promise((resolve) => {
           globalEventLoader({
@@ -153,16 +154,22 @@ export default {
               const decryptedContent = await nip44.decrypt(receiptEvent.content, decryptionKey);
               const receiptData = JSON.parse(decryptedContent);
               
-              console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
+              // console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
               
               // Start settlement confirmation stream for this receipt
               startSettlementStreamForReceipt(receipt.eventId);
               
+              // Calculate receipt total from items
+              const receiptTotal = receiptData.items?.reduce((total, item) => {
+                return total + (item.quantity * item.price);
+              }, 0) || 0;
+
               resolve({
                 id: receipt.eventId,
                 title: receiptData.title || 'Untitled Receipt',
-                status: 'processing', // Will be updated by settlement stream
+                status: 'pending', // Start as pending, will be updated by settlement stream
                 timestamp: new Date(receiptEvent.created_at * 1000),
+                totalAmount: receiptTotal, // Original receipt total
                 payments: [] // Will be populated by settlement stream
               });
               
@@ -231,7 +238,7 @@ export default {
 
     // Start a settlement confirmation stream for a specific receipt
     const startSettlementStreamForReceipt = (receiptEventId) => {
-      console.log(`🌊 Starting settlement stream for receipt: ${receiptEventId}`);
+      // console.log(`🌊 Starting settlement stream for receipt: ${receiptEventId}`);
       
       // Initialize settlements array for this receipt
       if (!receiptSettlements.value.has(receiptEventId)) {
@@ -247,7 +254,7 @@ export default {
         .pipe(onlyEvents())
         .subscribe({
           next: (confirmationEvent) => {
-            console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
+            // console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
             processConfirmationEvent(receiptEventId, confirmationEvent);
           },
           error: (error) => {
@@ -269,31 +276,48 @@ export default {
         return;
       }
       
-      console.log(`🌊 Starting settlement data stream for ${settlementId} from confirmation ${confirmationEvent.id}`);
+      // console.log(`🌊 Starting settlement data stream for ${settlementId} from confirmation ${confirmationEvent.id}`);
       
       // Stream the referenced settlement event
       const settlementSubscription = globalEventLoader({
         id: settlementId,
         relays: DEFAULT_RELAYS,
       }).subscribe({
-        next: (settlementEvent) => {
+        next: async (settlementEvent) => {
           if (settlementEvent) {
-            console.log(`📊 Settlement stream: loaded settlement ${settlementId}`);
+            // console.log(`📊 Settlement stream: loaded settlement ${settlementId}`);
             
-            // Create settlement object
-            const settlement = {
-              id: settlementId,
-              confirmed: true, // Has confirmation
-              timestamp: new Date(settlementEvent.created_at * 1000),
-              confirmationId: confirmationEvent.id,
-              confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
-              paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
-              settledItems: [{
-                name: 'Confirmed Payment',
-                selectedQuantity: 1,
-                price: 1000, // placeholder - would decrypt content for real amount
-              }]
-            };
+            // Decrypt settlement content to get real settlement data
+            const decryptedSettlement = await decryptSettlementContent(settlementEvent, receiptEventId);
+            
+            // Create settlement object with real data or error state
+            let settlement;
+            
+            if (decryptedSettlement?.settledItems) {
+              // Successfully decrypted settlement
+              settlement = {
+                id: settlementId,
+                confirmed: true,
+                timestamp: new Date(settlementEvent.created_at * 1000),
+                confirmationId: confirmationEvent.id,
+                confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
+                paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
+                settledItems: decryptedSettlement.settledItems
+              };
+            } else {
+              // Settlement decryption failed - create error settlement
+              settlement = {
+                id: settlementId,
+                confirmed: true,
+                timestamp: new Date(settlementEvent.created_at * 1000),
+                confirmationId: confirmationEvent.id,
+                confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
+                paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
+                error: true,
+                errorMessage: 'Failed to decrypt settlement content',
+                settledItems: [] // Empty items for error state
+              };
+            }
             
             // Add settlement to receipt's settlements
             const currentSettlements = receiptSettlements.value.get(receiptEventId) || [];
@@ -321,6 +345,44 @@ export default {
       subscriptions.value.push(settlementSubscription);
     };
 
+    // Decrypt settlement content using the receipt's encryption key
+    const decryptSettlementContent = async (settlementEvent, receiptEventId) => {
+      try {
+        // Get the owned receipt to access its decryption key
+        const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);
+        if (!ownedReceipt) {
+          console.warn(`⚠️ No owned receipt found for ${receiptEventId}`);
+          return null;
+        }
+        
+        // Check if we have a decryption key - try both field names
+        const encryptionKey = ownedReceipt.sharedDecryptionKey || ownedReceipt.sharedEncryptionKey;
+        if (!encryptionKey) {
+          console.warn(`⚠️ No decryption key found for receipt ${receiptEventId}`);
+          return null;
+        }
+        
+        // Decrypt settlement content using the same key as the receipt
+        const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
+        const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
+        
+        // Parse the decrypted settlement content
+        const parsedContent = safeParseSettlementContent(decryptedContent);
+        
+        if (parsedContent) {
+          // console.log(`✅ Settlement content decrypted successfully:`, parsedContent);
+          return parsedContent;
+        } else {
+          console.warn(`⚠️ Failed to parse decrypted settlement content`);
+          return null;
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error decrypting settlement content for ${settlementEvent.id}:`, error);
+        return null;
+      }
+    };
+
     // Update a receipt with current settlement data
     const updateReceiptWithSettlements = (receiptEventId) => {
       const receiptIndex = ownedReceipts.value.findIndex(r => r.id === receiptEventId);
@@ -328,9 +390,12 @@ export default {
         const settlements = receiptSettlements.value.get(receiptEventId) || [];
         const payments = convertSettlementsToPayments(settlements);
         
-        // Determine status
-        let status = 'processing';
-        if (settlements.length > 0) {
+        // Determine status based on payments
+        let status;
+        if (payments.length === 0) {
+          status = 'pending'; // No payments yet - grey status
+        } else {
+          // Has payments - check if all confirmed
           const allConfirmed = settlements.every(s => s.confirmed);
           status = allConfirmed ? 'completed' : 'processing';
         }
@@ -342,7 +407,7 @@ export default {
           status: status
         };
         
-        console.log(`🔄 Updated receipt ${receiptEventId} with ${payments.length} payments, status: ${status}`);
+        // console.log(`🔄 Updated receipt ${receiptEventId} with ${payments.length} payments, status: ${status}`);
       }
     };
 
@@ -351,7 +416,25 @@ export default {
       const payments = [];
       
       settlements.forEach((settlement, index) => {
-        if (settlement.settledItems && settlement.settledItems.length > 0) {
+        if (settlement.error) {
+          // Handle settlement decryption errors
+          payments.push({
+            id: `${settlement.id}-error`,
+            settlementId: settlement.id,
+            amount: 0,
+            itemName: 'Settlement Error',
+            quantity: 0,
+            unitPrice: 0,
+            comment: settlement.errorMessage || 'Failed to decrypt settlement',
+            status: 'error',
+            timestamp: settlement.timestamp,
+            paymentMethod: settlement.paymentMethod,
+            confirmationId: settlement.confirmationId,
+            error: true,
+            errorMessage: settlement.errorMessage
+          });
+        } else if (settlement.settledItems && settlement.settledItems.length > 0) {
+          // Handle successfully decrypted settlements
           settlement.settledItems.forEach((item, itemIndex) => {
             payments.push({
               id: `${settlement.id}-${itemIndex}`,
