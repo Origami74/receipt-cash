@@ -27,6 +27,7 @@
             <div v-if="receipt.status === 'completed'" class="w-3 h-3 bg-green-500 rounded-full"></div>
             <div v-else-if="receipt.status === 'processing'" class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-600"></div>
             <div v-else-if="receipt.status === 'error'" class="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div v-else-if="isErrorState" class="w-3 h-3 bg-red-500 rounded-full"></div>
             <div v-else class="w-3 h-3 bg-gray-400 rounded-full"></div>
           </div>
 
@@ -36,10 +37,15 @@
               {{ receipt.title || `Receipt ${receipt.id}` }}
             </h3>
             <p class="text-sm" :class="receiptSubtextClasses">
-              {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
-              <span v-if="receipt.status === 'processing'"> • Processing payouts</span>
-              <span v-if="receipt.status === 'completed'"> • Fully paid out</span>
-              <span v-if="receipt.status === 'error'"> • Errors detected</span>
+              <span v-if="!isErrorState">
+                {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
+                <span v-if="receipt.status === 'processing'"> • Processing payouts</span>
+                <span v-if="receipt.status === 'completed'"> • Fully paid out</span>
+                <span v-if="receipt.status === 'error'"> • Errors detected</span>
+              </span>
+              <span v-else class="text-gray-500">
+                Expand for details
+              </span>
             </p>
           </div>
         </div>
@@ -54,23 +60,52 @@
 
       <!-- Receipt Payments (Expandable) -->
       <div v-show="isExpanded" class="p-4 border-t border-gray-100 space-y-3">
-        <!-- Payments List -->
-        <ActivityPayment
-          v-for="payment in receipt.payments"
-          :key="payment.id"
-          :payment="payment"
-          @retry-payout="$emit('retry-payout', $event)"
-        />
+        <!-- Error Details for error states -->
+        <div v-if="isErrorState" class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div class="space-y-3">
+            <div>
+              <h4 class="text-sm font-medium text-red-900 mb-1">Error Details:</h4>
+              <p class="text-sm text-red-700">{{ receipt.error || 'Unknown error occurred' }}</p>
+            </div>
+            
+            <div class="flex items-center gap-2 pt-2 border-t border-red-200">
+              <button
+                @click="copyEventId"
+                class="px-3 py-1 text-xs bg-white hover:bg-red-50 border border-red-300 text-red-700 rounded font-mono"
+                title="Copy full event ID"
+              >
+                {{ (receipt.fullEventId || receipt.id)?.slice(0, 16) }}...
+              </button>
+              <button
+                @click="reportError"
+                class="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+              >
+                Report Error
+              </button>
+            </div>
+          </div>
+        </div>
 
-        <!-- Error Messages -->
-        <div v-if="receipt.errors && receipt.errors.length > 0" class="p-4 border-t border-gray-100">
-          <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-            <h4 class="text-sm font-medium text-red-900 mb-2">Errors:</h4>
-            <ul class="space-y-1">
-              <li v-for="error in receipt.errors" :key="error.id" class="text-sm text-red-700">
-                • {{ error.message }}
-              </li>
-            </ul>
+        <!-- Normal content for non-error states -->
+        <div v-else>
+          <!-- Payments List -->
+          <ActivityPayment
+            v-for="payment in receipt.payments"
+            :key="payment.id"
+            :payment="payment"
+            @retry-payout="$emit('retry-payout', $event)"
+          />
+
+          <!-- Error Messages -->
+          <div v-if="receipt.errors && receipt.errors.length > 0" class="border-t border-gray-100 pt-3">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+              <h4 class="text-sm font-medium text-red-900 mb-2">Errors:</h4>
+              <ul class="space-y-1">
+                <li v-for="error in receipt.errors" :key="error.id" class="text-sm text-red-700">
+                  • {{ error.message }}
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -140,6 +175,11 @@ export default {
           return 'text-green-600';
         case 'error':
           return 'text-red-600';
+        case 'not_found':
+          return 'text-gray-500';
+        case 'decryption_error':
+        case 'fetch_error':
+          return 'text-red-600';
         default:
           return 'text-gray-900';
       }
@@ -153,10 +193,33 @@ export default {
           return 'text-green-600';
         case 'error':
           return 'text-red-600';
+        case 'not_found':
+          return 'text-gray-500';
+        case 'decryption_error':
+        case 'fetch_error':
+          return 'text-red-600';
         default:
           return 'text-gray-600';
       }
     });
+
+    const copyEventId = async () => {
+      try {
+        const eventId = props.receipt.fullEventId || props.receipt.id;
+        await navigator.clipboard.writeText(eventId);
+        console.log('✅ Event ID copied to clipboard:', eventId);
+        // TODO: Show a toast notification
+      } catch (err) {
+        console.error('❌ Failed to copy event ID:', err);
+        // Fallback: select the text
+        const button = event.target;
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    };
 
     const formatTime = (timestamp) => {
       const now = new Date();
@@ -173,6 +236,15 @@ export default {
       return `${days}d ago`;
     };
 
+    const isErrorState = computed(() => {
+      return ['not_found', 'decryption_error', 'fetch_error'].includes(props.receipt.status);
+    });
+
+    const reportError = () => {
+      console.log('🚨 Reporting error for receipt:', props.receipt.id, props.receipt.error);
+      // TODO: Implement actual error reporting
+    };
+
     return {
       isExpanded,
       toggleExpanded,
@@ -180,7 +252,10 @@ export default {
       totalAmount,
       receiptTextClasses,
       receiptSubtextClasses,
-      formatTime
+      copyEventId,
+      formatTime,
+      isErrorState,
+      reportError
     };
   }
 };

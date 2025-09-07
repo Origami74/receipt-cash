@@ -41,7 +41,7 @@
       <!-- Receipts Activity -->
       <div v-else>
         <!-- No Activity State -->
-        <div v-if="mockReceipts.length === 0" class="bg-white rounded-lg shadow text-center py-8">
+        <div v-if="displayReceipts.length === 0" class="bg-white rounded-lg shadow text-center py-8">
           <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -54,7 +54,7 @@
         <!-- Receipt Groups -->
         <div v-else class="space-y-4">
           <ActivityReceiptGroup
-            v-for="receipt in mockReceipts"
+            v-for="receipt in displayReceipts"
             :key="receipt.id"
             :receipt="receipt"
             @retry-payout="handleRetryPayout"
@@ -66,10 +66,15 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { getSharedReceiptSubscription, getSharedSettlementSubscription, getSharedSettlementConfirmation } from '../services/sharedComposables.js';
 import { formatSats } from '../utils/pricingUtils.js';
+import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager.js';
+import { globalEventLoader } from '../services/nostr/applesauce.js';
+import { DEFAULT_RELAYS } from '../services/nostr/constants.js';
+import { nip44 } from 'nostr-tools';
+import { Buffer } from 'buffer';
 
 // Import new activity components
 import ActivityHeader from '../components/activity/ActivityHeader.vue';
@@ -85,43 +90,150 @@ export default {
   },
   setup() {
     const router = useRouter();
+    
+    // Real data from storage
+    const ownedReceipts = ref([]);
+    const loading = ref(true);
+    const error = ref(null);
+    const subscriptions = ref([]);
 
     const goBack = () => {
       router.push('/');
     };
 
-    // Get shared composable instances (these will reuse existing instances)
-    const receiptSub = getSharedReceiptSubscription();
-    const settlementSub = getSharedSettlementSubscription();
-    const confirmationSub = getSharedSettlementConfirmation();
+    // Fetch receipt content from Nostr event
+    const fetchReceiptContent = async (receipt) => {
+      try {
+        console.log(`🔍 Fetching content for receipt: ${receipt.eventId}`);
+        
+        return new Promise((resolve) => {
+          globalEventLoader({
+            id: receipt.eventId,
+            relays: DEFAULT_RELAYS,
+          }).subscribe(async (receiptEvent) => {
+            try {
+              if (!receiptEvent) {
+                console.warn(`⚠️ Receipt event not found: ${receipt.eventId}`);
+                resolve({
+                  id: receipt.eventId,
+                  title: 'Could not find receipt',
+                  fullEventId: receipt.eventId, // Store full event ID for copying
+                  status: 'not_found',
+                  timestamp: new Date(),
+                  payments: []
+                });
+                return;
+              }
 
-    // Extract the reactive properties we need
-    const {
-      loading,
-      error,
-      receiptEvents,
-      processingCount: receiptProcessingCount,
-      restartSubscription: restartReceiptSubscription
-    } = receiptSub;
+              // Check if we have a decryption key
+              if (!receipt.sharedDecryptionKey) {
+                console.error(`❌ No decryption key for receipt: ${receipt.eventId}`);
+                resolve({
+                  id: receipt.eventId,
+                  title: 'Decryption Error',
+                  fullEventId: receipt.eventId,
+                  status: 'decryption_error',
+                  error: 'No decryption key found',
+                  timestamp: new Date(receiptEvent.created_at * 1000),
+                  payments: []
+                });
+                return;
+              }
 
-    const {
-      settlementEvents,
-      pendingSettlements,
-      processingCount: settlementProcessingCount,
-      restartSubscription: restartSettlementSubscription,
-      settlementCount
-    } = settlementSub;
+              // Decrypt and parse the receipt content
+              const decryptionKey = Uint8Array.from(Buffer.from(receipt.sharedDecryptionKey, 'hex'));
+              const decryptedContent = await nip44.decrypt(receiptEvent.content, decryptionKey);
+              const receiptData = JSON.parse(decryptedContent);
+              
+              console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
+              
+              resolve({
+                id: receipt.eventId,
+                title: receiptData.title || 'Untitled Receipt',
+                status: 'processing', // Default status - will be updated based on settlements
+                timestamp: new Date(receiptEvent.created_at * 1000),
+                payments: [] // TODO: Load actual payment data
+              });
+              
+            } catch (err) {
+              console.error(`❌ Error decrypting receipt ${receipt.eventId}:`, err);
+              resolve({
+                id: receipt.eventId,
+                title: 'Decryption Error',
+                fullEventId: receipt.eventId,
+                status: 'decryption_error',
+                error: err.message,
+                timestamp: receiptEvent ? new Date(receiptEvent.created_at * 1000) : new Date(),
+                payments: []
+              });
+            }
+          });
+        });
+      } catch (err) {
+        console.error(`❌ Error fetching receipt ${receipt.eventId}:`, err);
+        return {
+          id: receipt.eventId,
+          title: 'Fetch Error',
+          fullEventId: receipt.eventId,
+          status: 'fetch_error',
+          error: err.message,
+          timestamp: new Date(),
+          payments: []
+        };
+      }
+    };
 
-    const {
-      totalSettlements,
-      confirmedSettlements,
-      unconfirmedSettlements,
-      trackSettlement,
-      restartSubscription: restartConfirmationSubscription
-    } = confirmationSub;
+    // Load owned receipts from storage
+    const loadOwnedReceipts = () => {
+      try {
+        console.log('📦 Loading owned receipts for ActivityView...');
+        
+        // Subscribe to receipts observable
+        const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe(async (receipts) => {
+          console.log(`📊 Owned receipts loaded: ${receipts.length} receipts`);
+          
+          if (receipts.length === 0) {
+            ownedReceipts.value = [];
+            loading.value = false;
+            return;
+          }
+          
+          // Fetch content for all receipts in parallel
+          const receiptPromises = receipts.map(receipt => fetchReceiptContent(receipt));
+          const receiptContents = await Promise.all(receiptPromises);
+          
+          ownedReceipts.value = receiptContents;
+          loading.value = false;
+        });
 
-    // Mock data for testing the new layout
-    const mockReceipts = ref([
+        // Subscribe to newly added receipts
+        const receiptAddedSubscription = ownedReceiptsStorageManager.receiptAdded$.subscribe(async ({ item: receipt, items: allReceipts }) => {
+          console.log(`✨ New receipt added to ActivityView: ${receipt.eventId}`);
+          
+          // Fetch content for the new receipt
+          const newReceiptContent = await fetchReceiptContent(receipt);
+          ownedReceipts.value.unshift(newReceiptContent);
+        });
+
+        // Subscribe to removed receipts
+        const receiptRemovedSubscription = ownedReceiptsStorageManager.receiptRemoved$.subscribe(({ item: receipt, items: allReceipts }) => {
+          console.log(`🗑️ Receipt removed from ActivityView: ${receipt.eventId}`);
+          
+          // Remove receipt from our list
+          ownedReceipts.value = ownedReceipts.value.filter(r => r.id !== receipt.eventId);
+        });
+
+        subscriptions.value = [receiptsSubscription, receiptAddedSubscription, receiptRemovedSubscription];
+        
+      } catch (err) {
+        console.error('❌ Error loading owned receipts:', err);
+        error.value = 'Failed to load receipts';
+        loading.value = false;
+      }
+    };
+
+    // Keep some mock receipts for development while we build real data integration
+    const developmentMockReceipts = ref([
       {
         id: 'receipt-a',
         title: 'Receipt A',
@@ -263,36 +375,26 @@ export default {
       }
     ]);
 
+    // Use real receipts if available, otherwise fall back to development mocks
+    const displayReceipts = computed(() => {
+      return ownedReceipts.value.length > 0 ? ownedReceipts.value : developmentMockReceipts.value;
+    });
+
     // Computed values for summary cards
-    const receiptsCount = computed(() => mockReceipts.value.length);
+    const receiptsCount = computed(() => displayReceipts.value.length);
     
     const handlingCount = computed(() => {
-      return mockReceipts.value.filter(r => r.status === 'processing').length;
+      return displayReceipts.value.filter(r => r.status === 'processing').length;
     });
     
     const errorsCount = computed(() => {
-      return mockReceipts.value.filter(r => r.status === 'error').length;
-    });
-
-    const statusMessage = computed(() => {
-      const processing = handlingCount.value;
-      const errors = errorsCount.value;
-      
-      if (processing > 0 && errors > 0) {
-        return `Processing ${processing} receipt${processing === 1 ? '' : 's'} • ${errors} error${errors === 1 ? '' : 's'} detected`;
-      } else if (processing > 0) {
-        return `Processing ${processing} receipt${processing === 1 ? '' : 's'}`;
-      } else if (errors > 0) {
-        return `${errors} error${errors === 1 ? '' : 's'} detected`;
-      }
-      return '';
+      return displayReceipts.value.filter(r => r.status === 'error').length;
     });
 
     // Combined restart function
     const restartMonitoring = async () => {
-      await restartReceiptSubscription();
-      await restartSettlementSubscription();
-      await restartConfirmationSubscription();
+      console.log('🔄 Restarting ActivityView monitoring...');
+      loadOwnedReceipts();
     };
 
     // Handle payout retry
@@ -301,14 +403,24 @@ export default {
       // TODO: Implement payout retry logic
     };
 
+    // Lifecycle hooks
+    onMounted(() => {
+      loadOwnedReceipts();
+    });
+
+    onUnmounted(() => {
+      // Clean up subscriptions
+      subscriptions.value.forEach(subscription => subscription.unsubscribe());
+      subscriptions.value = [];
+    });
+
     return {
       loading,
       error,
-      mockReceipts,
+      displayReceipts,
       receiptsCount,
       handlingCount,
       errorsCount,
-      statusMessage,
       goBack,
       restartMonitoring,
       handleRetryPayout,
