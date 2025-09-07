@@ -51,11 +51,11 @@
       </div>
 
       <!-- Payout Operations (Full Width) -->
-      <div v-if="payment.payouts && payment.payouts.length > 0" class="ml-8">
+      <div v-if="allPayouts && allPayouts.length > 0" class="ml-8">
         <p class="text-xs text-gray-600 mb-2">Payout operations:</p>
         <div class="space-y-1">
           <ActivityPayout
-            v-for="payout in payment.payouts"
+            v-for="payout in allPayouts"
             :key="payout.id"
             :payout="payout"
             @retry="$emit('retry-payout', payout)"
@@ -67,9 +67,10 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
 import ActivityPayout from './ActivityPayout.vue';
+import { meltSessionStorageManager } from '../../services/new/storage/meltSessionStorageManager.js';
 
 export default {
   name: 'ActivityPayment',
@@ -83,24 +84,120 @@ export default {
       validator(value) {
         return value.amount && value.timestamp;
       }
+    },
+    receiptId: {
+      type: String,
+      required: false
     }
   },
   emits: ['retry-payout'],
   setup(props) {
+    // Lightning payout rounds from melt sessions
+    const lightningPayouts = ref([]);
+    // Fetch lightning payout rounds from melt sessions
+    const fetchLightningPayouts = () => {
+      try {
+        // Only fetch for lightning payments
+        if (props.payment.paymentMethod !== 'lightning') {
+          return;
+        }
+
+        // Generate session ID using receiptId and settlementId
+        let sessionId = null;
+        
+        if (props.receiptId && props.payment.settlementId) {
+          // Primary approach: use receiptId and settlementId
+          sessionId = `${props.receiptId}-${props.payment.settlementId}`;
+        } else if (props.payment.settlementId) {
+          // Fallback: try to find a session that contains the settlementId
+          const allSessions = meltSessionStorageManager.getAllItems();
+          const matchingSession = allSessions.find(session =>
+            session.sessionId.includes(props.payment.settlementId)
+          );
+          if (matchingSession) {
+            sessionId = matchingSession.sessionId;
+          }
+        }
+
+        if (!sessionId) {
+          console.log(`⚡ No session ID found for lightning payment ${props.payment.id}`);
+          return;
+        }
+
+        // Get melt session from storage
+        const meltSession = meltSessionStorageManager.getByKey(sessionId);
+        
+        if (!meltSession || !meltSession.rounds || meltSession.rounds.length === 0) {
+          console.log(`⚡ No melt session or rounds found for session ${sessionId}`);
+          return;
+        }
+        
+        // Convert melt session rounds to payout format
+        const payouts = meltSession.rounds.map((round, index) => {
+          let status, statusText;
+          
+          if (round.running) {
+            status = 'processing';
+            statusText = 'Melting in progress...';
+          } else if (round.success) {
+            status = 'completed';
+            statusText = `Melted ${round.meltedAmount || 0} sats`;
+          } else if (round.error) {
+            status = 'error';
+            statusText = round.error;
+          } else {
+            status = 'processing';
+            statusText = 'Waiting for completion...';
+          }
+          
+          return {
+            id: `${sessionId}-round-${round.roundNumber}`,
+            type: 'lightning',
+            amount: round.meltedAmount || (round.inputProofs ? round.inputProofs.reduce((sum, p) => sum + p.amount, 0) : 0),
+            status,
+            statusText,
+            timestamp: new Date(round.createdAt || round.completedAt || Date.now()),
+            meltQuote: round.meltQuote,
+            roundNumber: round.roundNumber,
+            sessionId: sessionId,
+            inputProofsCount: round.inputProofs ? round.inputProofs.length : 0,
+            changeProofsCount: round.changeProofs ? round.changeProofs.length : 0
+          };
+        });
+        
+        lightningPayouts.value = payouts;
+        console.log(`⚡ Loaded ${payouts.length} lightning payout rounds for payment ${props.payment.id} (session: ${sessionId})`);
+      } catch (error) {
+        console.error(`Error fetching lightning payouts for payment ${props.payment.id}:`, error);
+      }
+    };
+
+    // Combined payouts: original payouts + lightning payouts from melt sessions
+    const allPayouts = computed(() => {
+      const originalPayouts = props.payment.payouts || [];
+      const lightningRounds = lightningPayouts.value || [];
+      return [...originalPayouts, ...lightningRounds];
+    });
+
     // Check if payment has processing payouts
     const hasProcessingPayouts = computed(() => {
-      if (!props.payment.payouts || props.payment.payouts.length === 0) {
+      if (allPayouts.value.length === 0) {
         return false;
       }
-      return props.payment.payouts.some(payout => payout.status === 'processing');
+      return allPayouts.value.some(payout => payout.status === 'processing');
     });
 
     // Check if payment is completed (all payouts are completed)
     const isCompleted = computed(() => {
-      if (!props.payment.payouts || props.payment.payouts.length === 0) {
+      if (allPayouts.value.length === 0) {
         return true; // No payouts means payment is just completed
       }
-      return props.payment.payouts.every(payout => payout.status === 'completed');
+      return allPayouts.value.every(payout => payout.status === 'completed');
+    });
+
+    // Load lightning payouts on mount
+    onMounted(() => {
+      fetchLightningPayouts();
     });
 
     // Processing payments start expanded, completed payments start collapsed
@@ -128,6 +225,7 @@ export default {
       isExpanded,
       isCompleted,
       hasProcessingPayouts,
+      allPayouts,
       toggleExpanded,
       formatTime,
       formatSats

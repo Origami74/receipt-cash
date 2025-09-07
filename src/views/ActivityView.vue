@@ -76,6 +76,7 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { safeParseSettlementContent } from '../parsing/settlementparser.js';
+import { meltSessionStorageManager } from '../services/new/storage/meltSessionStorageManager.js';
 
 // Import new activity components
 import ActivityHeader from '../components/activity/ActivityHeader.vue';

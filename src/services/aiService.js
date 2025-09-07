@@ -14,7 +14,7 @@ export const processReceiptImage = async (base64Image) => {
     const response = await fetch(aiSettings.completionsUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiSettings.apiKey || import.meta.env.VITE_PPQ_API_KEY || "sk-uh7yDIMONkvLmreJgw0bDA"}`,
+        'Authorization': `Bearer ${aiSettings.apiKey || import.meta.env.VITE_PPQ_API_KEY || "sk-ImqOwgY54b6LCHy7oLrpJg"}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({

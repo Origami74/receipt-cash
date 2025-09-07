@@ -95,6 +95,7 @@
             v-for="payment in receipt.payments"
             :key="payment.id"
             :payment="payment"
+            :receipt-id="receipt.id"
             @retry-payout="$emit('retry-payout', $event)"
           />
 
