@@ -53,16 +53,14 @@
     </div>
 
       <!-- Receipt Payments (Expandable) -->
-      <div v-show="isExpanded" class="border-t border-gray-100">
+      <div v-show="isExpanded" class="p-4 border-t border-gray-100 space-y-3">
         <!-- Payments List -->
-        <div class="divide-y divide-gray-50">
-          <ActivityPayment
-            v-for="payment in receipt.payments"
-            :key="payment.id"
-            :payment="payment"
-            @retry-payout="$emit('retry-payout', $event)"
-          />
-        </div>
+        <ActivityPayment
+          v-for="payment in receipt.payments"
+          :key="payment.id"
+          :payment="payment"
+          @retry-payout="$emit('retry-payout', $event)"
+        />
 
         <!-- Error Messages -->
         <div v-if="receipt.errors && receipt.errors.length > 0" class="p-4 border-t border-gray-100">

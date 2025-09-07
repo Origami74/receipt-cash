@@ -1,17 +1,16 @@
 <template>
-  <div class="p-3">
-    <!-- Payment Header (clickable if completed) -->
+  <div class="bg-gray-50 rounded-lg border border-gray-300 p-3 shadow-sm">
+    <!-- Payment Header (always clickable) -->
     <div
       class="flex items-start justify-between cursor-pointer"
-      :class="{ 'cursor-pointer': isCompleted }"
-      @click="isCompleted ? toggleExpanded() : null"
+      @click="toggleExpanded"
     >
       <div class="flex items-start flex-1">
-        <!-- Expand/Collapse Arrow (only for completed payments) -->
-        <div v-if="isCompleted" class="mr-2 pt-1">
+        <!-- Expand/Collapse Arrow -->
+        <div class="mr-3">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3 transition-transform duration-200 text-gray-400"
+            class="h-5 w-5 transition-transform duration-200"
             :class="{ 'transform rotate-90': isExpanded }"
             fill="none"
             viewBox="0 0 24 24"
@@ -21,13 +20,10 @@
           </svg>
         </div>
 
-        <!-- Payment Confirmation Checkmark -->
-        <div class="mr-3 pt-1">
-          <div class="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
+        <!-- Payment Status Icon -->
+        <div class="mr-3">
+          <div v-if="hasProcessingPayouts" class="w-3 h-3 bg-orange-500 rounded-full"></div>
+          <div v-else class="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
 
         <!-- Payment Details -->
@@ -45,8 +41,8 @@
       </div>
     </div>
 
-    <!-- Expandable Content (always shown for processing, collapsible for completed) -->
-    <div v-show="!isCompleted || isExpanded" class="mt-3">
+    <!-- Expandable Content -->
+    <div v-show="isExpanded" class="mt-3">
       <!-- User Comment -->
       <div v-if="payment.comment" class="mb-3 ml-8">
         <p class="text-sm text-gray-800 bg-gray-50 rounded p-2 italic">
@@ -91,6 +87,14 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
+    // Check if payment has processing payouts
+    const hasProcessingPayouts = computed(() => {
+      if (!props.payment.payouts || props.payment.payouts.length === 0) {
+        return false;
+      }
+      return props.payment.payouts.some(payout => payout.status === 'processing');
+    });
+
     // Check if payment is completed (all payouts are completed)
     const isCompleted = computed(() => {
       if (!props.payment.payouts || props.payment.payouts.length === 0) {
@@ -99,8 +103,8 @@ export default {
       return props.payment.payouts.every(payout => payout.status === 'completed');
     });
 
-    // Completed payments start collapsed, processing payments start expanded
-    const isExpanded = ref(!isCompleted.value);
+    // Processing payments start expanded, completed payments start collapsed
+    const isExpanded = ref(hasProcessingPayouts.value);
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
@@ -123,6 +127,7 @@ export default {
     return {
       isExpanded,
       isCompleted,
+      hasProcessingPayouts,
       toggleExpanded,
       formatTime,
       formatSats
