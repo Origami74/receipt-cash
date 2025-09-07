@@ -85,7 +85,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import btcPriceService from '../services/btcPriceService';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
-import { globalEventStore, globalEventLoader } from '../services/nostr/applesauce';
+import { globalEventStore, globalEventLoader, globalPool } from '../services/nostr/applesauce';
 import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser';
@@ -272,7 +272,7 @@ export default {
       errorDetails.value = null;
 
       // Fetch receipt event using eventLoader
-      globalEventLoader({
+    globalEventLoader({
         id: props.eventId,
         relays: DEFAULT_RELAYS,
       }).subscribe(handleReceiptEvent);
@@ -282,7 +282,7 @@ export default {
     const loadSettlements = async () => {
       try {
         // Subscribe to settlement events using applesauce
-        globalEventLoader({
+        globalPool.subscription(DEFAULT_RELAYS, {
             kinds: [KIND_SETTLEMENT],
             '#e': [props.eventId],
           })
@@ -290,7 +290,7 @@ export default {
           .subscribe(handleSettlementEvent);
 
         // Subscribe to confirmation events
-        globalEventLoader({
+        globalPool.subscription(DEFAULT_RELAYS, {
             kinds: [KIND_SETTLEMENT_CONFIRMATION],
             authors: [receiptAuthorPubkey.value],
             '#e': [props.eventId],

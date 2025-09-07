@@ -196,14 +196,14 @@ export default {
     const loadSettlements = async () => {
       try {
 
-        globalEventLoader({
+        globalPool.subscription(DEFAULT_RELAYS, {
             kinds: [KIND_SETTLEMENT],
             "#e": [receiptEvent.id],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
           .subscribe(handleSettlementEvent)
 
-        globalEventLoader({
+        globalPool.subscription(DEFAULT_RELAYS, {
             kinds: [KIND_SETTLEMENT_CONFIRMATION],
             authors: [receiptEvent.pubkey],
             "#e": [receiptEvent.id],
