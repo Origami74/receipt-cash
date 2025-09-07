@@ -1,5 +1,5 @@
 <template>
-  <div class="ml-4 mt-3 p-3 bg-white rounded-lg border border-gray-200">
+  <div class="p-3">
     <!-- Payment Header (clickable if completed) -->
     <div
       class="flex items-start justify-between cursor-pointer"

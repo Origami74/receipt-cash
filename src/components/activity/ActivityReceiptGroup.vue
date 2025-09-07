@@ -1,11 +1,11 @@
 <template>
   <div class="mb-6">
     <!-- Receipt Header -->
-    <div 
-      class="p-4 rounded-lg border cursor-pointer transition-colors"
-      :class="receiptStatusClasses"
-      @click="toggleExpanded"
-    >
+    <div class="bg-white rounded-lg shadow">
+      <div
+        class="p-4 cursor-pointer transition-colors hover:bg-gray-50"
+        @click="toggleExpanded"
+      >
       <div class="flex items-center justify-between">
         <div class="flex items-center">
           <!-- Expand/Collapse Icon -->
@@ -52,27 +52,28 @@
       </div>
     </div>
 
-    <!-- Receipt Payments (Expandable) -->
-    <div v-show="isExpanded" class="mt-2">
-      <!-- Payments List -->
-      <div class="space-y-2">
-        <ActivityPayment
-          v-for="payment in receipt.payments"
-          :key="payment.id"
-          :payment="payment"
-          @retry-payout="$emit('retry-payout', $event)"
-        />
-      </div>
+      <!-- Receipt Payments (Expandable) -->
+      <div v-show="isExpanded" class="border-t border-gray-100">
+        <!-- Payments List -->
+        <div class="divide-y divide-gray-50">
+          <ActivityPayment
+            v-for="payment in receipt.payments"
+            :key="payment.id"
+            :payment="payment"
+            @retry-payout="$emit('retry-payout', $event)"
+          />
+        </div>
 
-      <!-- Error Messages -->
-      <div v-if="receipt.errors && receipt.errors.length > 0" class="mt-4 ml-4">
-        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-          <h4 class="text-sm font-medium text-red-900 mb-2">Errors:</h4>
-          <ul class="space-y-1">
-            <li v-for="error in receipt.errors" :key="error.id" class="text-sm text-red-700">
-              • {{ error.message }}
-            </li>
-          </ul>
+        <!-- Error Messages -->
+        <div v-if="receipt.errors && receipt.errors.length > 0" class="p-4 border-t border-gray-100">
+          <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <h4 class="text-sm font-medium text-red-900 mb-2">Errors:</h4>
+            <ul class="space-y-1">
+              <li v-for="error in receipt.errors" :key="error.id" class="text-sm text-red-700">
+                • {{ error.message }}
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -136,11 +137,11 @@ export default {
     const receiptTextClasses = computed(() => {
       switch (props.receipt.status) {
         case 'processing':
-          return 'text-orange-900';
+          return 'text-orange-600';
         case 'completed':
-          return 'text-green-900';
+          return 'text-green-600';
         case 'error':
-          return 'text-red-900';
+          return 'text-red-600';
         default:
           return 'text-gray-900';
       }
@@ -149,13 +150,13 @@ export default {
     const receiptSubtextClasses = computed(() => {
       switch (props.receipt.status) {
         case 'processing':
-          return 'text-orange-700';
+          return 'text-orange-600';
         case 'completed':
-          return 'text-green-700';
+          return 'text-green-600';
         case 'error':
-          return 'text-red-700';
+          return 'text-red-600';
         default:
-          return 'text-gray-700';
+          return 'text-gray-600';
       }
     });
 
@@ -179,7 +180,6 @@ export default {
       toggleExpanded,
       paymentsCount,
       totalAmount,
-      receiptStatusClasses,
       receiptTextClasses,
       receiptSubtextClasses,
       formatTime

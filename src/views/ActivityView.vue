@@ -4,14 +4,16 @@
     <ActivityHeader @back="goBack" />
 
     <!-- Summary Cards -->
-    <ActivitySummaryCards
-      :receipts-count="receiptsCount"
-      :handling-count="handlingCount"
-      :errors-count="errorsCount"
-    />
+    <div class="p-4 pb-2">
+      <ActivitySummaryCards
+        :receipts-count="receiptsCount"
+        :handling-count="handlingCount"
+        :errors-count="errorsCount"
+      />
+    </div>
 
     <!-- Main Content Area -->
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto p-4 pt-2">
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-8">
         <div class="text-center">
@@ -37,9 +39,9 @@
       </div>
 
       <!-- Receipts Activity -->
-      <div v-else class="p-4">
+      <div v-else>
         <!-- No Activity State -->
-        <div v-if="mockReceipts.length === 0" class="text-center py-8">
+        <div v-if="mockReceipts.length === 0" class="bg-white rounded-lg shadow text-center py-8">
           <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

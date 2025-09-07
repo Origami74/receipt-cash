@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white border-b p-3">
+  <div class="bg-white rounded-lg shadow p-3">
     <div class="grid grid-cols-3 gap-3">
       <!-- Receipts Card -->
       <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded p-3 border border-blue-200">
