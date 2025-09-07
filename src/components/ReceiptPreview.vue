@@ -45,22 +45,46 @@
     
     <div class="flex-1 overflow-y-auto p-4">
       <div class="bg-white rounded-lg shadow mb-4">
-        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50 flex justify-between items-center">
-          <div>Items</div>
-          <div class="flex gap-2">
-            <button
-              v-if="step === 'payment-request'"
-              @click="addNewItem"
-              class="text-sm text-blue-500 hover:text-blue-600"
-            >
-              Add Item
-            </button>
+        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+          Items
+        </div>
+        
+        <!-- Item Selection Instructions -->
+        <div v-if="showItemSelection" class="p-3 bg-blue-50 border-b border-blue-100">
+          <div class="text-sm text-blue-800">
+            <div class="font-medium mb-1">Select your portion of each item:</div>
+            <div class="text-xs text-blue-600">
+              Use +/- buttons to choose how many of each item you consumed. These will be deducted from the total before sharing the receipt.
+            </div>
           </div>
         </div>
-        <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
+        
+        <!-- Scrollable items container -->
+        <div class="max-h-96 overflow-y-auto">
+          <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
+          <!-- Item Selection Controls -->
+          <div v-if="showItemSelection" class="flex items-center space-x-2 mr-3">
+            <button
+              @click="decrementItemSelection(index)"
+              class="px-2 py-1 text-sm border rounded hover:bg-gray-50"
+              :disabled="(item.selectedQuantity || 0) <= 0"
+            >-</button>
+            <span class="w-8 text-center text-sm">{{ item.selectedQuantity || 0 }}</span>
+            <button
+              @click="incrementItemSelection(index)"
+              class="px-2 py-1 text-sm border rounded hover:bg-gray-50"
+              :disabled="(item.selectedQuantity || 0) >= item.quantity"
+            >+</button>
+          </div>
+          
           <div class="flex-1">
             <div v-if="!item.editing" class="cursor-pointer" @click="startEditing(index)">
-              <div>{{ item.name }}</div>
+              <div class="flex items-center justify-between">
+                <div>{{ item.name }}</div>
+                <div v-if="showItemSelection && (item.selectedQuantity || 0) > 0" class="text-xs text-green-600 font-medium">
+                  {{ item.selectedQuantity }}/{{ item.quantity }} selected
+                </div>
+              </div>
               <div class="text-sm text-gray-500">
                 {{ item.quantity || 0 }} × {{ formatPrice(item.price || 0) }}
                 <span class="text-xs text-gray-400 ml-1">({{ formatSats(convertToSats(item.price || 0)) }} sats)</span>
@@ -99,10 +123,10 @@
           </div>
           <div class="flex items-center gap-2">
             <div class="text-right">
-              <div class="font-medium">
+              <div class="font-medium" :class="{ 'text-green-600': showItemSelection && (item.selectedQuantity || 0) > 0 }">
                 {{ formatPrice((item.price || 0) * (item.quantity || 0)) }}
               </div>
-              <div class="text-xs text-gray-500 font-normal">
+              <div class="text-xs font-normal" :class="showItemSelection && (item.selectedQuantity || 0) > 0 ? 'text-green-500' : 'text-gray-500'">
                 {{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }} sats
               </div>
             </div>
@@ -125,17 +149,76 @@
             </div>
           </div>
         </div>
+        
+          <!-- Empty row for adding new item -->
+          <div v-if="step === 'payment-request'" class="receipt-item border-dashed border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors" @click="addNewItem">
+            <div class="flex-1 text-center py-2">
+              <div class="text-gray-400 text-sm">
+                <span class="text-lg">+</span> Tap to add item
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggested Actions Section -->
+      <div v-if="step === 'payment-request'" class="bg-white rounded-lg shadow mb-4">
+        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+          Suggested Actions
+        </div>
+        <div class="p-3 flex flex-wrap gap-2">
+          <button
+            v-if="!showItemSelection"
+            @click="toggleItemSelection"
+            class="px-3 py-2 text-sm bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+          >
+            📝 Deduct My Items
+          </button>
+          <button
+            v-if="showItemSelection"
+            @click="toggleItemSelection"
+            class="px-3 py-2 text-sm bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100"
+          >
+            ✅ Done Selecting
+          </button>
+          <!-- <button
+            class="px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100"
+            disabled
+            title="Coming soon"
+          >
+            💰 Split Tip
+          </button>
+          <button
+            class="px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100"
+            disabled
+            title="Coming soon"
+          >
+            📊 Split Tax
+          </button> -->
+        </div>
       </div>
       
       <div class="bg-white rounded-lg shadow">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
           Summary
         </div>
+        
+        <!-- Show breakdown when items are selected -->
+        <div v-if="getSelectedItemsTotal() > 0" class="p-3 border-b border-gray-100">
+          <div class="flex justify-between items-center text-sm">
+            <div>Total for me ({{ getSelectedItemsCount() }} items):</div>
+            <div class="text-green-600">
+              <div class="font-medium">{{ formatPrice(getSelectedItemsTotal()) }}</div>
+              <div class="text-xs">{{ formatSats(convertToSats(getSelectedItemsTotal())) }} sats</div>
+            </div>
+          </div>
+        </div>
+        
         <div class="p-3 flex justify-between items-center font-bold">
-          <div>Total</div>
+          <div>{{ getSelectedItemsTotal() > 0 ? 'Total for others' : 'Total' }}</div>
           <div>
-            <div class="font-bold">{{ formatPrice(calculateSubtotal()) }}</div>
-            <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats(calculateSubtotal())) }} sats</div>
+            <div class="font-bold">{{ formatPrice(calculateRemainingTotal()) }}</div>
+            <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats(calculateRemainingTotal())) }} sats</div>
           </div>
         </div>
         <div class="p-3 pt-2 text-xs text-gray-500 border-t border-gray-100">
@@ -226,6 +309,7 @@ export default {
       items: props.receiptData.items.map(item => ({
         ...item,
         editing: false,
+        selectedQuantity: 0, // For partial item selection
         originalData: { ...item }
       }))
     });
@@ -249,6 +333,9 @@ export default {
     
     // Developer split with 0.1% precision (default 2.1%)
     const developerSplit = ref(2.1);
+    
+    // Item selection state
+    const showItemSelection = ref(false);
     
     
     onMounted(async () => {
@@ -369,6 +456,42 @@ export default {
       titleEditing.value = false;
     };
     
+    // Item selection functions
+    const toggleItemSelection = () => {
+      showItemSelection.value = !showItemSelection.value;
+      // Don't clear selections when hiding selection mode - preserve the user's choices
+      // The selections will be used when creating the payment request
+    };
+    
+    const incrementItemSelection = (index) => {
+      const item = receipt.value.items[index];
+      if (item.selectedQuantity < item.quantity) {
+        item.selectedQuantity++;
+      }
+    };
+    
+    const decrementItemSelection = (index) => {
+      const item = receipt.value.items[index];
+      if (item.selectedQuantity > 0) {
+        item.selectedQuantity--;
+      }
+    };
+    
+    const getSelectedItemsCount = () => {
+      return receipt.value.items.filter(item => (item.selectedQuantity || 0) > 0).length;
+    };
+    
+    const getSelectedItemsTotal = () => {
+      return receipt.value.items
+        .reduce((sum, item) => sum + (item.price * (item.selectedQuantity || 0)), 0);
+    };
+    
+    const calculateRemainingTotal = () => {
+      const totalAmount = calculateSubtotalUtil(receipt.value.items);
+      const selectedAmount = getSelectedItemsTotal();
+      return totalAmount - selectedAmount;
+    };
+    
     const createRequest = async () => {
       if (!receiveAddress.value) {
         showNotification('Please enter a receive address', 'error');
@@ -395,13 +518,19 @@ export default {
     const proceedWithRequest = async () => {
       try {
         // Clean up items data for publishing (remove editing props)
-        const cleanedItems = receipt.value.items.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.price * item.quantity,
-          title: item.merchant
-        }));
+        // Reduce quantities by what the creator selected
+        const cleanedItems = receipt.value.items
+          .map(item => {
+            const remainingQuantity = item.quantity - (item.selectedQuantity || 0);
+            return {
+              name: item.name,
+              quantity: remainingQuantity,
+              price: item.price,
+              total: item.price * remainingQuantity,
+              title: item.merchant
+            };
+          })
+          .filter(item => item.quantity > 0); // Only include items with remaining quantity
         
         const receiptWithDevSplit = {
           ...receipt.value,
@@ -511,7 +640,15 @@ export default {
       titleInput,
       startTitleEditing,
       saveTitleEdit,
-      cancelTitleEdit
+      cancelTitleEdit,
+      // Item selection
+      showItemSelection,
+      toggleItemSelection,
+      incrementItemSelection,
+      decrementItemSelection,
+      getSelectedItemsCount,
+      getSelectedItemsTotal,
+      calculateRemainingTotal
     };
   }
 };

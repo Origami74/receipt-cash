@@ -4,11 +4,6 @@ This document contains prioritized user feedback and feature requests for the Re
 
 ## Priority 90-100 (Critical - Core Flow Blockers)
 
-### Priority 95 - When canceling, bad UX, everything is deselected
-**Status**: Open  
-**Impact**: Breaks core settlement flow - users lose their selections when canceling accidentally, leading to abandonment  
-**Reason**: This directly impacts conversion and user retention in the primary use case
-
 ### Priority 90 - Fix subsidy in next.receipt.cash
 **Status**: Open  
 **Impact**: Production deployment issue affecting live users  
@@ -20,11 +15,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Status**: Open  
 **Impact**: Reduces onboarding friction significantly  
 **Reason**: Current flow requires payers to have Cashu tokens already. Allowing immediate funding improves first-time user experience and removes major adoption barrier
-
-### Priority 80 - Feature request: the creator of the receipt should be able to select his order out of the bill before sharing the receipt
-**Status**: Open  
-**Impact**: Fundamental workflow gap affecting usability  
-**Reason**: Common real-world scenario where payer also consumed items. Without this, payers must create workarounds or split their own items awkwardly
 
 ### Priority 75 - Hide unconfirmed settlements
 **Status**: Open  
