@@ -543,6 +543,15 @@ export default {
 
     // Cancel payment
     const cancelPayment = () => {
+      // Restore user selections from pending quantities
+      items.value.forEach(item => {
+        if (item.pendingQuantity > 0) {
+          item.selectedQuantity = item.pendingQuantity;
+          item.pendingQuantity = 0;
+        }
+      });
+      
+      // Reset payment state
       paymentInProgress.value = false;
       lightningPaymentLocked.value = false;
       cashuPaymentLocked.value = false;
