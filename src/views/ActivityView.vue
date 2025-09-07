@@ -125,9 +125,11 @@ export default {
                 return;
               }
 
-              // Check if we have a decryption key
-              if (!receipt.sharedDecryptionKey) {
+              // Check if we have a decryption key - try both field names
+              const encryptionKey = receipt.sharedDecryptionKey || receipt.sharedEncryptionKey;
+              if (!encryptionKey) {
                 console.error(`❌ No decryption key for receipt: ${receipt.eventId}`);
+                console.error(`❌ Receipt fields:`, Object.keys(receipt));
                 resolve({
                   id: receipt.eventId,
                   title: 'Decryption Error',
@@ -141,7 +143,7 @@ export default {
               }
 
               // Decrypt and parse the receipt content
-              const decryptionKey = Uint8Array.from(Buffer.from(receipt.sharedDecryptionKey, 'hex'));
+              const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
               const decryptedContent = await nip44.decrypt(receiptEvent.content, decryptionKey);
               const receiptData = JSON.parse(decryptedContent);
               
@@ -202,7 +204,10 @@ export default {
           const receiptPromises = receipts.map(receipt => fetchReceiptContent(receipt));
           const receiptContents = await Promise.all(receiptPromises);
           
-          ownedReceipts.value = receiptContents;
+          // Sort by timestamp, most recent first
+          const sortedReceipts = receiptContents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          
+          ownedReceipts.value = sortedReceipts;
           loading.value = false;
         });
 
