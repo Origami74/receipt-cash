@@ -86,12 +86,26 @@ Here are some things to keep in mind:
     return {
       title: parsedData.merchant,
       date: new Date().toISOString().split('T')[0],
-      items: parsedData.items.map(item => ({
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        total: item.total
-      })),
+      items: parsedData.items.map(item => {
+        let name = item.name;
+        let quantity = item.quantity;
+        let price = item.price;
+        
+        // Normalize fractional quantities (e.g., weighted items like 0.237kg or 1.347kg)
+        // If quantity is not a whole number, set quantity to 1 and adjust price to total
+        if (quantity > 0 && !Number.isInteger(quantity)) {
+          name = `(${item.quantity} x ${item.price}) ${item.name}`
+          price = item.total; // Use the total as the new price
+          quantity = 1;
+        }
+        
+        return {
+          name: name,
+          price: price,
+          quantity: quantity,
+          total: price * quantity
+        };
+      }),
       currency: parsedData.currency,
       total: parsedData.total_amount
     };

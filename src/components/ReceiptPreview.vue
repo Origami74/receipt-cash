@@ -130,22 +130,41 @@
                 {{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }} sats
               </div>
             </div>
-            <div v-if="step === 'payment-request'" class="flex flex-col gap-1">
+            <div v-if="step === 'payment-request'" class="relative">
               <button
                 v-if="!item.editing"
-                @click="startEditing(index)"
-                class="text-xs text-blue-500 hover:text-blue-600"
-                title="Edit item"
+                @click.stop="toggleItemMenu(index)"
+                class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                title="Item options"
               >
-                ✏️
+                <span class="text-lg leading-none">⋯</span>
               </button>
-              <button
-                @click="removeItem(index)"
-                class="text-xs text-red-500 hover:text-red-600"
-                title="Remove item"
+              
+              <!-- Dropdown menu -->
+              <div
+                v-if="item.showMenu"
+                class="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-32"
+                @click.stop
               >
-                🗑️
-              </button>
+                <button
+                  @click="handleEditClick(index)"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  @click="handleSplitClick(index)"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+                >
+                  👥 Split
+                </button>
+                <button
+                  @click="handleDeleteClick(index)"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600 flex items-center gap-2 border-t border-gray-100"
+                >
+                  🗑️ Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -261,7 +280,17 @@
       </div>
       
     </div>
-    
+
+    <!-- Split Item Modal -->
+    <SplitItemModal
+      :show="splitDialog.show"
+      :itemName="splitDialog.itemName"
+      :itemPrice="splitDialog.itemPrice"
+      :itemQuantity="splitDialog.itemQuantity"
+      :currency="selectedCurrency"
+      @close="closeSplitDialog"
+      @split="applySplit"
+    />
     
   </div>
 </template>
@@ -277,6 +306,7 @@ import QRCodeVue from 'qrcode.vue';
 import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
+import SplitItemModal from './SplitItemModal.vue';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
 import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
@@ -291,7 +321,8 @@ export default {
     QRCodeVue,
     CurrencySelector,
     ReceiveAddressInput,
-    DeveloperSplitSlider
+    DeveloperSplitSlider,
+    SplitItemModal
   },
   props: {
     receiptData: {
@@ -310,6 +341,7 @@ export default {
         ...item,
         editing: false,
         selectedQuantity: 0, // For partial item selection
+        showMenu: false, // For dropdown menu
         originalData: { ...item }
       }))
     });
@@ -337,8 +369,25 @@ export default {
     // Item selection state
     const showItemSelection = ref(false);
     
+    // Split dialog state
+    const splitDialog = ref({
+      show: false,
+      itemIndex: -1,
+      itemName: '',
+      itemPrice: 0,
+      itemQuantity: 1
+    });
+    
+    // Close all dropdowns when clicking outside
+    const closeAllMenus = () => {
+      receipt.value.items.forEach(item => {
+        item.showMenu = false;
+      });
+    };
     
     onMounted(async () => {
+      // Close dropdowns when clicking outside
+      document.addEventListener('click', closeAllMenus);
       // Set currency to receipt's currency
       selectedCurrency.value = receipt.value.currency || 'EUR';
       
@@ -461,6 +510,70 @@ export default {
       showItemSelection.value = !showItemSelection.value;
       // Don't clear selections when hiding selection mode - preserve the user's choices
       // The selections will be used when creating the payment request
+    };
+    
+    // Dropdown menu functions
+    const toggleItemMenu = (index) => {
+      closeAllMenus();
+      receipt.value.items[index].showMenu = !receipt.value.items[index].showMenu;
+    };
+    
+    // Handler functions that close the menu after action
+    const handleEditClick = (index) => {
+      startEditing(index);
+      closeAllMenus();
+    };
+    
+    const handleSplitClick = (index) => {
+      openSplitDialog(index);
+      closeAllMenus();
+    };
+    
+    const handleDeleteClick = (index) => {
+      removeItem(index);
+      closeAllMenus();
+    };
+    
+    // Split dialog functions
+    const openSplitDialog = (index) => {
+      const item = receipt.value.items[index];
+      splitDialog.value = {
+        show: true,
+        itemIndex: index,
+        itemName: item.name,
+        itemPrice: item.price,
+        itemQuantity: item.quantity
+      };
+      closeAllMenus();
+    };
+    
+    const closeSplitDialog = () => {
+      splitDialog.value.show = false;
+    };
+    
+    const applySplit = (splitData) => {
+      const index = splitDialog.value.itemIndex;
+      const item = receipt.value.items[index];
+      
+      // Store original quantity if not already split
+      if (!item.originalQuantity) {
+        item.originalQuantity = item.quantity;
+        item.originalName = item.name;
+      }
+      
+      // Update item with split values
+      item.quantity = splitData.participants;
+      item.price = splitData.newPrice;
+      
+      // Update name to show original quantity
+      if (item.originalQuantity > 1) {
+        item.name = `(${item.originalQuantity}x) ${item.originalName}`;
+      } else {
+        item.name = `(${item.originalQuantity}x) ${item.originalName}`;
+      }
+      
+      // Close the dialog
+      closeSplitDialog();
     };
     
     const incrementItemSelection = (index) => {
@@ -648,7 +761,16 @@ export default {
       decrementItemSelection,
       getSelectedItemsCount,
       getSelectedItemsTotal,
-      calculateRemainingTotal
+      calculateRemainingTotal,
+      // Dropdown and split functions
+      toggleItemMenu,
+      handleEditClick,
+      handleSplitClick,
+      handleDeleteClick,
+      splitDialog,
+      openSplitDialog,
+      closeSplitDialog,
+      applySplit
     };
   }
 };
