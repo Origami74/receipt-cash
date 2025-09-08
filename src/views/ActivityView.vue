@@ -158,7 +158,7 @@ export default {
               // console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
               
               // Start settlement confirmation stream for this receipt
-              startSettlementStreamForReceipt(receipt.eventId);
+              // startSettlementStreamForReceipt(receipt.eventId);
               
               // Calculate receipt total from items
               const receiptTotal = receiptData.items?.reduce((total, item) => {
@@ -253,15 +253,15 @@ export default {
           '#e': [receiptEventId] // Find confirmations that reference this receipt
         })
         .pipe(onlyEvents())
-        .subscribe({
-          next: (confirmationEvent) => {
-            // console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
-            processConfirmationEvent(receiptEventId, confirmationEvent);
-          },
-          error: (error) => {
-            console.error(`❌ Error in confirmation stream for receipt ${receiptEventId}:`, error);
-          }
-        });
+        // .subscribe({
+        //   next: (confirmationEvent) => {
+        //     // console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
+        //     processConfirmationEvent(receiptEventId, confirmationEvent);
+        //   },
+        //   error: (error) => {
+        //     console.error(`❌ Error in confirmation stream for receipt ${receiptEventId}:`, error);
+        //   }
+        // });
       
       // Store subscription for cleanup
       confirmationStreams.value.set(receiptEventId, confirmationSubscription);

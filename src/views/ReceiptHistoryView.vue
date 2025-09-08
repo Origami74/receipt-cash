@@ -33,19 +33,16 @@
 
     <!-- Receipts List -->
     <div v-else class="flex-1 overflow-y-auto p-4">
-      <div v-if="receiptEvents.length === 0" class="text-center py-8">
+      <div v-if="receiptsDisplay.length === 0" class="text-center py-8">
         <div class="text-gray-500 text-lg">No receipts found</div>
         <div class="text-gray-400 text-sm mt-2">Published receipts will appear here</div>
       </div>
       
       <div v-else class="space-y-4">
-        <!-- Display receipt events using the new component -->
-        <ReceiptItem
-          v-for="[receiptEvent, parsedContent, contentDecryptionKey] in receiptEvents"
-          :key="receiptEvent.id"
-          :receiptEvent="[receiptEvent, parsedContent, contentDecryptionKey]"
-        />
-        
+          <ReceiptItem
+            v-for="receipt in receiptsDisplay"
+            :receipt="receipt"
+          />
       </div>
     </div>
   </div>
@@ -53,8 +50,9 @@
 
 <script>
 import { useRouter } from 'vue-router';
-import { getSharedReceiptSubscription } from '../services/sharedComposables.js';
 import ReceiptItem from '../components/ReceiptItem.vue';
+import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager.js';
+
 
 export default {
   name: 'ReceiptHistoryView',
@@ -68,23 +66,24 @@ export default {
       router.push('/');
     };
 
-    // Use the shared receipt subscription instance
-    const {
-      loading,
-      error,
-      receiptEvents,
-      restartSubscription
-    } = getSharedReceiptSubscription();
-
-    // Alias for the retry button
-    const loadReceipts = restartSubscription;
+    var receiptsDisplay = []
+    var error = undefined
+    var loading = true
+    
+    ownedReceiptsStorageManager.receipts$
+      .subscribe(receipts => {
+        receiptsDisplay = receipts
+        loading = false
+      }).error(err => {
+        error = err
+        loading = false;
+      })
 
     return {
       loading,
       error,
-      receiptEvents,
+      receiptsDisplay,
       goBack,
-      loadReceipts
     };
   }
 };

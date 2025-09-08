@@ -90,6 +90,8 @@ import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
+import { receiptModel } from '../services/nostr/receipt';
+
 
 export default {
   name: 'ReceiptView',
@@ -265,43 +267,45 @@ export default {
       }
     };
 
-    // Fetch receipt data using eventLoader
-    const fetchReceipt = () => {
-      loading.value = true;
-      error.value = null;
-      errorDetails.value = null;
+    
 
-      // Fetch receipt event using eventLoader
-    globalEventLoader({
-        id: props.eventId,
-        relays: DEFAULT_RELAYS,
-      }).subscribe(handleReceiptEvent);
-    };
+    // // Fetch receipt data using eventLoader
+    // const fetchReceipt = () => {
+    //   loading.value = true;
+    //   error.value = null;
+    //   errorDetails.value = null;
 
-    // Load settlements using applesauce
-    const loadSettlements = async () => {
-      try {
-        // Subscribe to settlement events using applesauce
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT],
-            '#e': [props.eventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleSettlementEvent);
+    //   // Fetch receipt event using eventLoader
+    // globalEventLoader({
+    //     id: props.eventId,
+    //     relays: DEFAULT_RELAYS,
+    //   }).subscribe(handleReceiptEvent);
+    // };
 
-        // Subscribe to confirmation events
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: [receiptAuthorPubkey.value],
-            '#e': [props.eventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleConfirmationEvent);
+    // // Load settlements using applesauce
+    // const loadSettlements = async () => {
+    //   try {
+    //     // Subscribe to settlement events using applesauce
+    //     globalPool.subscription(DEFAULT_RELAYS, {
+    //         kinds: [KIND_SETTLEMENT],
+    //         '#e': [props.eventId],
+    //       })
+    //       .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+    //       .subscribe(handleSettlementEvent);
+
+    //     // Subscribe to confirmation events
+    //     globalPool.subscription(DEFAULT_RELAYS, {
+    //         kinds: [KIND_SETTLEMENT_CONFIRMATION],
+    //         authors: [receiptAuthorPubkey.value],
+    //         '#e': [props.eventId],
+    //       })
+    //       .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
+    //       .subscribe(handleConfirmationEvent);
           
-      } catch (error) {
-        console.error('Error loading settlements:', error);
-      }
-    };
+    //   } catch (error) {
+    //     console.error('Error loading settlements:', error);
+    //   }
+    // };
 
     // Handle settlement events
     const handleSettlementEvent = async (settlementEvent) => {
@@ -398,7 +402,12 @@ export default {
 
     // Component lifecycle
     onMounted(() => {
-      fetchReceipt();
+      // fetchReceipt();
+
+      receiptModel(props.eventId)
+      .subscribe(receipt => {
+        console.warn(`🥜🥜🥜 collecting nutz`, receipt)
+      })
       
       // Check if we should automatically show the QR (e.g., when coming from receipt creation)
       if (route.query.showQR === 'true') {
@@ -426,7 +435,7 @@ export default {
       errorDetails,
       notification,
       clearNotification,
-      fetchReceipt,
+      // fetchReceipt,
       showSettings,
       goBack,
       btcPrice,

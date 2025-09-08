@@ -1,7 +1,7 @@
 <template>
   <div
     class="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
-    @click="viewReceipt"
+    @click="navigateToReceipt"
   >
     <div class="flex justify-between items-start mb-2">
       <div>
@@ -19,36 +19,36 @@
       <div class="flex justify-between text-sm text-gray-600 mb-1">
         <span>Settlement Progress</span>
         <span>
-          <span class="text-green-600 font-medium">{{ receipt.confirmedSettledAmount || 0 }}</span> /
-          <span class="text-yellow-600 font-medium">{{ receipt.settledAmount || 0 }}</span> /
-          <span class="text-gray-600">{{ receipt.totalAmount }}</span> sats
+          <span class="text-yellow-600 font-medium">{{  formatSats(receipt.collectedAmount) || 0 }}</span> /
+          <span class="text-green-600 font-medium">{{  formatSats(receipt.distributedAmount) || 0 }}</span> /
+          <span class="text-gray-600">{{  formatSats(receipt.totalAmount) }}</span> sats
         </span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-2 relative">
-        <!-- Total settled amount (orange/yellow background) -->
+        <!-- Confirmed settled amount (orange/yellow background) -->
         <div
           class="bg-yellow-500 h-2 rounded-full transition-all duration-300 absolute"
-          :style="{ width: getSettlementProgress(receipt) + '%' }"
+          :style="{ width: collectedPercent + '%' }"
         ></div>
-        <!-- Confirmed settled amount (green overlay) -->
+        <!-- Paid out amount (green overlay) -->
         <div
           class="bg-green-500 h-2 rounded-full transition-all duration-300 absolute"
-          :style="{ width: Math.round((receipt.confirmedSettledAmount || 0) / receipt.totalAmount * 100) + '%' }"
+          :style="{ width: distributedPercent + '%' }"
         ></div>
       </div>
       <div class="flex justify-between text-xs text-gray-500 mt-1">
-        <span>Confirmed: {{ Math.round((receipt.confirmedSettledAmount || 0) / receipt.totalAmount * 100) }}%</span>
-        <span>Total Settled: {{ getSettlementProgress(receipt) }}%</span>
+        <span>Collected: {{ collectedPercent }}%</span>
+        <span>Distributed: {{ distributedPercent }}%</span>
       </div>
     </div>
 
     <!-- Status Badge -->
     <div class="mt-2 flex justify-between items-center">
-      <span 
+      <span
         class="px-2 py-1 rounded-full text-xs font-medium"
-        :class="getStatusClass(receipt)"
+        :class="statusClass"
       >
-        {{ getStatusText(receipt) }}
+        {{ statusText }}
       </span>
       <div class="text-xs text-gray-500">
         {{ receipt.itemCount || 0 }} items
@@ -62,177 +62,149 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatSats, convertFromSats } from '../utils/pricingUtils.js';
 import { formatDate } from '../utils/dateUtils';
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
-import { globalEventLoader, globalEventStore, globalPool } from '../services/nostr/applesauce';
-import { onlyEvents } from 'applesauce-relay';
-import { mapEventsToStore } from 'applesauce-core';
-import { safeParseSettlementContent } from '../parsing/settlementparser.js';
-import { Buffer } from 'buffer';
-import { nip44 } from 'nostr-tools'
-
+import { receiptModel } from '../services/nostr/receipt.js';
+import { decryptAndParseReceipt } from '../utils/receiptUtils.js';
+import { decryptAndParseSettlement } from '../utils/settlementUtils.js';
 
 export default {
   name: 'ReceiptItem',
   props: {
-    receiptEvent: {
-      type: Array,
+    receipt: {
+      type: Object,
       required: true
     }
   },
   setup(props) {
     const router = useRouter();
-    const settlementEvents = ref([]);
-    const settlementConfirmationEvents = ref([]);
+    const decryptedContent = ref();
+    const receiptEvent = ref();
+    const confirmedSettlementIds = ref([]);
+    const confirmedSettlements = ref([]);
 
-    // const settledAmount
+    const {privateKey: receiptPrivateKey, pubkey: receiptPubkey, eventId: receiptEventId, sharedEncryptionKey} = props.receipt;
 
-    // Convert the tuple [event, parsedContent, contentDecryptionKey] to receipt format
-    const [receiptEvent, parsedContent, contentDecryptionKey] = props.receiptEvent;
+    // Calculate collected amount (settlements that have been received in app, not necessarily distributed yet)
+    const collectedAmount = computed(() => {
 
-    // Calculate total settled amount from all settlement events
-    const totalSettledAmount = computed(() => {
-      return settlementEvents.value.reduce((total, [settlementEvent, parsedSettlement]) => {
-        const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + item.total, 0);
-        return total + settlementTotal;
-      }, 0);
-    });
+      var total = 0
+      confirmedSettlements.value.forEach(settlementEvent => {
+        // get decrypted contents for calculation  
+        const decryptedSettlement = decryptAndParseSettlement(settlementEvent, sharedEncryptionKey)
+          
+        const settlementTotal = decryptedSettlement.settledItems.reduce((sum, item) => sum + item.total, 0);
 
-    // Calculate confirmed settled amount (settlements that have been confirmed)
-    const confirmedSettledAmount = computed(() => {
-      // Get settlement IDs that have been confirmed
-      const confirmedSettlementIds = new Set(
-        settlementConfirmationEvents.value.map(event => {
-          // Find the settlement event ID from the confirmation event tags
-          const eTags = event.tags.filter(tag => tag[0] === 'e');
-          // The second 'e' tag should be the settlement event ID
-          return eTags.length >= 2 ? eTags[1][1] : null;
-        }).filter(Boolean)
-      );
+        total += settlementTotal;
+      })
 
-      // Sum up only the confirmed settlements
-      return settlementEvents.value.reduce((total, [settlementEvent, parsedSettlement]) => {
-        if (confirmedSettlementIds.has(settlementEvent.id)) {
-          const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + item.total, 0);
-          return total + settlementTotal;
-        }
-        return total;
-      }, 0);
+      return total
     });
 
     const receipt = computed(() => {
       
       // Calculate total from parsed items
-      const totalAmount = parsedContent.items.reduce((sum, item) => sum + item.total, 0);
+      const totalAmount = decryptedContent.value?.items?.reduce((sum, item) => sum + (item.total || item.quantity * item.price || 0), 0) || 0;
       
+      console.log('Debug receipt calculation:', {
+        hasDecryptedContent: !!decryptedContent.value,
+        hasItems: !!decryptedContent.value?.items,
+        itemsCount: decryptedContent.value?.items?.length,
+        items: decryptedContent.value?.items,
+        calculatedTotal: totalAmount,
+        confirmedAmount: collectedAmount.value
+      });
+
       return {
-        id: receiptEvent.id,
-        eventId: receiptEvent.id,
-        title: parsedContent.title, // No merchant in simplified model
-        created_at: receiptEvent.created_at,
+        id: receiptEvent.value?.id,
+        eventId: receiptEvent.value?.id,
+        title: decryptedContent.value?.title, // No merchant in simplified model
+        created_at: receiptEvent.value?.created_at,
         totalAmount,
-        currency: parsedContent.currency,
-        btcPrice: parsedContent.btcPrice,
-        itemCount: parsedContent.items.length,
-        settledAmount: totalSettledAmount.value,
-        confirmedSettledAmount: confirmedSettledAmount.value,
-        status: 'pending'
+        currency: decryptedContent.value?.currency,
+        btcPrice: decryptedContent.value?.btcPrice,
+        itemCount: decryptedContent.value?.items?.length || 0,
+        distributedAmount: 0, // Hardcoded to 0 as requested
+        collectedAmount: collectedAmount.value,
       };
     });
 
-    const viewReceipt = () => {
-      // Convert Uint8Array to hex string for URL
-      const keyHex = Buffer.from(contentDecryptionKey).toString('hex');
+    const navigateToReceipt = () => {
       // Navigate to the receipt view
-      router.push(`/receipt/${receipt.value.id}/${keyHex}`);
+      router.push(`/receipt/${receiptEventId}/${sharedEncryptionKey}`);
     };
 
-    const getSettlementProgress = (receipt) => {
-      if (!receipt.totalAmount) return 0;
-      return Math.round((receipt.settledAmount || 0) / receipt.totalAmount * 100);
-    };
-
-    const getStatusClass = (receipt) => {
-      const confirmedProgress = Math.round((receipt.confirmedSettledAmount || 0) / receipt.totalAmount * 100);
-      const totalProgress = getSettlementProgress(receipt);
+    const statusClass = computed(() => {
+      const collectedProgress = collectedPercent.value;
+      const distributedProgress = distributedPercent.value;
       
-      if (confirmedProgress === 100) return 'bg-green-100 text-green-800';  // Fully confirmed
-      if (confirmedProgress > 0) return 'bg-yellow-100 text-yellow-800';      // Partially confirmed (green)
-      if (totalProgress > 0) return 'bg-yellow-100 text-yellow-800';        // Settled but unconfirmed (orange)
+      if (distributedProgress === 100) return 'bg-green-100 text-green-800';  // Fully distributed
+      if (distributedProgress > 0) return 'bg-green-100 text-green-800';      // Partially distributed
+      if (collectedProgress === 100) return 'bg-yellow-100 text-yellow-800'; // Fully collected
+      if (collectedProgress > 0) return 'bg-yellow-100 text-yellow-800';      // Partially collected
       return 'bg-gray-100 text-gray-800';                                   // Pending
-    };
+    });
 
-    const getStatusText = (receipt) => {
-      const confirmedProgress = Math.round((receipt.confirmedSettledAmount || 0) / receipt.totalAmount * 100);
-      const totalProgress = getSettlementProgress(receipt);
+    const statusText = computed(() => {
+      const collectedProgress = collectedPercent.value;
+      const distributedProgress = distributedPercent.value;
       
-      if (confirmedProgress === 100) return 'Fully Settled';
-      if (confirmedProgress > 0) return 'Partially Settled';
-      if (totalProgress > 0) return 'Settled (Unconfirmed)';
-      return 'Pending Settlement';
-    };
+      if (distributedProgress === 100) return 'Fully Distributed';
+      if (distributedProgress > 0) return 'Partially Distributed';
+      if (collectedProgress === 100) return 'Fully Collected';
+      if (collectedProgress > 0) return 'Partially Collected';
+      return 'Pending Collection';
+    });
 
-    const handleSettlementEvent = async (settlementEvent) => {
-      console.log("settlement event", settlementEvent);
-      
-      try {
-        // Decrypt the content using the same encryption key as the receipt
-        const decryptedContent = await nip44.decrypt(settlementEvent.content, contentDecryptionKey);
-        
-        // Validate and parse the decrypted settlement content
-        const parsedSettlement = safeParseSettlementContent(decryptedContent);
-        
-        if (parsedSettlement) {
-          // Save as tuple: [settlementEvent, parsedSettlement]
-          settlementEvents.value.push([settlementEvent, parsedSettlement]);
-        } else {
-          console.warn("Invalid settlement content after decryption, skipping event:", settlementEvent.id);
-        }
-        
-      } catch (error) {
-        console.error("Error processing settlement event:", error, "Settlement Event ID:", settlementEvent.id);
-      }
-    };
+    const collectedPercent = computed(() => {
+      if (!receipt.value.totalAmount) return 0;
+      const percent = Math.round((receipt.value.collectedAmount || 0) / receipt.value.totalAmount * 100);
+      return Math.min(percent, 100); // Cap at 100%
+    });
 
-    const loadSettlements = async () => {
-      try {
-
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT],
-            "#e": [receiptEvent.id],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleSettlementEvent)
-
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: [receiptEvent.pubkey],
-            "#e": [receiptEvent.id],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe((event) => {
-            console.log("confirmation event", event);
-            settlementConfirmationEvents.value.push(event);
-          })
-        
-      } catch (error) {
-        console.error('Error calculating settled amount:', error);
-        return 0;
-      }
-    };
+    const distributedPercent = computed(() => {
+      // For now, hardcode distributed amount to 0 as requested
+      // This will eventually calculate actual distribution progress
+      const distributedAmount = receipt.value.distributedAmount || 0;
+      if (!receipt.value.totalAmount) return 0;
+      const percent = Math.round(distributedAmount / receipt.value.totalAmount * 100);
+      return Math.min(percent, 100); // Cap at 100%
+    });
 
     onMounted(() => {
-      loadSettlements();
+      receiptModel(receiptEventId)
+      .subscribe(receipt => {
+                console.warn(`555`, receipt)
+        receiptEvent.value = receipt.event
+        decryptedContent.value = decryptAndParseReceipt(receipt.event, sharedEncryptionKey)
+        
+        // More efficient approach: Create a Set of confirmed settlement IDs first
+        confirmedSettlementIds.value = new Set(
+          receipt.confirmations.flatMap(confirmation =>
+            confirmation.tags
+              .filter(tag => tag[0] === 'e')
+              .map(tag => tag[1])
+          )
+        );
+        
+        // Then filter settlements using O(1) Set lookup
+        confirmedSettlements.value = receipt.settlements.filter(settlement =>
+          confirmedSettlementIds.value.has(settlement.id)
+        );
+
+        // TODO: payouts
+
+      })
     });
 
     return {
       receipt,
-      viewReceipt,
+      navigateToReceipt,
       formatDate,
       formatSats,
       convertFromSats,
-      getSettlementProgress,
-      getStatusClass,
-      getStatusText
+      statusClass,
+      statusText,
+      collectedPercent,
+      distributedPercent
     };
   }
 };

@@ -73,7 +73,7 @@ class ReceiptPaymentCollector {
           "#e": [this.receipt.eventId],
         })
         .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-        .subscribe((event) => this._handleSettlementEvent(this, event))
+        // .subscribe((event) => this._handleSettlementEvent(this, event))
 
     this.nostrSubscriptions.push(sub)
 
@@ -137,7 +137,7 @@ class ReceiptPaymentCollector {
             "#e": [settlementEventId],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe((event) => this._handleConfirmationEvent(this, event))
+          // .subscribe((event) => this._handleConfirmationEvent(this, event))
     
     this.nostrSubscriptions.push(sub);
 

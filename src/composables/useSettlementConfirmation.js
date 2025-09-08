@@ -144,7 +144,7 @@ export function useSettlementConfirmation(options = {}) {
           authors: pubkeys // Filter on pubkeys we use for receipts
         })
         .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-        .subscribe(handleConfirmationEvent);
+        // .subscribe(handleConfirmationEvent);
         
     } catch (err) {
       console.error('Error starting confirmation subscription:', err);

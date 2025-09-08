@@ -574,7 +574,7 @@ export default {
             '#e': [props.eventId],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleSettlementEvent);
+          // .subscribe(handleSettlementEvent);
 
         // Subscribe to confirmation events
         globalPool.subscription(DEFAULT_RELAYS, {
@@ -583,7 +583,7 @@ export default {
             '#e': [props.eventId],
           })
           .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          .subscribe(handleConfirmationEvent);
+          // .subscribe(handleConfirmationEvent);
           
       } catch (error) {
         console.error('Error loading settlements:', error);

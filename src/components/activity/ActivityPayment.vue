@@ -71,6 +71,8 @@ import { ref, computed, onMounted } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
 import ActivityPayout from './ActivityPayout.vue';
 import { meltSessionStorageManager } from '../../services/new/storage/meltSessionStorageManager.js';
+import { moneyStorageManager } from '../../services/new/storage/moneyStorageManager.js';
+import { sumProofs } from '../../utils/cashuUtils.js';
 
 export default {
   name: 'ActivityPayment',
@@ -94,6 +96,8 @@ export default {
   setup(props) {
     // Lightning payout rounds from melt sessions
     const lightningPayouts = ref([]);
+    // Unspent Cashu tokens from money storage
+    const cashuPayouts = ref([]);
     // Fetch lightning payout rounds from melt sessions
     const fetchLightningPayouts = () => {
       try {
@@ -172,11 +176,63 @@ export default {
       }
     };
 
-    // Combined payouts: original payouts + lightning payouts from melt sessions
+    // Fetch unspent Cashu tokens from payer money storage
+    const fetchCashuPayouts = () => {
+      try {
+        if (!props.receiptId || !props.payment.settlementId) {
+          return;
+        }
+
+        // Generate the key used in money storage: receiptEventId-settlementEventId
+        const moneyKey = `${props.receiptId}-${props.payment.settlementId}`;
+        
+        // Get the money item from payer storage
+        const payerMoney = moneyStorageManager.payer.getByKey(moneyKey);
+        
+        if (!payerMoney || !payerMoney.proofs || payerMoney.proofs.length === 0) {
+          console.log(`🥜 No payer money found for key ${moneyKey}`);
+          return;
+        }
+
+        // Check if the payment is spent - if spent, don't show it
+        // if (payerMoney.isSpent === true) {
+        //   console.log(`🥜 Payment already spent for key ${moneyKey}`);
+        //   return;
+        // }
+
+        // Calculate total amount from all proofs
+        const totalAmount = sumProofs(payerMoney.proofs)
+        const proofsCount = payerMoney.proofs.length;
+        const mint = payerMoney.mint || 'unknown';
+
+        // Create payout object for the failed payout (unspent tokens are recoverable)
+        const payout = {
+          id: `${moneyKey}-cashu-failed`,
+          type: 'cashu',
+          amount: totalAmount,
+          status: 'failed', // Mark as failed so user can recover the tokens
+          statusText: `Payout failed - ${proofsCount} tokens available for recovery`,
+          error: 'Lightning payout failed - tokens can be recovered',
+          timestamp: new Date(), // Current time since these are available now
+          mint: mint,
+          proofsCount: proofsCount,
+          moneyKey: moneyKey,
+          proofs: payerMoney.proofs // Include proofs for token generation
+        };
+
+        cashuPayouts.value = [payout];
+        console.log(`🥜 Loaded failed Cashu payout with recoverable tokens: ${totalAmount} sats (${proofsCount} proofs) for payment ${props.payment.id}`);
+      } catch (error) {
+        console.error(`Error fetching Cashu payouts for payment ${props.payment.id}:`, error);
+      }
+    };
+
+    // Combined payouts: original payouts + lightning payouts from melt sessions + unspent cashu tokens
     const allPayouts = computed(() => {
       const originalPayouts = props.payment.payouts || [];
       const lightningRounds = lightningPayouts.value || [];
-      return [...originalPayouts, ...lightningRounds];
+      const cashuTokens = cashuPayouts.value || [];
+      return [...originalPayouts, ...lightningRounds, ...cashuTokens];
     });
 
     // Check if payment has processing payouts
@@ -195,9 +251,10 @@ export default {
       return allPayouts.value.every(payout => payout.status === 'completed');
     });
 
-    // Load lightning payouts on mount
+    // Load payouts on mount
     onMounted(() => {
       fetchLightningPayouts();
+      fetchCashuPayouts();
     });
 
     // Processing payments start expanded, completed payments start collapsed

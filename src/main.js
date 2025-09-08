@@ -11,14 +11,14 @@ import { cashuDmSender } from './services/new/payout/cashuDmSender';
 import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
 
 // Initialize services
-receiptLifecycleManager.start()
+// receiptLifecycleManager.start()
 
-incomingPaymentSplitter.start()
+// incomingPaymentSplitter.start()
 
-devPayoutManager.start()
-payerPayoutManager.start()
+// devPayoutManager.start()
+// payerPayoutManager.start()
 
-cashuDmSender.start()
+// cashuDmSender.start()
 
 
 // Initialize debug logging if it was previously enabled

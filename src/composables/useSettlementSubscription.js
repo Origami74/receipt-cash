@@ -223,7 +223,7 @@ export function useSettlementSubscription(options = {}) {
           "#p": filteredPubkeys,
         })
         .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-        .subscribe(handleSettlementEvent);
+        // .subscribe(handleSettlementEvent);
         
     } catch (err) {
       console.error('Error starting settlement subscription:', err);

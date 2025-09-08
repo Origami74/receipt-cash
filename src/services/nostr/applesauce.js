@@ -2,7 +2,7 @@ import { EventStore } from "applesauce-core";
 import { presistEventsToCache } from "applesauce-core/helpers";
 import { RelayPool } from "applesauce-relay";
 import { createEventLoader, createTagValueLoader } from "applesauce-loaders/loaders";
-import { KIND_SETTLEMENT } from "./constants";
+import { DEFAULT_RELAYS, KIND_SETTLEMENT } from "./constants";
 import { addEvents, getEventsForFilters, openDB } from "nostr-idb";
 
 // Create a relay pool
@@ -26,7 +26,7 @@ const initCache = async () => {
   return cache;
 };
 
-async function cacheRequest(filters) {
+export async function cacheRequest(filters) {
   return initCache().then((cache) => {
     return getEventsForFilters(cache, filters).then((events) => {
       console.log("loaded events from cache", events.length);
@@ -39,7 +39,8 @@ async function cacheRequest(filters) {
 export const globalEventLoader = createEventLoader(globalPool, 
   {
     eventStore: globalEventStore,
-    cacheRequest: cacheRequest
+    cacheRequest: cacheRequest,
+    extraRelays: DEFAULT_RELAYS,
   });
 
 // Example get confirmation events
@@ -53,3 +54,5 @@ export const settlementLoader = createTagValueLoader(globalPool, "e", {
 initCache().catch(console.error);
 
 // TODO: AI write docs on cache
+
+window.globalEventLoader = globalEventLoader

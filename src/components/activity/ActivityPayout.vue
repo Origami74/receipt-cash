@@ -40,14 +40,29 @@
       <span class="text-xs text-gray-500">{{ formatTime(payout.timestamp) }}</span>
     </div>
 
-    <!-- Retry Button for Failed Payouts -->
-    <div v-if="payout.status === 'failed'" class="mt-2">
-      <button 
+    <!-- Action Buttons for Failed Payouts -->
+    <div v-if="payout.status === 'failed'" class="mt-2 space-x-2">
+      <!-- Copy Token Button for Cashu Payouts with Proofs -->
+      <button
+        v-if="payout.type === 'cashu' && payout.proofs && payout.proofs.length > 0"
+        @click="copyToken"
+        class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+      >
+        {{ copyButtonText }}
+      </button>
+      
+      <!-- Retry Button -->
+      <button
         @click="$emit('retry', payout)"
         class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition-colors"
       >
         Retry Payout
       </button>
+    </div>
+
+    <!-- Mint Info for Cashu Tokens -->
+    <div v-if="payout.status === 'failed' && payout.type === 'cashu' && payout.mint" class="mt-1">
+      <span class="text-xs text-gray-500">Mint: {{ payout.mint.slice(0, 40) }}...</span>
     </div>
   </div>
 </template>
