@@ -90,7 +90,7 @@ import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
 import { safeParseSettlementContent } from '../parsing/settlementparser';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
-import { receiptModel } from '../services/nostr/receipt';
+import { fullReceiptModel, receiptModel } from '../services/nostr/receipt';
 
 
 export default {
@@ -403,10 +403,9 @@ export default {
     // Component lifecycle
     onMounted(() => {
       // fetchReceipt();
-
-      receiptModel(props.eventId)
-      .subscribe(receipt => {
-        console.warn(`🥜🥜🥜 collecting nutz`, receipt)
+      fullReceiptModel(props.eventId)
+      .subscribe(fullReceiptModel => {
+          console.warn(`🥜🥜🥜 collecting nutz`, fullReceiptModel)
       })
       
       // Check if we should automatically show the QR (e.g., when coming from receipt creation)

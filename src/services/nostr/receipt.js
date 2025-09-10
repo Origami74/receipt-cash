@@ -5,6 +5,7 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION, KIND_SET
 import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { metadata } from "@vueuse/core/metadata.cjs";
+import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 
 const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),
@@ -139,3 +140,63 @@ export const receiptModel = (receiptEventId) => {
     receiptModelCache.set(receiptEventId, receipt$)
     return receipt$
 }
+
+
+const fullReceiptModelCache = new Map()
+export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => {
+
+    if(fullReceiptModelCache.has(receiptEventId)){
+        return fullReceiptModelCache.get(receiptEventId)
+    }
+
+    const fullReceiptModel$ = receiptModel(receiptEventId)
+    .pipe(
+        tap(v => console.warn(v)),
+        map(receiptModel => {
+            const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
+            
+            // More efficient approach: Create a Set of confirmed settlement IDs first
+            const confirmedSettlementIds = new Set(
+            receiptModel.confirmations.flatMap(confirmation =>
+                confirmation.tags
+                .filter(tag => tag[0] === 'e')
+                .map(tag => tag[1])
+            )
+            );
+            
+            // Then filter settlements using O(1) Set lookup
+            const confirmedSettlements = receiptModel.settlements.filter(settlement =>
+                confirmedSettlementIds.has(settlement.id)
+            );
+
+            const unConfirmedSettlements = receiptModel.settlements.filter(settlement =>
+                confirmedSettlementIds.has(settlement.id)
+            );
+
+            console.warn('content', receiptContent)
+            return {
+                receiptModel: receiptModel,
+
+                // Receipt
+                items: receiptContent.items,
+                total: receiptContent.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+                currency: receiptContent.currency,
+                btcPrice: receiptContent.btcPrice,
+                splitPercentage: receiptContent.splitPercentage,
+
+                // settlements
+                confirmedSettlements: confirmedSettlements,
+                // confirmedAmount: 
+
+                unConfirmedSettlements: unConfirmedSettlements
+
+            }
+        }),
+        share({connector: () => new ReplaySubject(1), resetOnRefCountZero: () => timer( 60000 )})
+    )
+
+    fullReceiptModelCache.set(receiptEventId, fullReceiptModel$)
+    return fullReceiptModel$
+    
+}
+
