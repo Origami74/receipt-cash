@@ -7,6 +7,7 @@ import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageMa
 import { metadata } from "@vueuse/core/metadata.cjs";
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
+import { getTagValue } from "applesauce-core/helpers";
 
 const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),
@@ -175,6 +176,7 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                             event: settlement,
             
                             // settlement
+                            paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
                             total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
                         }
@@ -188,6 +190,7 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                             event: settlement,
             
                             // settlement
+                            paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
                             total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
                         }

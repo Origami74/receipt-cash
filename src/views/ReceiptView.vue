@@ -21,21 +21,18 @@
         <ReceiptItemsList
           :receiptModel="receiptModel"
           :selectedCurrency="selectedCurrency"
-          
         />
 
         <ReceiptSummary
           :receiptModel="receiptModel"
           :selectedCurrency="selectedCurrency"
         />
-        <!-- :currentBtcPrice="currentBtcPrice"
-        :toFiat="toFiat" -->
         
         <!-- Settlements List -->
-        <!-- <ReceiptSettlementsList
+        <ReceiptSettlementsList
           :receiptModel="receiptModel"
-          :toFiat="toFiat"
-        /> -->
+        />
+         <!-- :toFiat="toFiat" -->
 
         <!-- Share QR Code Section (conditionally shown) -->
         <ReceiptShareQR
