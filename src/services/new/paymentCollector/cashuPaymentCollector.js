@@ -23,7 +23,6 @@ class CashuPaymentCollector {
 
     const privateKeyBytes = Uint8Array.from(Buffer.from(this.receipt.privateKey, 'hex'));
     this.signer = new SimpleSigner(privateKeyBytes);
-    console.log(`signer2: ${JSON.stringify(this.signer)}`)
   }
 
   start() {

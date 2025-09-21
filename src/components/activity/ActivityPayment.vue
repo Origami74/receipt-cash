@@ -82,10 +82,7 @@ export default {
   props: {
     settlement: {
       type: Object,
-      required: true,
-      validator(value) {
-        return value.id && value.created_at;
-      }
+      required: true
     },
     receiptId: {
       type: String,
@@ -109,14 +106,16 @@ export default {
         // Generate session ID using receiptId and settlementId
         let sessionId = null;
         
-        if (props.receiptId && props.settlement.id) {
+        const settlementId = props.settlement.id || props.settlement.event?.id;
+        
+        if (props.receiptId && settlementId) {
           // Primary approach: use receiptId and settlementId
-          sessionId = `${props.receiptId}-${props.settlement.id}`;
-        } else if (props.settlement.id) {
+          sessionId = `${props.receiptId}-${settlementId}`;
+        } else if (settlementId) {
           // Fallback: try to find a session that contains the settlementId
           const allSessions = meltSessionStorageManager.getAllItems();
           const matchingSession = allSessions.find(session =>
-            session.sessionId.includes(props.settlement.id)
+            session.sessionId.includes(settlementId)
           );
           if (matchingSession) {
             sessionId = matchingSession.sessionId;
@@ -124,7 +123,7 @@ export default {
         }
 
         if (!sessionId) {
-          console.log(`⚡ No session ID found for lightning payment ${props.settlement.id}`);
+          console.log(`⚡ No session ID found for lightning payment ${settlementId}`);
           return;
         }
 
@@ -170,16 +169,16 @@ export default {
         });
         
         lightningPayouts.value = payouts;
-        console.log(`⚡ Loaded ${payouts.length} lightning payout rounds for settlement ${props.settlement.id} (session: ${sessionId})`);
+        console.debug(`⚡ Loaded ${payouts.length} lightning payout rounds for settlement ${settlementId} (session: ${sessionId})`);
       } catch (error) {
-        console.error(`Error fetching lightning payouts for settlement ${props.settlement.id}:`, error);
+        console.error(`Error fetching lightning payouts for settlement ${settlementId}:`, error);
       }
     };
 
     // Fetch unspent Cashu tokens from payer money storage
     const fetchCashuPayouts = () => {
       try {
-        const settlementId = props.settlement.id;
+        const settlementId = props.settlement.id || props.settlement.event?.id;
         if (!props.receiptId || !settlementId) {
           return;
         }
@@ -222,9 +221,9 @@ export default {
         };
 
         cashuPayouts.value = [payout];
-        console.log(`🥜 Loaded failed Cashu payout with recoverable tokens: ${totalAmount} sats (${proofsCount} proofs) for settlement ${props.settlement.id}`);
+        console.log(`🥜 Loaded failed Cashu payout with recoverable tokens: ${totalAmount} sats (${proofsCount} proofs) for settlement ${settlementId}`);
       } catch (error) {
-        console.error(`Error fetching Cashu payouts for settlement ${props.settlement.id}:`, error);
+        console.error(`Error fetching Cashu payouts for settlement ${settlementId}:`, error);
       }
     };
 

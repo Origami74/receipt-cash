@@ -20,12 +20,12 @@ class ReceiptPaymentCollector {
 
   start() {
     if (this.isActive) {
-      console.log(`🔄 ReceiptPaymentCollector for ${this.receipt.eventId} already active`);
+      console.debug(`🔄 ReceiptPaymentCollector for ${this.receipt.eventId} already active`);
       return;
     }
 
     this.isActive = true;
-    console.log(`🚀 Starting ReceiptPaymentCollector for receipt: ${this.receipt.eventId}`);
+    console.debug(`🚀 Starting ReceiptPaymentCollector for receipt: ${this.receipt.eventId}`);
 
 
     const unconfirmedSettlments$ = fullReceiptModel(this.receipt.eventId, this.receipt.sharedEncryptionKey)
@@ -77,7 +77,7 @@ class ReceiptPaymentCollector {
     );
 
     hasUnconfirmedCashuSettlements$.subscribe(hasCashu => {
-      console.log(`🥜 Has cashu settlements`, hasCashu)
+      console.debug(`🥜 Has cashu settlements`, hasCashu, 'receipt:', this.receipt.id)
       if(hasCashu){
         this._startCashuPaymentCollector()
       } else {
@@ -86,7 +86,7 @@ class ReceiptPaymentCollector {
     })
 
     lightningChanges$.subscribe(lnSettlement => {
-      console.log(`⚡️ LN settlement`, lnSettlement)
+      console.debug(`⚡️ LN settlement`, lnSettlement)
       if(lnSettlement.type === 'added'){
         this._startLightningPaymentCollector(lnSettlement.settlement.event);
       } else{

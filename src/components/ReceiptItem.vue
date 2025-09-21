@@ -104,14 +104,14 @@ export default {
       // Calculate total from parsed items
       const totalAmount = decryptedContent.value?.items?.reduce((sum, item) => sum + (item.total || item.quantity * item.price || 0), 0) || 0;
       
-      console.log('Debug receipt calculation:', {
-        hasDecryptedContent: !!decryptedContent.value,
-        hasItems: !!decryptedContent.value?.items,
-        itemsCount: decryptedContent.value?.items?.length,
-        items: decryptedContent.value?.items,
-        calculatedTotal: totalAmount,
-        confirmedAmount: collectedAmount.value
-      });
+      // console.log('Debug receipt calculation:', {
+      //   hasDecryptedContent: !!decryptedContent.value,
+      //   hasItems: !!decryptedContent.value?.items,
+      //   itemsCount: decryptedContent.value?.items?.length,
+      //   items: decryptedContent.value?.items,
+      //   calculatedTotal: totalAmount,
+      //   confirmedAmount: collectedAmount.value
+      // });
 
       return {
         id: receiptEvent.value?.id,

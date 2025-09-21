@@ -143,7 +143,8 @@ export default {
         const payouts = props.receiptModel.receiptModel?.payouts || [];
         return !payouts.some(payout => {
           const payoutSettlementRefs = (payout.tags || []).filter(tag => tag[0] === 'e');
-          return payoutSettlementRefs.some(tag => tag[1] === settlement.id);
+          const settlementId = settlement.id || settlement.event?.id;
+          return payoutSettlementRefs.some(tag => tag[1] === settlementId);
         });
       });
       return hasUnconfirmed || hasConfirmedWithoutPayouts;

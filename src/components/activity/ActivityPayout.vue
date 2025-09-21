@@ -70,6 +70,8 @@
 <script>
 import { computed } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
+import { sumProofs } from '../../utils/cashuUtils.js';
+import { getEncodedToken } from '@cashu/cashu-ts';
 
 export default {
   name: 'ActivityPayout',
@@ -138,12 +140,41 @@ export default {
       return `${days}d ago`;
     };
 
+    const copyButtonText = computed(() => {
+      return 'Copy Token';
+    });
+
+    const copyToken = async () => {
+      try {
+        if (props.payout.proofs && props.payout.proofs.length > 0) {
+          // Create the token using cashu-ts library
+          const token = {
+            mint: props.payout.mint,
+            proofs: props.payout.proofs
+          }
+          
+          // Use cashu-ts to encode the token
+          const tokenString = getEncodedToken(token);
+          
+          // Copy to clipboard
+          await navigator.clipboard.writeText(tokenString);
+          
+          const amount = sumProofs(props.payout.proofs);
+          console.log(`Cashu token with ${amount} sats copied to clipboard`);
+        }
+      } catch (error) {
+        console.error('Error copying token:', error);
+      }
+    };
+
     return {
       payoutStatusClasses,
       payoutTextClasses,
       payoutTypeLabel,
       formatTime,
-      formatSats
+      formatSats,
+      copyButtonText,
+      copyToken
     };
   }
 };
