@@ -6,6 +6,7 @@ import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { metadata } from "@vueuse/core/metadata.cjs";
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
+import { decryptAndParseSettlement } from "../../utils/settlementUtils";
 
 const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),
@@ -150,50 +151,68 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
     }
 
     const fullReceiptModel$ = receiptModel(receiptEventId)
-    .pipe(
-        tap(v => console.warn(v)),
-        map(receiptModel => {
-            const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
+        .pipe(
+            tap(v => console.warn(v)),
+            map(receiptModel => {
+                const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
+                const encryptionKey = sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey;
+                
+                // More efficient approach: Create a Set of confirmed settlement IDs first
+                const confirmedSettlementIds = new Set(
+                    receiptModel.confirmations.flatMap(confirmation =>
+                        confirmation.tags
+                        .filter(tag => tag[0] === 'e')
+                        .map(tag => tag[1])
+                    )
+                );
+                
+                // Then filter settlements using O(1) Set lookup and decrypt their content
+                const confirmedSettlements = receiptModel.settlements
+                    .filter(settlement => confirmedSettlementIds.has(settlement.id))
+                    .map(settlement => {
+                        const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
+                        return {
+                            event: settlement,
             
-            // More efficient approach: Create a Set of confirmed settlement IDs first
-            const confirmedSettlementIds = new Set(
-            receiptModel.confirmations.flatMap(confirmation =>
-                confirmation.tags
-                .filter(tag => tag[0] === 'e')
-                .map(tag => tag[1])
-            )
-            );
+                            // settlement
+                            items: parsedSettlement.settledItems,
+                            total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
+                        }
+                    });
+    
+                const unConfirmedSettlements = receiptModel.settlements
+                    .filter(settlement => !confirmedSettlementIds.has(settlement.id))
+                    .map(settlement => {
+                        const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
+                        return {
+                            event: settlement,
             
-            // Then filter settlements using O(1) Set lookup
-            const confirmedSettlements = receiptModel.settlements.filter(settlement =>
-                confirmedSettlementIds.has(settlement.id)
-            );
-
-            const unConfirmedSettlements = receiptModel.settlements.filter(settlement =>
-                confirmedSettlementIds.has(settlement.id)
-            );
-
-            console.warn('content', receiptContent)
-            return {
-                receiptModel: receiptModel,
-
-                // Receipt
-                items: receiptContent.items,
-                total: receiptContent.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-                currency: receiptContent.currency,
-                btcPrice: receiptContent.btcPrice,
-                splitPercentage: receiptContent.splitPercentage,
-
-                // settlements
-                confirmedSettlements: confirmedSettlements,
-                // confirmedAmount: 
-
-                unConfirmedSettlements: unConfirmedSettlements
-
-            }
-        }),
-        share({connector: () => new ReplaySubject(1), resetOnRefCountZero: () => timer( 60000 )})
-    )
+                            // settlement
+                            items: parsedSettlement.settledItems,
+                            total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
+                        }
+                    });
+    
+                console.warn('content', receiptContent)
+                return {
+                    receiptModel: receiptModel,
+    
+                    // Receipt
+                    title: receiptContent.title,
+                    items: receiptContent.items,
+                    total: receiptContent.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+                    currency: receiptContent.currency,
+                    btcPrice: receiptContent.btcPrice,
+                    splitPercentage: receiptContent.splitPercentage,
+    
+                    // settlements with decrypted content
+                    confirmedSettlements: confirmedSettlements,
+                    unConfirmedSettlements: unConfirmedSettlements
+    
+                }
+            }),
+            share({connector: () => new ReplaySubject(1), resetOnRefCountZero: () => timer( 60000 )})
+        )
 
     fullReceiptModelCache.set(receiptEventId, fullReceiptModel$)
     return fullReceiptModel$

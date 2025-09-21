@@ -1,4 +1,5 @@
 import { formatCurrency } from './currencyUtils';
+import btcPriceService from '../services/btcPriceService';
 
 /**
  * Format sats with proper number formatting
@@ -80,4 +81,32 @@ export function formatDevPercentage(percentage) {
     return '0.0';
   }
   return percentage.toFixed(1);
+}
+
+/**
+ * Global toFiat function that fetches current BTC price and converts sats to fiat
+ * @param {number} satsAmount - Amount in sats
+ * @param {string} currency - Currency code (e.g., 'EUR', 'USD')
+ * @param {number} fallbackBtcPrice - Fallback BTC price if fetch fails
+ * @returns {Promise<string>} Formatted amount in fiat currency
+ */
+export async function toFiatAsync(satsAmount, currency = 'USD', fallbackBtcPrice = 0) {
+  try {
+    const currentBtcPrice = await btcPriceService.fetchBtcPrice(currency);
+    return convertFromSats(satsAmount, currentBtcPrice, currency);
+  } catch (error) {
+    console.error('Error fetching BTC price for conversion:', error);
+    return 0;
+  }
+}
+
+/**
+ * Synchronous toFiat function that uses a provided BTC price
+ * @param {number} satsAmount - Amount in sats
+ * @param {number} btcPrice - Current BTC price
+ * @param {string} currency - Currency code (e.g., 'EUR', 'USD')
+ * @returns {string} Formatted amount in fiat currency
+ */
+export function toFiat(satsAmount, btcPrice, currency) {
+  return convertFromSats(satsAmount, btcPrice, currency);
 }

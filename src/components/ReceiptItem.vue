@@ -161,8 +161,6 @@ export default {
     });
 
     const distributedPercent = computed(() => {
-      // For now, hardcode distributed amount to 0 as requested
-      // This will eventually calculate actual distribution progress
       const distributedAmount = receipt.value.distributedAmount || 0;
       if (!receipt.value.totalAmount) return 0;
       const percent = Math.round(distributedAmount / receipt.value.totalAmount * 100);
@@ -172,7 +170,6 @@ export default {
     onMounted(() => {
       receiptModel(receiptEventId)
       .subscribe(receipt => {
-                console.warn(`555`, receipt)
         receiptEvent.value = receipt.event
         decryptedContent.value = decryptAndParseReceipt(receipt.event, sharedEncryptionKey)
         

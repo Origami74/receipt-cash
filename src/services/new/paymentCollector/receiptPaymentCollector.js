@@ -5,6 +5,7 @@ import { lightningPaymentCollector } from '../paymentCollector/lightningPaymentC
 import { mapEventsToStore } from 'applesauce-core';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../../nostr/constants.js';
 import { getTagValue } from 'applesauce-core/helpers';
+import { fullReceiptModel } from '../../nostr/receipt.js';
 
 /**
  * Collects payments for a specific receipt by monitoring settlements and confirmations via Nostr
@@ -33,6 +34,11 @@ class ReceiptPaymentCollector {
 
     // Subscribe to settlement events for this receipt using Nostr
     this._subscribeToSettlementEvents();
+
+    const fullReceiptModel$ = fullReceiptModel(this.receipt.eventId, this.receipt.sharedEncryptionKey)
+    // .subscribe(fullReceiptModel => {
+    //   console.log(`💰 Full receipt model`, fullReceiptModel)
+    // })
   }
 
   stop() {

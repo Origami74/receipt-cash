@@ -36,6 +36,7 @@
 </template>
 
 <script>
+import { computed } from 'vue';
 import CurrencySelector from './CurrencySelector.vue';
 
 export default {
@@ -44,13 +45,9 @@ export default {
     CurrencySelector
   },
   props: {
-    title: {
-      type: String,
-      default: ''
-    },
-    date: {
-      type: String,
-      default: ''
+    receiptModel: {
+      type: Object,
+      default: () => null
     },
     selectedCurrency: {
       type: String,
@@ -62,6 +59,22 @@ export default {
     }
   },
   emits: ['back-click', 'toggle-settings', 'currency-change'],
+  setup(props) {
+    const title = computed(() => {
+      console.log("title", props)
+      return props.receiptModel?.title ?? "Untitled Receipt"
+    });
+
+    const date = computed(() => {
+      if (!props.receiptModel?.receiptModel?.event?.created_at) return '';
+      return new Date(props.receiptModel.receiptModel.event.created_at * 1000).toLocaleDateString();
+    });
+
+    return {
+      title,
+      date
+    };
+  },
   methods: {
     handleBackClick() {
       this.$emit('back-click');
