@@ -1,7 +1,7 @@
 import { cashuPaymentCollector } from '../paymentCollector/cashuPaymentCollector.js';
 import { lightningPaymentCollector } from '../paymentCollector/lightningPaymentCollector.js';
 import { fullReceiptModel } from '../../nostr/receipt.js';
-import { filter, map, mergeMap, pairwise, shareReplay, startWith, tap } from 'rxjs';
+import { debounceTime, distinctUntilChanged, filter, map, mergeMap, pairwise, shareReplay, startWith, tap } from 'rxjs';
 
 /**
  * Collects payments for a specific receipt by monitoring settlements and confirmations via Nostr
@@ -76,14 +76,19 @@ class ReceiptPaymentCollector {
       })
     );
 
-    hasUnconfirmedCashuSettlements$.subscribe(hasCashu => {
-      console.debug(`🥜 Has cashu settlements`, hasCashu, 'receipt:', this.receipt.id)
-      if(hasCashu){
-        this._startCashuPaymentCollector()
-      } else {
-        this._stopCashuPaymentCollector()
-      }
-    })
+    hasUnconfirmedCashuSettlements$
+      .pipe(
+        debounceTime(400), // Wait 100ms for rapid emissions to settle
+        distinctUntilChanged() // Only emit when the value actually changes
+      )
+      .subscribe(hasCashu => {
+        console.debug(`🥜 Has cashu settlements`, hasCashu, 'receipt:', this.receipt)
+        if(hasCashu){
+          this._startCashuPaymentCollector()
+        } else {
+          this._stopCashuPaymentCollector()
+        }
+      })
 
     lightningChanges$.subscribe(lnSettlement => {
       console.debug(`⚡️ LN settlement`, lnSettlement)
@@ -117,16 +122,6 @@ class ReceiptPaymentCollector {
     
     this.isActive = false;
     console.log(`✅ ReceiptPaymentCollector stopped for receipt: ${this.receipt.eventId}`);
-  }
-
-  _handleCashuSettlement(settlementEventId) {
-    this.unconfirmedCashuSettlementIds.add(settlementEventId)
-    console.log(`📈 Unconfirmed cashu settlements: ${this.unconfirmedCashuSettlementIds.size} (settlement: ${settlementEventId})`);
-    
-    // Start cashu collector if not already running (one collector for all cashu settlements)
-    if (!this.cashuCollector && this.unconfirmedCashuSettlementIds.size > 0) {
-      this._startCashuPaymentCollector();
-    }
   }
 
   _handleConfirmationEvent(receiptPaymentCollector, confirmationEvent) {
@@ -174,7 +169,7 @@ class ReceiptPaymentCollector {
   }
 
   _startCashuPaymentCollector() {
-    if (this.cashuCollector) {
+    if (this.cashuCollector !== null && this.cashuCollector !== undefined) {
       return; // Already running
     }
 

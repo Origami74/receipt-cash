@@ -93,6 +93,10 @@ class DevPayoutManager {
    */
   async _processDevPayment(devPayment) {
     try {
+        if(devPayment.isSpent){
+          return;
+        }
+
         console.log(`🔄 Processing dev payment: ${devPayment.receiptEventId.slice(0, 8)}... → ${devPayment.splitAmount} sats`);
 
         // Log payment details

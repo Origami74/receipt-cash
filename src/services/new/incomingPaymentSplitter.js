@@ -36,7 +36,7 @@ class IncomingPaymentSplitter {
     const incomingSubscription = moneyStorageManager.incoming.itemAdded$.subscribe(
       ({ item: payment }) => {
         console.log(`💰 New incoming payment: ${payment.receiptEventId.slice(0, 8)}...`);
-        this._processIncomingPayment(this, payment, null);
+        this._processIncomingPayment(payment, null);
       }
     );
 
@@ -67,7 +67,7 @@ class IncomingPaymentSplitter {
     if (existingPayments.length > 0) {
       console.log(`📦 Processing ${existingPayments.length} existing incoming payments...`);
       existingPayments.forEach(payment => {
-        this._processIncomingPayment(this, payment, null);
+        this._processIncomingPayment(payment, null);
       });
     } else {
       console.log('📭 No existing incoming payments to process');
@@ -83,7 +83,7 @@ class IncomingPaymentSplitter {
    * @param {string} payment.mintUrl - Mint URL
    * @param {boolean} [payment.isSpent] - Whether the payment has been spent
    */
-  async _processIncomingPayment(incomingPaymentSplitter, payment, receiptEvent = null) {
+  async _processIncomingPayment(payment, receiptEvent = null) {
     try {
       console.log(`🔄 Processing payment: ${payment.receiptEventId.slice(0, 8)}... → ${payment.settlementEventId.slice(0, 8)}...`);
 
@@ -96,7 +96,7 @@ class IncomingPaymentSplitter {
       if(receiptEvent === null || receiptEvent === undefined){
         const sub = await globalEventLoader({ id: payment.receiptEventId, relays: DEFAULT_RELAYS,  })
           .subscribe((event) => {
-              this._processIncomingPayment(incomingPaymentSplitter, payment, event)
+              this._processIncomingPayment(payment, event)
           });
           
         this.subscriptions.push(sub)
