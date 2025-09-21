@@ -61,7 +61,6 @@ export default {
   emits: ['back-click', 'toggle-settings', 'currency-change'],
   setup(props) {
     const title = computed(() => {
-      console.log("title", props)
       return props.receiptModel?.title ?? "Untitled Receipt"
     });
 

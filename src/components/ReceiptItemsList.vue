@@ -21,14 +21,18 @@
               <div
                 v-if="itemWithSettlements.collectedPercent > 0"
                 :style="{ width: itemWithSettlements.collectedPercent + '%' }"
-                :class="itemWithSettlements.collectedPercent >= 100 ? 'bg-green-500' : 'bg-green-400'"
+                :class="{
+                  'bg-green-500': itemWithSettlements.collectedColor === 'green' && itemWithSettlements.collectedPercent >= 100,
+                  'bg-green-400': itemWithSettlements.collectedColor === 'green' && itemWithSettlements.collectedPercent < 100,
+                  'bg-yellow-400': itemWithSettlements.collectedColor === 'orange',
+                }"
                 class="transition-all duration-300"
               ></div>
               <!-- Pending settlements (orange) - only show if not fully collected -->
               <div
                 v-if="itemWithSettlements.pendingPercent > 0 && itemWithSettlements.collectedPercent < 100"
                 :style="{ width: itemWithSettlements.pendingPercent + '%' }"
-                class="bg-orange-400 transition-all duration-300"
+                class="bg-yellow-400 transition-all duration-300"
               ></div>
             </div>
           </div>
@@ -36,7 +40,11 @@
           <div class="text-sm text-gray-500">
             <!-- Settlement status with confirmation counter -->
             <span
-              :class="itemWithSettlements.collectedPercent >= 100 ? 'text-green-600 font-medium' : 'text-gray-500'"
+              :class="{
+                'text-green-600 font-medium': itemWithSettlements.collectedColor === 'green' && itemWithSettlements.collectedPercent >= 100,
+                'text-yellow-600 font-medium': itemWithSettlements.collectedColor === 'orange' && itemWithSettlements.collectedPercent >= 100,
+                'text-gray-500': itemWithSettlements.collectedPercent < 100
+              }"
             >
               (<span :class="itemWithSettlements.confirmedQuantity > itemWithSettlements.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ itemWithSettlements.confirmedQuantity }}</span>/{{ itemWithSettlements.quantity }})
             </span>
@@ -122,12 +130,23 @@ export default {
         const collectedPercent = item.quantity > 0 ? Math.min(Math.round((confirmedQuantity / item.quantity) * 100), 100) : 0;
         const pendingPercent = item.quantity > 0 ? Math.min(Math.round((pendingQuantity / item.quantity) * 100), 100) : 0;
 
+        // Determine color based on ownership and payout status
+        const isOwnedReceipt = props.receiptModel?.isOwnedReceipt || false;
+        const hasPayouts = props.receiptModel?.payouts && props.receiptModel.payouts.length > 0;
+        
+        // Color logic:
+        // - Owned receipt + no payouts = orange (collected but not distributed)
+        // - Owned receipt + has payouts = green (collected and distributed)
+        // - Not owned receipt = green (collected, payout status irrelevant)
+        const collectedColor = isOwnedReceipt && !hasPayouts ? 'orange' : 'green';
+
         return {
           ...item,
           confirmedQuantity,
           pendingQuantity,
           collectedPercent,
-          pendingPercent
+          pendingPercent,
+          collectedColor
         };
       });
     });

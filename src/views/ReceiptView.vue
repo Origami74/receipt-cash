@@ -183,7 +183,7 @@ export default {
       try {
         // Load the receipt model
         fullReceiptModel(props.eventId).subscribe(model => {
-          console.warn(`🥜🥜🥜 collecting nutz`, model);
+          console.warn(`📝🥜🥜🥜 Full Receipt Model:`, model);
           receiptModel.value = model;
           
           // Set initial selected currency from model

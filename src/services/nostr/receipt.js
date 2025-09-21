@@ -153,7 +153,6 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
 
     const fullReceiptModel$ = receiptModel(receiptEventId)
         .pipe(
-            tap(v => console.warn(v)),
             map(receiptModel => {
                 const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
                 const encryptionKey = sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey;
@@ -196,11 +195,11 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                         }
                     });
     
-                console.warn('content', receiptContent)
                 return {
                     receiptModel: receiptModel,
     
                     // Receipt
+                    isOwnedReceipt: ownedReceiptsStorageManager.hasReceipt(receiptModel.event.id), 
                     title: receiptContent.title,
                     items: receiptContent.items,
                     total: receiptContent.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
