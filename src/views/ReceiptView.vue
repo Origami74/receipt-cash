@@ -23,15 +23,13 @@
           :selectedCurrency="selectedCurrency"
           
         />
-        <!-- :toFiat="toFiat" -->
 
-        
-        <!-- <ReceiptSummary
+        <ReceiptSummary
           :receiptModel="receiptModel"
-          :currentBtcPrice="currentBtcPrice"
           :selectedCurrency="selectedCurrency"
-          :toFiat="toFiat"
-        /> -->
+        />
+        <!-- :currentBtcPrice="currentBtcPrice"
+        :toFiat="toFiat" -->
         
         <!-- Settlements List -->
         <!-- <ReceiptSettlementsList

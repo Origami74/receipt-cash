@@ -178,7 +178,7 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                             items: parsedSettlement.settledItems,
                             total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
                         }
-                    });
+                    })
     
                 const unConfirmedSettlements = receiptModel.settlements
                     .filter(settlement => !confirmedSettlementIds.has(settlement.id))
