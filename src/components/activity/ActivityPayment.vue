@@ -29,24 +29,24 @@
         <!-- Payment Details -->
         <div class="flex-1">
           <p class="text-sm font-medium text-gray-900">
-            Payment {{ payment.paymentMethod === 'lightning' ? '⚡' : payment.paymentMethod === 'cashu' ? '🥜' : '' }}
+            Payment {{ settlement.paymentType === 'lightning' ? '⚡' : settlement.paymentType === 'cashu' ? '🥜' : '' }}
           </p>
         </div>
       </div>
 
       <!-- Amount and Timestamp (stacked) -->
       <div class="text-right">
-        <p class="text-sm font-semibold text-gray-900">{{ formatSats(payment.amount) }} sats</p>
-        <span class="text-xs text-gray-500">{{ formatTime(payment.timestamp) }}</span>
+        <p class="text-sm font-semibold text-gray-900">{{ formatSats(settlement.total) }} sats</p>
+        <span class="text-xs text-gray-500">{{ formatTime(settlement.event.created_at * 1000) }}</span>
       </div>
     </div>
 
     <!-- Expandable Content -->
     <div v-show="isExpanded" class="mt-3">
       <!-- User Comment -->
-      <div v-if="payment.comment" class="mb-3 ml-8">
+      <div v-if="settlement.comment" class="mb-3 ml-8">
         <p class="text-sm text-gray-800 bg-gray-50 rounded p-2 italic">
-          "{{ payment.comment }}"
+          "{{ settlement.comment }}"
         </p>
       </div>
 
@@ -80,11 +80,11 @@ export default {
     ActivityPayout
   },
   props: {
-    payment: {
+    settlement: {
       type: Object,
       required: true,
       validator(value) {
-        return value.amount && value.timestamp;
+        return value.id && value.created_at;
       }
     },
     receiptId: {
@@ -102,21 +102,21 @@ export default {
     const fetchLightningPayouts = () => {
       try {
         // Only fetch for lightning payments
-        if (props.payment.paymentMethod !== 'lightning') {
+        if (props.settlement.paymentType !== 'lightning') {
           return;
         }
 
         // Generate session ID using receiptId and settlementId
         let sessionId = null;
         
-        if (props.receiptId && props.payment.settlementId) {
+        if (props.receiptId && props.settlement.id) {
           // Primary approach: use receiptId and settlementId
-          sessionId = `${props.receiptId}-${props.payment.settlementId}`;
-        } else if (props.payment.settlementId) {
+          sessionId = `${props.receiptId}-${props.settlement.id}`;
+        } else if (props.settlement.id) {
           // Fallback: try to find a session that contains the settlementId
           const allSessions = meltSessionStorageManager.getAllItems();
           const matchingSession = allSessions.find(session =>
-            session.sessionId.includes(props.payment.settlementId)
+            session.sessionId.includes(props.settlement.id)
           );
           if (matchingSession) {
             sessionId = matchingSession.sessionId;
@@ -124,7 +124,7 @@ export default {
         }
 
         if (!sessionId) {
-          console.log(`⚡ No session ID found for lightning payment ${props.payment.id}`);
+          console.log(`⚡ No session ID found for lightning payment ${props.settlement.id}`);
           return;
         }
 
@@ -170,21 +170,22 @@ export default {
         });
         
         lightningPayouts.value = payouts;
-        console.log(`⚡ Loaded ${payouts.length} lightning payout rounds for payment ${props.payment.id} (session: ${sessionId})`);
+        console.log(`⚡ Loaded ${payouts.length} lightning payout rounds for settlement ${props.settlement.id} (session: ${sessionId})`);
       } catch (error) {
-        console.error(`Error fetching lightning payouts for payment ${props.payment.id}:`, error);
+        console.error(`Error fetching lightning payouts for settlement ${props.settlement.id}:`, error);
       }
     };
 
     // Fetch unspent Cashu tokens from payer money storage
     const fetchCashuPayouts = () => {
       try {
-        if (!props.receiptId || !props.payment.settlementId) {
+        const settlementId = props.settlement.id;
+        if (!props.receiptId || !settlementId) {
           return;
         }
 
         // Generate the key used in money storage: receiptEventId-settlementEventId
-        const moneyKey = `${props.receiptId}-${props.payment.settlementId}`;
+        const moneyKey = `${props.receiptId}-${settlementId}`;
         
         // Get the money item from payer storage
         const payerMoney = moneyStorageManager.payer.getByKey(moneyKey);
@@ -221,15 +222,15 @@ export default {
         };
 
         cashuPayouts.value = [payout];
-        console.log(`🥜 Loaded failed Cashu payout with recoverable tokens: ${totalAmount} sats (${proofsCount} proofs) for payment ${props.payment.id}`);
+        console.log(`🥜 Loaded failed Cashu payout with recoverable tokens: ${totalAmount} sats (${proofsCount} proofs) for settlement ${props.settlement.id}`);
       } catch (error) {
-        console.error(`Error fetching Cashu payouts for payment ${props.payment.id}:`, error);
+        console.error(`Error fetching Cashu payouts for settlement ${props.settlement.id}:`, error);
       }
     };
 
     // Combined payouts: original payouts + lightning payouts from melt sessions + unspent cashu tokens
     const allPayouts = computed(() => {
-      const originalPayouts = props.payment.payouts || [];
+      const originalPayouts = props.settlement.payouts || [];
       const lightningRounds = lightningPayouts.value || [];
       const cashuTokens = cashuPayouts.value || [];
       return [...originalPayouts, ...lightningRounds, ...cashuTokens];
@@ -265,7 +266,8 @@ export default {
     };
     const formatTime = (timestamp) => {
       const now = new Date();
-      const diff = now - timestamp;
+      const date = new Date(timestamp);
+      const diff = now - date;
       const minutes = Math.floor(diff / 60000);
       
       if (minutes < 1) return 'Just now';

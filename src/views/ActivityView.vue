@@ -41,7 +41,7 @@
       <!-- Receipts Activity -->
       <div v-else>
         <!-- No Activity State -->
-        <div v-if="displayReceipts.length === 0" class="bg-white rounded-lg shadow text-center py-8">
+        <div v-if="sortedReceiptModels.length === 0" class="bg-white rounded-lg shadow text-center py-8">
           <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -54,10 +54,8 @@
         <!-- Receipt Groups -->
         <div v-else class="space-y-4">
           <ActivityReceiptGroup
-            v-for="receipt in displayReceipts"
-            :key="receipt.id"
-            :receipt="receipt"
-            @retry-payout="handleRetryPayout"
+            v-for="model in sortedReceiptModels"
+            :receiptModel="model"
           />
         </div>
       </div>
@@ -68,22 +66,14 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { getSharedReceiptSubscription, getSharedSettlementSubscription, getSharedSettlementConfirmation } from '../services/sharedComposables.js';
 import { formatSats } from '../utils/pricingUtils.js';
 import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager.js';
-import { globalEventLoader, globalEventStore, globalPool } from '../services/nostr/applesauce.js';
-import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants.js';
-import { nip44 } from 'nostr-tools';
-import { Buffer } from 'buffer';
-import { safeParseSettlementContent } from '../parsing/settlementparser.js';
-import { meltSessionStorageManager } from '../services/new/storage/meltSessionStorageManager.js';
+import { fullReceiptModel } from '../services/nostr/receipt.js';
 
 // Import new activity components
 import ActivityHeader from '../components/activity/ActivityHeader.vue';
 import ActivitySummaryCards from '../components/activity/ActivitySummaryCards.vue';
 import ActivityReceiptGroup from '../components/activity/ActivityReceiptGroup.vue';
-import { onlyEvents } from 'applesauce-relay';
-import { mapEventsToStore } from 'applesauce-core';
 
 export default {
   name: 'ActivityView',
@@ -95,412 +85,65 @@ export default {
   setup() {
     const router = useRouter();
     
-    // Real data from storage
-    const ownedReceipts = ref([]);
+    // Simplified data with full models
+    const receiptModels = ref(new Map()); // eventId -> full model
     const loading = ref(true);
     const error = ref(null);
     const subscriptions = ref([]);
-    
-    // Settlement streaming data
-    const receiptSettlements = ref(new Map()); // receiptId -> settlements[]
-    const confirmationStreams = ref(new Map()); // receiptId -> subscription
 
     const goBack = () => {
       router.push('/');
     };
 
-    // Fetch receipt content from Nostr event
-    const fetchReceiptContent = async (receipt) => {
-      try {
-        // console.log(`🔍 Fetching content for receipt: ${receipt.eventId}`);
-        
-        return new Promise((resolve) => {
-          globalEventLoader({
-            id: receipt.eventId,
-            relays: DEFAULT_RELAYS,
-          }).subscribe(async (receiptEvent) => {
-            try {
-              if (!receiptEvent) {
-                console.warn(`⚠️ Receipt event not found: ${receipt.eventId}`);
-                resolve({
-                  id: receipt.eventId,
-                  title: 'Could not find receipt',
-                  fullEventId: receipt.eventId, // Store full event ID for copying
-                  status: 'not_found',
-                  timestamp: new Date(),
-                  payments: []
-                });
-                return;
-              }
-
-              // Check if we have a decryption key - try both field names
-              const encryptionKey = receipt.sharedDecryptionKey || receipt.sharedEncryptionKey;
-              if (!encryptionKey) {
-                console.error(`❌ No decryption key for receipt: ${receipt.eventId}`);
-                console.error(`❌ Receipt fields:`, Object.keys(receipt));
-                resolve({
-                  id: receipt.eventId,
-                  title: 'Decryption Error',
-                  fullEventId: receipt.eventId,
-                  status: 'decryption_error',
-                  error: 'No decryption key found',
-                  timestamp: new Date(receiptEvent.created_at * 1000),
-                  payments: []
-                });
-                return;
-              }
-
-              // Decrypt and parse the receipt content
-              const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
-              const decryptedContent = await nip44.decrypt(receiptEvent.content, decryptionKey);
-              const receiptData = JSON.parse(decryptedContent);
-              
-              // console.log(`✅ Receipt content loaded: ${receiptData.title || 'Untitled'}`);
-              
-              // Start settlement confirmation stream for this receipt
-              // startSettlementStreamForReceipt(receipt.eventId);
-              
-              // Calculate receipt total from items
-              const receiptTotal = receiptData.items?.reduce((total, item) => {
-                return total + (item.quantity * item.price);
-              }, 0) || 0;
-
-              resolve({
-                id: receipt.eventId,
-                title: receiptData.title || 'Untitled Receipt',
-                status: 'pending', // Start as pending, will be updated by settlement stream
-                timestamp: new Date(receiptEvent.created_at * 1000),
-                totalAmount: receiptTotal, // Original receipt total
-                payments: [] // Will be populated by settlement stream
-              });
-              
-            } catch (err) {
-              console.error(`❌ Error decrypting receipt ${receipt.eventId}:`, err);
-              resolve({
-                id: receipt.eventId,
-                title: 'Decryption Error',
-                fullEventId: receipt.eventId,
-                status: 'decryption_error',
-                error: err.message,
-                timestamp: receiptEvent ? new Date(receiptEvent.created_at * 1000) : new Date(),
-                payments: []
-              });
-            }
-          });
-        });
-      } catch (err) {
-        console.error(`❌ Error fetching receipt ${receipt.eventId}:`, err);
-        return {
-          id: receipt.eventId,
-          title: 'Fetch Error',
-          fullEventId: receipt.eventId,
-          status: 'fetch_error',
-          error: err.message,
-          timestamp: new Date(),
-          payments: []
-        };
-      }
-    };
-
-    // Extract settlement ID from confirmation event
-    const extractSettlementIdFromConfirmation = (confirmationEvent) => {
-      try {
-        // Look for settlement reference in tags (typically an 'e' tag pointing to the settlement)
-        const settlementTags = confirmationEvent.tags?.filter(tag => tag[0] === 'e');
-        if (settlementTags && settlementTags.length > 1) {
-          // First 'e' tag is usually the receipt, second is usually the settlement being confirmed
-          return settlementTags[1][1];
-        }
-        
-        // Alternative: look for explicit settlement tag
-        const settlementTag = confirmationEvent.tags?.find(tag => tag[0] === 'settlement');
-        if (settlementTag && settlementTag[1]) {
-          return settlementTag[1];
-        }
-        
-        // Alternative: check content
-        if (confirmationEvent.content) {
-          try {
-            const contentObj = JSON.parse(confirmationEvent.content);
-            if (contentObj.settlementId) {
-              return contentObj.settlementId;
-            }
-          } catch (e) {
-            // Content might not be JSON
-          }
-        }
-        
-        return null;
-      } catch (error) {
-        console.error("Error extracting settlement ID from confirmation:", error);
-        return null;
-      }
-    };
-
-    // Start a settlement confirmation stream for a specific receipt
-    const startSettlementStreamForReceipt = (receiptEventId) => {
-      // console.log(`🌊 Starting settlement stream for receipt: ${receiptEventId}`);
-      
-      // Initialize settlements array for this receipt
-      if (!receiptSettlements.value.has(receiptEventId)) {
-        receiptSettlements.value.set(receiptEventId, []);
-      }
-      
-      // Subscribe to confirmation events that reference this receipt
-      const confirmationSubscription = globalPool
-        .subscription(DEFAULT_RELAYS, {
-          kinds: [KIND_SETTLEMENT_CONFIRMATION],
-          '#e': [receiptEventId] // Find confirmations that reference this receipt
-        })
-        .pipe(onlyEvents())
-        // .subscribe({
-        //   next: (confirmationEvent) => {
-        //     // console.log(`📧 Confirmation stream: found confirmation for receipt ${receiptEventId}:`, confirmationEvent.id);
-        //     processConfirmationEvent(receiptEventId, confirmationEvent);
-        //   },
-        //   error: (error) => {
-        //     console.error(`❌ Error in confirmation stream for receipt ${receiptEventId}:`, error);
-        //   }
-        // });
-      
-      // Store subscription for cleanup
-      confirmationStreams.value.set(receiptEventId, confirmationSubscription);
-      subscriptions.value.push(confirmationSubscription);
-    };
-
-    // Process a confirmation event and start settlement stream
-    const processConfirmationEvent = (receiptEventId, confirmationEvent) => {
-      // Extract settlement ID from confirmation
-      const settlementId = extractSettlementIdFromConfirmation(confirmationEvent);
-      if (!settlementId) {
-        console.warn(`⚠️ No settlement ID found in confirmation: ${confirmationEvent.id}`);
-        return;
-      }
-      
-      // console.log(`🌊 Starting settlement data stream for ${settlementId} from confirmation ${confirmationEvent.id}`);
-      
-      // Stream the referenced settlement event
-      const settlementSubscription = globalEventLoader({
-        id: settlementId,
-        relays: DEFAULT_RELAYS,
-      }).subscribe({
-        next: async (settlementEvent) => {
-          if (settlementEvent) {
-            // console.log(`📊 Settlement stream: loaded settlement ${settlementId}`);
-            
-            // Decrypt settlement content to get real settlement data
-            const decryptedSettlement = await decryptSettlementContent(settlementEvent, receiptEventId);
-            
-            // Create settlement object with real data or error state
-            let settlement;
-            
-            if (decryptedSettlement?.settledItems) {
-              // Successfully decrypted settlement
-              settlement = {
-                id: settlementId,
-                confirmed: true,
-                timestamp: new Date(settlementEvent.created_at * 1000),
-                confirmationId: confirmationEvent.id,
-                confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
-                paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
-                settledItems: decryptedSettlement.settledItems
-              };
-            } else {
-              // Settlement decryption failed - create error settlement
-              settlement = {
-                id: settlementId,
-                confirmed: true,
-                timestamp: new Date(settlementEvent.created_at * 1000),
-                confirmationId: confirmationEvent.id,
-                confirmationTimestamp: new Date(confirmationEvent.created_at * 1000),
-                paymentMethod: settlementEvent.tags.find(tag => tag[0] === 'payment')?.[1] || 'unknown',
-                error: true,
-                errorMessage: 'Failed to decrypt settlement content',
-                settledItems: [] // Empty items for error state
-              };
-            }
-            
-            // Add settlement to receipt's settlements
-            const currentSettlements = receiptSettlements.value.get(receiptEventId) || [];
-            const existingIndex = currentSettlements.findIndex(s => s.id === settlementId);
-            
-            if (existingIndex >= 0) {
-              // Update existing settlement
-              currentSettlements[existingIndex] = settlement;
-            } else {
-              // Add new settlement
-              currentSettlements.push(settlement);
-            }
-            
-            receiptSettlements.value.set(receiptEventId, currentSettlements);
-            
-            // Update the receipt in ownedReceipts with new payment data
-            updateReceiptWithSettlements(receiptEventId);
-          }
-        },
-        error: (error) => {
-          console.error(`❌ Error in settlement stream for ${settlementId}:`, error);
-        }
-      });
-      
-      subscriptions.value.push(settlementSubscription);
-    };
-
-    // Decrypt settlement content using the receipt's encryption key
-    const decryptSettlementContent = async (settlementEvent, receiptEventId) => {
-      try {
-        // Get the owned receipt to access its decryption key
-        const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);
-        if (!ownedReceipt) {
-          console.warn(`⚠️ No owned receipt found for ${receiptEventId}`);
-          return null;
-        }
-        
-        // Check if we have a decryption key - try both field names
-        const encryptionKey = ownedReceipt.sharedDecryptionKey || ownedReceipt.sharedEncryptionKey;
-        if (!encryptionKey) {
-          console.warn(`⚠️ No decryption key found for receipt ${receiptEventId}`);
-          return null;
-        }
-        
-        // Decrypt settlement content using the same key as the receipt
-        const decryptionKey = Uint8Array.from(Buffer.from(encryptionKey, 'hex'));
-        const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
-        
-        // Parse the decrypted settlement content
-        const parsedContent = safeParseSettlementContent(decryptedContent);
-        
-        if (parsedContent) {
-          // console.log(`✅ Settlement content decrypted successfully:`, parsedContent);
-          return parsedContent;
-        } else {
-          console.warn(`⚠️ Failed to parse decrypted settlement content`);
-          return null;
-        }
-        
-      } catch (error) {
-        console.error(`❌ Error decrypting settlement content for ${settlementEvent.id}:`, error);
-        return null;
-      }
-    };
-
-    // Update a receipt with current settlement data
-    const updateReceiptWithSettlements = (receiptEventId) => {
-      const receiptIndex = ownedReceipts.value.findIndex(r => r.id === receiptEventId);
-      if (receiptIndex >= 0) {
-        const settlements = receiptSettlements.value.get(receiptEventId) || [];
-        const payments = convertSettlementsToPayments(settlements);
-        
-        // Determine status based on payments
-        let status;
-        if (payments.length === 0) {
-          status = 'pending'; // No payments yet - grey status
-        } else {
-          // Has payments - check if all confirmed
-          const allConfirmed = settlements.every(s => s.confirmed);
-          status = allConfirmed ? 'completed' : 'processing';
-        }
-        
-        // Update receipt reactively
-        ownedReceipts.value[receiptIndex] = {
-          ...ownedReceipts.value[receiptIndex],
-          payments: payments,
-          status: status
-        };
-        
-        // console.log(`🔄 Updated receipt ${receiptEventId} with ${payments.length} payments, status: ${status}`);
-      }
-    };
-
-    // Convert settlements to payment format expected by ActivityPayment component
-    const convertSettlementsToPayments = (settlements) => {
-      const payments = [];
-      
-      settlements.forEach((settlement, index) => {
-        if (settlement.error) {
-          // Handle settlement decryption errors
-          payments.push({
-            id: `${settlement.id}-error`,
-            settlementId: settlement.id,
-            amount: 0,
-            itemName: 'Settlement Error',
-            quantity: 0,
-            unitPrice: 0,
-            comment: settlement.errorMessage || 'Failed to decrypt settlement',
-            status: 'error',
-            timestamp: settlement.timestamp,
-            paymentMethod: settlement.paymentMethod,
-            confirmationId: settlement.confirmationId,
-            error: true,
-            errorMessage: settlement.errorMessage
-          });
-        } else if (settlement.settledItems && settlement.settledItems.length > 0) {
-          // Handle successfully decrypted settlements
-          settlement.settledItems.forEach((item, itemIndex) => {
-            payments.push({
-              id: `${settlement.id}-${itemIndex}`,
-              settlementId: settlement.id,
-              amount: item.selectedQuantity * item.price, // Total amount for this item
-              itemName: item.name,
-              quantity: item.selectedQuantity,
-              unitPrice: item.price,
-              comment: `${item.name} (${settlement.paymentMethod})`,
-              status: settlement.confirmed ? 'completed' : 'processing',
-              timestamp: settlement.timestamp,
-              paymentMethod: settlement.paymentMethod,
-              confirmationId: settlement.confirmationId
-            });
-          });
-        }
-      });
-      
-      return payments;
-    };
-
-    // Load owned receipts from storage
+    // Load owned receipts using fullReceiptModel
     const loadOwnedReceipts = () => {
       try {
         console.log('📦 Loading owned receipts for ActivityView...');
         
-        // Subscribe to receipts observable
-        const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe(async (receipts) => {
+        // Subscribe to receipts observable from storage
+        const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe((receipts) => {
           console.log(`📊 Owned receipts loaded: ${receipts.length} receipts`);
           
           if (receipts.length === 0) {
-            ownedReceipts.value = [];
+            receiptModels.value.clear();
             loading.value = false;
             return;
           }
           
-          // Fetch content for all receipts in parallel
-          const receiptPromises = receipts.map(receipt => fetchReceiptContent(receipt));
-          const receiptContents = await Promise.all(receiptPromises);
-          
-          // Sort by timestamp, most recent first
-          const sortedReceipts = receiptContents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          
-          ownedReceipts.value = sortedReceipts;
-          loading.value = false;
+          // Subscribe to each receipt's full model
+          receipts.forEach(receipt => {
+            const modelSub = fullReceiptModel(receipt.eventId).subscribe(model => {
+              if (model) {
+                receiptModels.value.set(receipt.eventId, model)
+                loading.value = false;
+              }
+            });
+            
+            subscriptions.value.push(modelSub);
+          });
         });
 
         // Subscribe to newly added receipts
-        const receiptAddedSubscription = ownedReceiptsStorageManager.receiptAdded$.subscribe(async ({ item: receipt, items: allReceipts }) => {
+        const receiptAddedSubscription = ownedReceiptsStorageManager.receiptAdded$.subscribe(({ item: receipt }) => {
           console.log(`✨ New receipt added to ActivityView: ${receipt.eventId}`);
           
-          // Fetch content for the new receipt
-          const newReceiptContent = await fetchReceiptContent(receipt);
-          ownedReceipts.value.unshift(newReceiptContent);
+          // Subscribe to the new receipt's model
+          const modelSub = fullReceiptModel(receipt.eventId).subscribe(model => {
+            if (model) {
+              receiptModels.value.set(receipt.eventId, model);
+            }
+          });
+          
+          subscriptions.value.push(modelSub);
         });
 
         // Subscribe to removed receipts
-        const receiptRemovedSubscription = ownedReceiptsStorageManager.receiptRemoved$.subscribe(({ item: receipt, items: allReceipts }) => {
+        const receiptRemovedSubscription = ownedReceiptsStorageManager.receiptRemoved$.subscribe(({ item: receipt }) => {
           console.log(`🗑️ Receipt removed from ActivityView: ${receipt.eventId}`);
-          
-          // Remove receipt from our list
-          ownedReceipts.value = ownedReceipts.value.filter(r => r.id !== receipt.eventId);
+          receiptModels.value.delete(receipt.eventId);
         });
 
-        subscriptions.value = [receiptsSubscription, receiptAddedSubscription, receiptRemovedSubscription];
+        subscriptions.value.push(receiptsSubscription, receiptAddedSubscription, receiptRemovedSubscription);
         
       } catch (err) {
         console.error('❌ Error loading owned receipts:', err);
@@ -509,163 +152,41 @@ export default {
       }
     };
 
-    // Keep some mock receipts for development while we build real data integration
-    const developmentMockReceipts = ref([
-      {
-        id: 'receipt-a',
-        title: 'Receipt A',
-        status: 'processing',
-        timestamp: new Date(Date.now() - 3600000), // 1h ago
-        payments: [
-          {
-            id: 'payment-a1',
-            type: 'lightning',
-            amount: 3000,
-            comment: 'Todd & Bianca',
-            timestamp: new Date(Date.now() - 3500000),
-            payouts: [
-              {
-                id: 'payout-a1-1',
-                type: 'lightning',
-                amount: 3000,
-                status: 'completed',
-                timestamp: new Date(Date.now() - 3400000)
-              }
-            ]
-          },
-          {
-            id: 'payment-a2',
-            type: 'cashu',
-            amount: 8000,
-            comment: 'Todd & Bianca',
-            timestamp: new Date(Date.now() - 3300000),
-            payouts: [
-              {
-                id: 'payout-a2-1',
-                type: 'lightning',
-                amount: 3000,
-                status: 'processing',
-                statusText: 'Melting in progress...',
-                timestamp: new Date(Date.now() - 3200000)
-              },
-              {
-                id: 'payout-a2-2',
-                type: 'lightning',
-                amount: 3000,
-                status: 'processing',
-                statusText: 'Waiting for confirmation...',
-                timestamp: new Date(Date.now() - 3100000)
-              },
-              {
-                id: 'payout-a2-3',
-                type: 'developer',
-                amount: 800,
-                status: 'completed',
-                timestamp: new Date(Date.now() - 3000000)
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: 'receipt-b',
-        title: 'Receipt B',
-        status: 'completed',
-        timestamp: new Date(Date.now() - 7200000), // 2h ago
-        payments: [
-          {
-            id: 'payment-b1',
-            type: 'lightning',
-            amount: 2000,
-            timestamp: new Date(Date.now() - 7000000),
-            payouts: [
-              {
-                id: 'payout-b1-1',
-                type: 'lightning',
-                amount: 2000,
-                status: 'completed',
-                timestamp: new Date(Date.now() - 6900000)
-              }
-            ]
-          },
-          {
-            id: 'payment-b2',
-            type: 'cashu',
-            amount: 500,
-            timestamp: new Date(Date.now() - 6800000),
-            payouts: [
-              {
-                id: 'payout-b2-1',
-                type: 'cashu',
-                amount: 500,
-                status: 'completed',
-                timestamp: new Date(Date.now() - 6700000)
-              }
-            ]
-          },
-          {
-            id: 'payment-b3',
-            type: 'lightning',
-            amount: 20000,
-            timestamp: new Date(Date.now() - 6600000),
-            payouts: [
-              {
-                id: 'payout-b3-1',
-                type: 'lightning',
-                amount: 20000,
-                status: 'completed',
-                timestamp: new Date(Date.now() - 6500000)
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: 'receipt-c',
-        title: 'Receipt C',
-        status: 'error',
-        timestamp: new Date(Date.now() - 10800000), // 3h ago
-        payments: [
-          {
-            id: 'payment-c1',
-            type: 'lightning',
-            amount: 1000,
-            timestamp: new Date(Date.now() - 10600000),
-            payouts: [
-              {
-                id: 'payout-c1-1',
-                type: 'lightning',
-                amount: 1000,
-                status: 'failed',
-                error: 'Insufficient liquidity in lightning channel',
-                timestamp: new Date(Date.now() - 10500000)
-              }
-            ]
-          }
-        ],
-        errors: [
-          {
-            id: 'error-c1',
-            message: 'Lightning payout failed - channel capacity exceeded'
-          }
-        ]
-      }
-    ]);
-
-    // Use real receipts if available, otherwise fall back to development mocks
-    const displayReceipts = computed(() => {
-      return ownedReceipts.value.length > 0 ? ownedReceipts.value : developmentMockReceipts.value;
+    // Sorted receipt models for display
+    const sortedReceiptModels = computed(() => {
+      return Array.from(receiptModels.value.values()).sort((a, b) => {
+        const timestampA = a.receiptModel?.event?.created_at || 0;
+        const timestampB = b.receiptModel?.event?.created_at || 0;
+        return timestampB - timestampA;
+      });
     });
 
-    // Computed values for summary cards
-    const receiptsCount = computed(() => displayReceipts.value.length);
+    // Computed values for summary cards based on settlement status
+    const receiptsCount = computed(() => sortedReceiptModels.value.length);
     
     const handlingCount = computed(() => {
-      return displayReceipts.value.filter(r => r.status === 'processing').length;
+      return sortedReceiptModels.value.filter(model => {
+        const hasUnconfirmed = (model.unConfirmedSettlements || []).length > 0;
+        const hasConfirmedWithoutPayouts = (model.confirmedSettlements || []).some(settlement => {
+          // Check if settlement has corresponding payouts
+          const payouts = model.receiptModel?.payouts || [];
+          return !payouts.some(payout => {
+            const payoutSettlementRefs = (payout.tags || []).filter(tag => tag[0] === 'e');
+            return payoutSettlementRefs.some(tag => tag[1] === settlement.id);
+          });
+        });
+        return hasUnconfirmed || hasConfirmedWithoutPayouts;
+      }).length;
     });
     
     const errorsCount = computed(() => {
-      return displayReceipts.value.filter(r => r.status === 'error').length;
+      // For now, consider receipts with no settlements as potential errors if they're old enough
+      return sortedReceiptModels.value.filter(model => {
+        const settlements = (model.confirmedSettlements || []).concat(model.unConfirmedSettlements || []);
+        const receiptAge = Date.now() - (model.receiptModel?.event?.created_at || 0) * 1000;
+        const isOld = receiptAge > 24 * 60 * 60 * 1000; // Older than 24 hours
+        return settlements.length === 0 && isOld;
+      }).length;
     });
 
     // Combined restart function
@@ -689,16 +210,12 @@ export default {
       // Clean up subscriptions
       subscriptions.value.forEach(subscription => subscription.unsubscribe());
       subscriptions.value = [];
-      
-      // Clear confirmation streams
-      confirmationStreams.value.clear();
-      receiptSettlements.value.clear();
     });
 
     return {
       loading,
       error,
-      displayReceipts,
+      sortedReceiptModels,
       receiptsCount,
       handlingCount,
       errorsCount,

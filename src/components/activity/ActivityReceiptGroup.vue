@@ -24,26 +24,25 @@
 
           <!-- Receipt Status Indicator -->
           <div class="mr-3">
-            <div v-if="receipt.status === 'completed'" class="w-3 h-3 bg-green-500 rounded-full"></div>
-            <div v-else-if="receipt.status === 'processing'" class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-600"></div>
-            <div v-else-if="receipt.status === 'pending'" class="w-3 h-3 bg-gray-400 rounded-full"></div>
-            <div v-else-if="receipt.status === 'error'" class="w-3 h-3 bg-red-500 rounded-full"></div>
-            <div v-else-if="isErrorState" class="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div v-if="receiptStatus === 'completed'" class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div v-else-if="receiptStatus === 'processing'" class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-600"></div>
+            <div v-else-if="receiptStatus === 'pending'" class="w-3 h-3 bg-gray-400 rounded-full"></div>
+            <div v-else-if="receiptStatus === 'error' || isErrorState" class="w-3 h-3 bg-red-500 rounded-full"></div>
             <div v-else class="w-3 h-3 bg-gray-400 rounded-full"></div>
           </div>
 
           <!-- Receipt Info -->
           <div class="flex-1">
             <h3 class="text-lg font-semibold" :class="receiptTextClasses">
-              {{ receipt.title || `Receipt ${receipt.id}` }}
+              {{ receiptTitle }}
             </h3>
             <p class="text-sm" :class="receiptSubtextClasses">
               <span v-if="!isErrorState">
                 {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
-                <span v-if="receipt.status === 'processing'"> • Processing payouts</span>
-                <span v-if="receipt.status === 'completed'"> • Fully paid out</span>
-                <span v-if="receipt.status === 'pending'"> • Awaiting payments</span>
-                <span v-if="receipt.status === 'error'"> • Errors detected</span>
+                <span v-if="receiptStatus === 'processing'"> • Processing payouts</span>
+                <span v-if="receiptStatus === 'completed'"> • Fully paid out</span>
+                <span v-if="receiptStatus === 'pending'"> • Awaiting payments</span>
+                <span v-if="receiptStatus === 'error'"> • Errors detected</span>
               </span>
               <span v-else class="text-gray-500">
                 Expand for details
@@ -55,7 +54,7 @@
         <!-- Receipt Amount and Timestamp -->
         <div class="text-right">
           <p class="text-sm font-semibold text-gray-900">{{ totalAmount }} sats</p>
-          <span class="text-xs text-gray-500">{{ formatTime(receipt.timestamp) }}</span>
+          <span class="text-xs text-gray-500">{{ formatTime(receiptTimestamp) }}</span>
         </div>
       </div>
     </div>
@@ -63,11 +62,12 @@
       <!-- Receipt Payments (Expandable) -->
       <div v-show="isExpanded" class="p-4 border-t border-gray-100 space-y-3">
         <!-- Error Details for error states -->
+        <!-- Error Details for error states -->
         <div v-if="isErrorState" class="bg-red-50 border border-red-200 rounded-lg p-4">
           <div class="space-y-3">
             <div>
               <h4 class="text-sm font-medium text-red-900 mb-1">Error Details:</h4>
-              <p class="text-sm text-red-700">{{ receipt.error || 'Unknown error occurred' }}</p>
+              <p class="text-sm text-red-700">{{ errorMessage }}</p>
             </div>
             
             <div class="flex items-center gap-2 pt-2 border-t border-red-200">
@@ -76,7 +76,7 @@
                 class="px-3 py-1 text-xs bg-white hover:bg-red-50 border border-red-300 text-red-700 rounded font-mono"
                 title="Copy full event ID"
               >
-                {{ (receipt.fullEventId || receipt.id)?.slice(0, 16) }}...
+                {{ eventId?.slice(0, 16) }}...
               </button>
               <button
                 @click="reportError"
@@ -90,25 +90,20 @@
 
         <!-- Normal content for non-error states -->
         <div v-else>
-          <!-- Payments List -->
-          <ActivityPayment
-            v-for="payment in receipt.payments"
-            :key="payment.id"
-            :payment="payment"
-            :receipt-id="receipt.id"
-            @retry-payout="$emit('retry-payout', $event)"
-          />
-
-          <!-- Error Messages -->
-          <div v-if="receipt.errors && receipt.errors.length > 0" class="border-t border-gray-100 pt-3">
-            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-              <h4 class="text-sm font-medium text-red-900 mb-2">Errors:</h4>
-              <ul class="space-y-1">
-                <li v-for="error in receipt.errors" :key="error.id" class="text-sm text-red-700">
-                  • {{ error.message }}
-                </li>
-              </ul>
-            </div>
+          <!-- Payments List (from confirmed settlements) -->
+          <div v-if="confirmedSettlements.length > 0" class="space-y-2">
+            <ActivityPayment
+              v-for="settlement in confirmedSettlements"
+              :key="settlement.event.id"
+              :settlement="settlement"
+              :receiptId="eventId"
+              @retry-payout="$emit('retry-payout', $event)"
+            />
+          </div>
+          
+          <!-- No payments message -->
+          <div v-else class="text-gray-500 text-sm text-center py-4">
+            No payments yet
           </div>
         </div>
       </div>
@@ -127,11 +122,11 @@ export default {
     ActivityPayment
   },
   props: {
-    receipt: {
+    receiptModel: {
       type: Object,
       required: true,
       validator(value) {
-        return value.id && value.payments && Array.isArray(value.payments);
+        return value.receiptModel && value.items;
       }
     },
     defaultExpanded: {
@@ -141,36 +136,55 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
-    const isExpanded = ref(props.defaultExpanded || props.receipt.status === 'processing');
+    // Determine if should be expanded based on activity
+    const hasActivity = computed(() => {
+      const hasUnconfirmed = (props.receiptModel.unConfirmedSettlements || []).length > 0;
+      const hasConfirmedWithoutPayouts = (props.receiptModel.confirmedSettlements || []).some(settlement => {
+        const payouts = props.receiptModel.receiptModel?.payouts || [];
+        return !payouts.some(payout => {
+          const payoutSettlementRefs = (payout.tags || []).filter(tag => tag[0] === 'e');
+          return payoutSettlementRefs.some(tag => tag[1] === settlement.id);
+        });
+      });
+      return hasUnconfirmed || hasConfirmedWithoutPayouts;
+    });
+    
+    const isExpanded = ref(props.defaultExpanded || hasActivity.value);
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
     };
-
-    const paymentsCount = computed(() => {
-      return props.receipt.payments.length;
-    });
-
     const totalAmount = computed(() => {
-      // Use the receipt's original total amount, not the sum of payments
-      return formatSats(props.receipt.totalAmount || 0);
+      return formatSats(props.receiptModel.total || 0);
     });
 
-    const receiptStatusClasses = computed(() => {
-      switch (props.receipt.status) {
-        case 'processing':
-          return 'bg-orange-50 border-orange-300 hover:bg-orange-100';
-        case 'completed':
-          return 'bg-green-50 border-green-300 hover:bg-green-100';
-        case 'error':
-          return 'bg-red-50 border-red-300 hover:bg-red-100';
-        default:
-          return 'bg-gray-50 border-gray-300 hover:bg-gray-100';
-      }
+    const receiptTimestamp = computed(() => {
+      const timestamp = props.receiptModel.receiptModel?.event?.created_at;
+      return timestamp ? new Date(timestamp * 1000) : new Date();
     });
+
+    const eventId = computed(() => {
+      return props.receiptModel.receiptModel?.event?.id || 'unknown';
+    });
+
+    // Get all settlements for display
+    const allSettlements = computed(() => {
+      const confirmed = props.receiptModel.confirmedSettlements || [];
+      const unconfirmed = props.receiptModel.unConfirmedSettlements || [];
+      return [...confirmed, ...unconfirmed].map(settlement => ({
+        ...settlement,
+        confirmed: confirmed.includes(settlement),
+        items: settlement.items || []
+      }));
+    });
+
+    const settlementsCount = computed(() => {
+      return allSettlements.value.length;
+    });
+
 
     const receiptTextClasses = computed(() => {
-      switch (props.receipt.status) {
+      switch (receiptStatus.value) {
         case 'processing':
           return 'text-orange-600';
         case 'completed':
@@ -178,11 +192,6 @@ export default {
         case 'pending':
           return 'text-gray-500';
         case 'error':
-          return 'text-red-600';
-        case 'not_found':
-          return 'text-gray-500';
-        case 'decryption_error':
-        case 'fetch_error':
           return 'text-red-600';
         default:
           return 'text-gray-900';
@@ -190,7 +199,7 @@ export default {
     });
 
     const receiptSubtextClasses = computed(() => {
-      switch (props.receipt.status) {
+      switch (receiptStatus.value) {
         case 'processing':
           return 'text-orange-600';
         case 'completed':
@@ -199,21 +208,62 @@ export default {
           return 'text-gray-500';
         case 'error':
           return 'text-red-600';
-        case 'not_found':
-          return 'text-gray-500';
-        case 'decryption_error':
-        case 'fetch_error':
-          return 'text-red-600';
         default:
           return 'text-gray-600';
       }
     });
 
+    const isErrorState = computed(() => {
+      return receiptStatus.value === 'error';
+    });
+
+    const errorMessage = computed(() => {
+      if (receiptStatus.value === 'error') {
+        const settlements = allSettlements.value;
+        if (settlements.length === 0) {
+          return 'No settlements received for this receipt';
+        }
+        return 'Unknown error occurred';
+      }
+      return '';
+    });
+
+    // Get confirmed settlements directly
+    const confirmedSettlements = computed(() => {
+      return props.receiptModel.confirmedSettlements || [];
+    });
+
+    const paymentsCount = computed(() => {
+      return confirmedSettlements.value.length;
+    });
+
+    // Extract receipt title from items
+    const receiptTitle = computed(() => {
+      return props.receiptModel.title || "Untitled Receipt";
+    });
+
+    // Receipt status will be derived from child ActivityPayment components
+    // For now, simple logic based on presence of payments
+    const receiptStatus = computed(() => {
+      const payments = confirmedSettlements.value;
+      
+      if (payments.length === 0) {
+        // No payments - check age of receipt
+        const receiptAge = Date.now() - (props.receiptModel.receiptModel?.event?.created_at || 0) * 1000;
+        const isOld = receiptAge > 24 * 60 * 60 * 1000; // Older than 24 hours
+        return isOld ? 'error' : 'pending';
+      }
+
+      // TODO: This should aggregate status from child ActivityPayment components
+      // For now, assume processing if we have payments
+      return 'processing';
+    });
+
     const copyEventId = async () => {
       try {
-        const eventId = props.receipt.fullEventId || props.receipt.id;
-        await navigator.clipboard.writeText(eventId);
-        console.log('✅ Event ID copied to clipboard:', eventId);
+        const id = eventId.value;
+        await navigator.clipboard.writeText(id);
+        console.log('✅ Event ID copied to clipboard:', id);
         // TODO: Show a toast notification
       } catch (err) {
         console.error('❌ Failed to copy event ID:', err);
@@ -242,26 +292,29 @@ export default {
       return `${days}d ago`;
     };
 
-    const isErrorState = computed(() => {
-      return ['not_found', 'decryption_error', 'fetch_error'].includes(props.receipt.status);
-    });
-
     const reportError = () => {
-      console.log('🚨 Reporting error for receipt:', props.receipt.id, props.receipt.error);
+      console.log('🚨 Reporting error for receipt:', eventId.value, errorMessage.value);
       // TODO: Implement actual error reporting
     };
 
     return {
       isExpanded,
       toggleExpanded,
-      paymentsCount,
       totalAmount,
+      receiptTimestamp,
+      eventId,
+      confirmedSettlements,
+      paymentsCount,
+      receiptTitle,
+      receiptStatus,
       receiptTextClasses,
       receiptSubtextClasses,
+      isErrorState,
+      errorMessage,
       copyEventId,
       formatTime,
-      isErrorState,
-      reportError
+      reportError,
+      formatSats
     };
   }
 };
