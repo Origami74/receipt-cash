@@ -56,7 +56,7 @@ function parseCashuDm(rumor) {
   const settlementId = idParts[1];
 
   console.log(`✅ Parsed Cashu payment: Receipt ${receiptId.slice(0, 8)}... → Settlement ${settlementId.slice(0, 8)}...`);
-  console.log(`💰 Proofs received: ${cashuMessage.proofs.length} proof(s) from mintUrl: ${cashuMessage.mintUrl}`);
+  console.log(`💰 Proofs received: ${cashuMessage.proofs.length} proof(s) from mintUrl: ${cashuMessage.mint}`);
   
   return {
     receiptId,

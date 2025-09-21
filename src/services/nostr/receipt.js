@@ -8,6 +8,7 @@ import { metadata } from "@vueuse/core/metadata.cjs";
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
 import { getTagValue } from "applesauce-core/helpers";
+import { createEventLoader } from "applesauce-loaders/loaders";
 
 const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),

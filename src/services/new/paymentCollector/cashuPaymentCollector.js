@@ -92,9 +92,10 @@ class CashuPaymentCollector {
         proofs: cashuDM.proofs,
         mintUrl: cashuDM.mintUrl
       }
+      
 
       if(moneyStorageManager.incoming.hasItem(incomingPayment)){
-        console.info('Incoming proofs already stored, ignoring...')
+        console.info('Incoming proofs already stored, ignoring... (⚠️ TODO: check confirmation event)')
         return
       }
 

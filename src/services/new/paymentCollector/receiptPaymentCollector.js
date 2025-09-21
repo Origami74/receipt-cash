@@ -1,11 +1,7 @@
-import { onlyEvents } from 'applesauce-relay';
-import { globalEventStore, globalPool, settlementLoader } from '../../nostr/applesauce.js';
 import { cashuPaymentCollector } from '../paymentCollector/cashuPaymentCollector.js';
 import { lightningPaymentCollector } from '../paymentCollector/lightningPaymentCollector.js';
-import { mapEventsToStore } from 'applesauce-core';
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../../nostr/constants.js';
-import { getTagValue } from 'applesauce-core/helpers';
 import { fullReceiptModel } from '../../nostr/receipt.js';
+import { filter, map, mergeMap, pairwise, shareReplay, startWith, tap } from 'rxjs';
 
 /**
  * Collects payments for a specific receipt by monitoring settlements and confirmations via Nostr
@@ -16,7 +12,6 @@ class ReceiptPaymentCollector {
   constructor(receipt) {
     this.receipt = receipt;
     this.isActive = false;
-    this.nostrSubscriptions = [];
     this.lightningCollectors = new Map(); // settlementEventId -> collector
     this.cashuCollector = null; // Single collector for all cashu settlements
     this.unconfirmedCashuSettlementIds = new Set();
@@ -32,13 +27,73 @@ class ReceiptPaymentCollector {
     this.isActive = true;
     console.log(`🚀 Starting ReceiptPaymentCollector for receipt: ${this.receipt.eventId}`);
 
-    // Subscribe to settlement events for this receipt using Nostr
-    this._subscribeToSettlementEvents();
 
-    const fullReceiptModel$ = fullReceiptModel(this.receipt.eventId, this.receipt.sharedEncryptionKey)
-    // .subscribe(fullReceiptModel => {
-    //   console.log(`💰 Full receipt model`, fullReceiptModel)
-    // })
+    const unconfirmedSettlments$ = fullReceiptModel(this.receipt.eventId, this.receipt.sharedEncryptionKey)
+    .pipe(
+      // Filter out models that are fully confirmed
+      filter(model => model.unConfirmedSettlements.length > 0),
+      map(model => model.unConfirmedSettlements),
+      // Only only react to changes in unconfirmed settlments
+      shareReplay(1)
+    );
+
+    const hasUnconfirmedCashuSettlements$ = unconfirmedSettlments$
+    .pipe(
+      // Map to true if there is any settlement of type 'cashu'
+      map(unconfirmedSettlments => unconfirmedSettlments.some(settlement => settlement.paymentType === 'cashu')),
+      // Only only react to changes in unconfirmed cashu settlments
+      shareReplay(1)
+    )
+
+    // Extract lightning settlements and detect individual changes
+    const unconfirmedLightninguSettlements$ = unconfirmedSettlments$
+    .pipe(
+      map(settlements => settlements.filter(settlement => settlement.paymentType === 'lightning')),
+      shareReplay(1)
+    );
+
+    // Detect individual additions and removals
+    const lightningChanges$ = unconfirmedLightninguSettlements$
+    .pipe(
+      startWith([]),
+      pairwise(),
+      mergeMap(([previous, current]) => {
+        const previousIds = new Set(previous.map(s => s.id));
+        const currentIds = new Set(current.map(s => s.id));
+        
+        // Find additions (in current but not in previous)
+        const additions = current.filter(s => !previousIds.has(s.id));
+        
+        // Find removals (in previous but not in current)
+        const removals = previous.filter(s => !currentIds.has(s.id));
+        
+        // Emit separate events for each change
+        const events = [];
+        additions.forEach(settlement => events.push({ type: 'added', settlement }));
+        removals.forEach(settlement => events.push({ type: 'removed', settlement }));
+        
+        return events;
+      })
+    );
+
+    hasUnconfirmedCashuSettlements$.subscribe(hasCashu => {
+      console.log(`🥜 Has cashu settlements`, hasCashu)
+      if(hasCashu){
+        this._startCashuPaymentCollector()
+      } else {
+        this._stopCashuPaymentCollector()
+      }
+    })
+
+    lightningChanges$.subscribe(lnSettlement => {
+      console.log(`⚡️ LN settlement`, lnSettlement)
+      if(lnSettlement.type === 'added'){
+        this._startLightningPaymentCollector(lnSettlement.settlement.event);
+      } else{
+        this._stopLightningCollectorForSettlement(lnSettlement.settlement.event.id)
+      }
+    })
+
   }
 
   stop() {
@@ -59,61 +114,9 @@ class ReceiptPaymentCollector {
       collector.stop();
     });
     this.lightningCollectors.clear();
-
-    // Close all Nostr subscriptions
-    this.nostrSubscriptions.forEach(subscription => {
-      subscription.unsubscribe();
-    });
-    this.nostrSubscriptions = [];
     
     this.isActive = false;
     console.log(`✅ ReceiptPaymentCollector stopped for receipt: ${this.receipt.eventId}`);
-  }
-
-  _subscribeToSettlementEvents() {
-    console.log(`🔍 Subscribing to settlement events for receipt: ${this.receipt.eventId}`);
-
-     const sub = globalPool
-        .subscription(DEFAULT_RELAYS, {
-          kinds: [KIND_SETTLEMENT],
-          "#e": [this.receipt.eventId],
-        })
-        .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-        // .subscribe((event) => this._handleSettlementEvent(this, event))
-
-    this.nostrSubscriptions.push(sub)
-
-    console.log(`📡 Settlement subscription created for receipt: ${this.receipt.eventId}`);
-  }
-
-  _handleSettlementEvent(receiptPaymentCollector, settlementEvent) {
-    const settlementEventId = settlementEvent.id;
-    console.log(`💰 Settlement event received for receipt ${receiptPaymentCollector.receipt.eventId}: ${settlementEventId}`);
-    
-    // Determine if this is a cashu or lightning settlement
-    const paymentType = getTagValue(settlementEvent, 'payment')
-
-    // Don't process invalid payment types
-    if(paymentType !== 'cashu' && paymentType !== 'lightning'){
-      console.warn(`⚠️ Settlement event ${settlementEvent.id} has unknown payment type '${paymentType}'`)
-      return;
-    }
-    
-    // Store settlement state
-    this.settlementStates.set(settlementEventId, {
-      isConfirmed: false,
-      paymentType: paymentType
-    });
-    
-    // Subscribe to confirmation events for this specific settlement
-    this._subscribeToConfirmationEvents(settlementEventId);
-    
-    // Handle cashu vs lightning differently
-    if (paymentType === 'cashu') {
-      this._handleCashuSettlement(settlementEventId);
-    } else {
-      this._handleLightningSettlement(settlementEvent);
-    }
   }
 
   _handleCashuSettlement(settlementEventId) {
@@ -124,30 +127,6 @@ class ReceiptPaymentCollector {
     if (!this.cashuCollector && this.unconfirmedCashuSettlementIds.size > 0) {
       this._startCashuPaymentCollector();
     }
-  }
-
-  _handleLightningSettlement(settlementEvent) {
-    console.log(`⚡ Lightning settlement detected: ${settlementEvent.id}`);
-    
-    // Start a dedicated lightning collector for this specific settlement
-    this._startLightningPaymentCollector(settlementEvent);
-  }
-
-  _subscribeToConfirmationEvents(settlementEventId) {
-    console.log(`🔔 Subscribing to confirmation events for settlement: ${settlementEventId}`);
-
-    const sub = globalPool
-          .subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: [this.receipt.pubkey],
-            "#e": [settlementEventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          // .subscribe((event) => this._handleConfirmationEvent(this, event))
-    
-    this.nostrSubscriptions.push(sub);
-
-    console.log(`📡 Confirmation subscription created for settlement: ${settlementEventId}`);
   }
 
   _handleConfirmationEvent(receiptPaymentCollector, confirmationEvent) {
@@ -202,6 +181,14 @@ class ReceiptPaymentCollector {
     console.log(`🥜 Starting CashuPaymentCollector for receipt: ${this.receipt.eventId}`);
     this.cashuCollector = cashuPaymentCollector.create(this.receipt);
     this.cashuCollector.start();
+  }
+
+  _stopCashuPaymentCollector() {
+    if(!this.cashuCollector){
+      return;
+    }
+    this.cashuCollector.stop();
+    console.log(`🛑🥜 Stopped cashu collector for receipt: ${this.receipt.eventId}`);
   }
 
   _startLightningPaymentCollector(settlementEvent) {
