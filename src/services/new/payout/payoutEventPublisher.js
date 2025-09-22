@@ -101,36 +101,34 @@ class PayoutEventPublisher {
       console.log(`🥜 Publishing Cashu payout event: ${payoutData.amount} sats (${payoutData.status})`);
 
       const publicKeyBytes = await signer.getPublicKey();
-      
-      // Create conversation key for self-encryption
-      const conversationKey = nip44.getConversationKey(privateKeyBytes, publicKeyBytes);
 
       // Create payout content with all sensitive data
       const payoutContent = {
         type: 'cashu',
         amount: payoutData.amount,
-        fees: payoutData.fees,
+        fees: payoutData.fees || 0,
+        recipient: payoutData.recipient || 'unknown',
         proof: {
           mint: payoutData.mint,
           proofsCount: payoutData.proofs ? payoutData.proofs.length : 0,
           // Don't include actual proofs in the event for privacy
-        }
+        },
+        status: payoutData.status || 'completed'
       };
-
-      // Encrypt the entire content
-      const encryptedContent = await nip44.encrypt(JSON.stringify(payoutContent), conversationKey);
 
       // Create the event with only necessary tags in plain text
       const factory = new EventFactory({ signer });
+      const plaintext = JSON.stringify(payoutContent);
       const draft = await factory.build({
-        kind: KIND_SETTLEMENT_PAYOUT,
-        content: encryptedContent,
-        tags: [
-          ['e', receiptEventId],
-          ['e', settlementEventId],
-          ['p', publicKeyBytes] // Self-addressed
-        ]
-      });
+          kind: KIND_SETTLEMENT_PAYOUT,
+          tags: [
+            ['e', receiptEventId],
+            ['e', settlementEventId],
+            ['p', publicKeyBytes] // Self-addressed
+          ]
+        },
+        setHiddenContent(plaintext)
+      );
 
       // Sign the event
       const signedEvent = await factory.sign(draft);
@@ -157,35 +155,6 @@ class PayoutEventPublisher {
 
     } catch (error) {
       console.error('❌ Error publishing Cashu payout event:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Decrypt payout event content (for reading own payout events)
-   * @param {Object} signer - Nostr signer (receipt author)
-   * @param {Object} payoutEvent - Payout event to decrypt
-   * @returns {Promise<Object>} Decrypted payout data
-   */
-  async decryptPayoutEvent(signer, payoutEvent) {
-    try {
-      // Get the signer's keys for decryption
-      const privateKeyBytes = await signer.getPrivateKey();
-      const publicKeyBytes = await signer.getPublicKey();
-      
-      // Create conversation key for decryption
-      const conversationKey = nip44.getConversationKey(privateKeyBytes, publicKeyBytes);
-
-      // Decrypt the content
-      const decryptedContent = await nip44.decrypt(payoutEvent.content, conversationKey);
-      
-      // Parse the JSON content
-      const payoutData = JSON.parse(decryptedContent);
-      
-      return payoutData;
-
-    } catch (error) {
-      console.error('❌ Error decrypting payout event:', error);
       throw error;
     }
   }

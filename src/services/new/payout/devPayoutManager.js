@@ -1,7 +1,12 @@
+import { SimpleSigner } from 'applesauce-signers';
+import { sumProofs } from '../../../utils/cashuUtils.js';
 import cashuService from '../../flows/shared/cashuService.js';
 import { DEV_CASHU_REQ } from '../../nostr/constants.js';
 import { moneyStorageManager } from '../storage/moneyStorageManager.js';
+import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
+import { payoutEventPublisher } from './payoutEventPublisher.js';
+import { Buffer } from 'buffer';
 
 /**
  * Developer Payout Manager Service
@@ -119,8 +124,40 @@ class DevPayoutManager {
         // Immediately forward payment to developer (1-to-1)
         cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mintUrl)
 
+        try {
+          const ownerSigner = await this._createSignerFromSessionId(devPayment.receiptEventId);
+          await payoutEventPublisher.publishCashuPayout(ownerSigner, devPayment.receiptEventId, devPayment.settlementEventId, {
+            amount: sumProofs(devPayment.proofs),
+            fees: 0,
+            recipient: 'developer'
+          });
+          console.log(`📝 Published payout event for Dev payment: ${sumProofs(devPayment.proofs)} sats`);
+        } catch (payoutEventError) {
+          console.error('Failed to publish payout event:', payoutEventError);
+        }
+
     } catch (error) {
       console.error(`❌ Error processing dev payment ${devPayment.receiptEventId}:`, error);
+    }
+  }
+
+  async _createSignerFromSessionId(receiptEventId) {
+    try {
+      // Get owned receipt to access private key
+      const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);
+      if (!ownedReceipt) {
+        throw new Error(`No owned receipt found for event ID: ${receiptEventId}`);
+      }
+      
+      // Create signer from receipt's private key
+      const privateKeyBytes = Uint8Array.from(Buffer.from(ownedReceipt.privateKey, 'hex'));
+      const signer = new SimpleSigner(privateKeyBytes);
+      
+      return signer;
+      
+    } catch (error) {
+      console.error('Error creating signer from session ID:', error);
+      throw error;
     }
   }
 }

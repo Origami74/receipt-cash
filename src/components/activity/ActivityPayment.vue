@@ -51,9 +51,17 @@
       </div>
 
       <!-- Payout Operations (Full Width) -->
-      <div v-if="payouts && payouts.length > 0" class="ml-8">
+      <div v-if="(payouts && payouts.length > 0) || (activeMeltRounds && activeMeltRounds.length > 0)" class="ml-8">
         <p class="text-xs text-gray-600 mb-2">Payout operations:</p>
         <div class="space-y-1">
+          <!-- Active Lightning Melt Rounds -->
+          <ActivityMeltRound
+            v-for="meltRound in activeMeltRounds"
+            :key="`${meltRound.sessionId}-${meltRound.roundNumber}`"
+            :melt-round="meltRound"
+          />
+          
+          <!-- Completed Payouts -->
           <ActivityPayout
             v-for="payout in payouts"
             :key="payout.id"
@@ -67,17 +75,21 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
 import ActivityPayout from './ActivityPayout.vue';
+import ActivityMeltRound from './ActivityMeltRound.vue';
 import { receiptModel } from '../../services/nostr/receipt.js';
 import { globalEventStore } from '../../services/nostr/applesauce.js';
 import { KIND_SETTLEMENT, KIND_SETTLEMENT_PAYOUT } from '../../services/nostr/constants.js';
+import meltSessionStorageManager from '../../services/new/storage/meltSessionStorageManager.js';
+import { watchEventsUpdates } from 'applesauce-core';
 
 export default {
   name: 'ActivityPayment',
   components: {
-    ActivityPayout
+    ActivityPayout,
+    ActivityMeltRound
   },
   props: {
     settlement: {
@@ -91,19 +103,45 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
-
-    
     const payouts = ref([])
+    const activeMeltRounds = ref([])
     
     globalEventStore.timeline({
       kinds: [KIND_SETTLEMENT_PAYOUT],
       "#e": [props.settlement.event.id]
-    }).subscribe( p => {
+    })
+    .subscribe( p => {
       payouts.value = p
     })
 
+    // Get active melt rounds for this settlement
+    const updateActiveMeltRounds = () => {
+      const sessionId = `${props.receiptId}-${props.settlement.event.id}`;
+      const session = meltSessionStorageManager.getByKey(sessionId);
+      
+      if (session && session.status === 'active' && session.rounds) {
+        // Get all running rounds
+        const runningRounds = session.rounds.filter(round => round.running === true);
+        activeMeltRounds.value = runningRounds;
+      } else {
+        activeMeltRounds.value = [];
+      }
+    };
+
+    // Initial load of active melt rounds
+    updateActiveMeltRounds();
+
+    // Subscribe to melt session changes using RxJS observables
+    const subscription = meltSessionStorageManager.items$.subscribe(() => {
+      updateActiveMeltRounds();
+    });
+
+    // Cleanup subscription on unmount
+    onUnmounted(() => {
+      subscription.unsubscribe();
+    });
+
     const settlement = computed(() => {
-      console.warn('settlement', props.settlement)
       return props.settlement
     }); 
     // Processing payments start expanded, completed payments start collapsed
@@ -131,6 +169,7 @@ export default {
 
     return {
       payouts,
+      activeMeltRounds,
       settlement,
       isExpanded,
       toggleExpanded,

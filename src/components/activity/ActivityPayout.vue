@@ -49,66 +49,33 @@
       <div class="flex items-center">
         <!-- Status Icon -->
         <div class="mr-3">
-          <div v-if="payoutDetails.status === 'processing'" class="text-orange-600">
-            ⏳
-          </div>
-          <div v-else-if="payoutDetails.status === 'completed'" class="text-green-600">
+          <div class="text-green-600">
             ✅
-          </div>
-          <div v-else-if="payoutDetails.status === 'failed'" class="text-red-600">
-            ❌
           </div>
         </div>
 
         <!-- Payment Type Icon -->
         <div class="text-xl mr-3">
-          <span v-if="payoutDetails.type === 'lightning'">⚡</span>
+          <span v-if="payoutDetails.recipient === 'developer'">👨‍💻</span>
+          <span v-else-if="payoutDetails.type === 'lightning'">⚡</span>
           <span v-else-if="payoutDetails.type === 'cashu'">🥜</span>
-          <span v-else-if="payoutDetails.type === 'developer'">👨‍💻</span>
         </div>
 
         <!-- Payout Details -->
         <div>
           <p class="text-sm font-medium" :class="payoutTextClasses">
             {{ payoutTypeLabel }} • {{ formatSats(payoutDetails.amount) }} sats
-          </p>
-          <p v-if="payoutDetails.status === 'failed' && payoutDetails.error" class="text-xs text-red-600 mt-1">
-            {{ payoutDetails.error }}
-          </p>
-          <p v-if="payoutDetails.status === 'processing'" class="text-xs text-orange-600 mt-1">
-            {{ payoutDetails.statusText || 'Processing payout...' }}
+            <span v-if="payoutDetails.fees && payoutDetails.fees > 0" class="text-xs opacity-75">
+              ({{ formatSats(payoutDetails.fees) }} fees)
+            </span>
           </p>
         </div>
       </div>
 
       <!-- Timestamp -->
-      <span class="text-xs text-gray-500">{{ formatTime(payoutDetails.timestamp) }}</span>
+      <span class="text-xs text-gray-500">{{ formatTime(payout.created_at * 1000) }}</span>
     </div>
 
-    <!-- Action Buttons for Failed Payouts -->
-    <div v-if="payoutDetails.status === 'failed'" class="mt-2 space-x-2">
-      <!-- Copy Token Button for Cashu Payouts with Proofs -->
-      <button
-        v-if="payoutDetails.type === 'cashu' && payoutDetails.proofs && payoutDetails.proofs.length > 0"
-        @click="copyToken"
-        class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
-      >
-        {{ copyButtonText }}
-      </button>
-      
-      <!-- Retry Button -->
-      <button
-        @click="$emit('retry', payoutDetails)"
-        class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition-colors"
-      >
-        Retry Payout
-      </button>
-    </div>
-
-    <!-- Mint Info for Cashu Tokens -->
-    <div v-if="payoutDetails.status === 'failed' && payoutDetails.type === 'cashu' && payoutDetails.mint" class="mt-1">
-      <span class="text-xs text-gray-500">Mint: {{ payoutDetails.mint.slice(0, 40) }}...</span>
-    </div>
   </div>
 </template>
 
@@ -155,43 +122,30 @@ export default {
     const payoutStatusClasses = computed(() => {
       if (!payoutDetails.value) return 'bg-gray-50 border-gray-300';
       
-      switch (payoutDetails.value.status) {
-        case 'processing':
-          return 'bg-orange-50 border-orange-300';
-        case 'completed':
-          return 'bg-green-50 border-green-300';
-        case 'failed':
-          return 'bg-red-50 border-red-300';
-        default:
-          return 'bg-gray-50 border-gray-300';
-      }
+      // All payout events indicate successful payouts
+      return 'bg-green-50 border-green-300';
     });
 
     const payoutTextClasses = computed(() => {
       if (!payoutDetails.value) return 'text-gray-900';
       
-      switch (payoutDetails.value.status) {
-        case 'processing':
-          return 'text-orange-900';
-        case 'completed':
-          return 'text-green-900';
-        case 'failed':
-          return 'text-red-900';
-        default:
-          return 'text-gray-900';
-      }
+      // All payout events indicate successful payouts
+      return 'text-green-900';
     });
 
     const payoutTypeLabel = computed(() => {
       if (!payoutDetails.value) return 'Invalid Payout';
+      
+      // Check recipient first for developer payouts
+      if (payoutDetails.value.recipient === 'developer') {
+        return 'Dev payout';
+      }
       
       switch (payoutDetails.value.type) {
         case 'lightning':
           return 'LN-melt';
         case 'cashu':
           return 'Cashu payout';
-        case 'developer':
-          return 'Dev payout';
         default:
           return 'Payout';
       }
