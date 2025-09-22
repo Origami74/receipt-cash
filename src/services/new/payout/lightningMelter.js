@@ -3,6 +3,10 @@ import cashuWalletManager from '../../flows/shared/cashuWalletManager.js';
 import { storeChangeForMint } from '../../storageService.js';
 import { sumProofs } from '../../../utils/cashuUtils.js';
 import meltSessionStorageManager from '../storage/meltSessionStorageManager.js';
+import { payoutEventPublisher } from './payoutEventPublisher.js';
+import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
+import { SimpleSigner } from 'applesauce-signers';
+import { Buffer } from 'buffer';
 
 /**
  * Lightning Melter Service
@@ -37,6 +41,44 @@ class LightningMelter {
     console.log('🛑 Stopping LightningMelter...');
     this.isActive = false;
     console.log('✅ LightningMelter stopped');
+  }
+
+  /**
+   * Create signer from session ID (format: receiptEventId-settlementEventId)
+   * @param {string} sessionId - Session ID in format receiptEventId-settlementEventId
+   * @returns {Promise<Object>} Object with signer, receiptEventId, settlementEventId
+   */
+  async _createSignerFromSessionId(sessionId) {
+    try {
+      // Parse session ID to extract receipt and settlement event IDs
+      const parts = sessionId.split('-');
+      if (parts.length < 2) {
+        throw new Error('Invalid session ID format. Expected: receiptEventId-settlementEventId');
+      }
+      
+      const receiptEventId = parts[0];
+      const settlementEventId = parts.slice(1).join('-'); // Handle case where settlement ID might contain dashes
+      
+      // Get owned receipt to access private key
+      const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);
+      if (!ownedReceipt) {
+        throw new Error(`No owned receipt found for event ID: ${receiptEventId}`);
+      }
+      
+      // Create signer from receipt's private key
+      const privateKeyBytes = Uint8Array.from(Buffer.from(ownedReceipt.privateKey, 'hex'));
+      const signer = new SimpleSigner(privateKeyBytes);
+      
+      return {
+        signer,
+        receiptEventId,
+        settlementEventId
+      };
+      
+    } catch (error) {
+      console.error('Error creating signer from session ID:', error);
+      throw error;
+    }
   }
 
   /**
@@ -481,8 +523,25 @@ class LightningMelter {
           if (meltResult.change && meltResult.change.length > 0) {
             changeProofs = meltResult.change;
             remainingProofs.push(...changeProofs);
-            const changeAmount = changeProofs.reduce((sum, p) => sum + p.amount, 0);
+            const changeAmount = sumProofs(changeProofs)
             console.log(`Received ${changeAmount} sats in change`);
+          }
+
+
+          // Publish payout event for successful melt
+          try {
+            const { signer, receiptEventId, settlementEventId } = await this._createSignerFromSessionId(sessionId);
+            await payoutEventPublisher.publishLightningPayout(signer, receiptEventId, settlementEventId, {
+              amount: meltResult.quote.amount,
+              fees: meltResult.quote.fee_reserve - sumProofs(changeProofs),
+              lightningReceipt: meltResult.payment_preimage,
+              sessionId: sessionId,
+              roundNumber: meltAttempts
+            });
+            console.log(`📝 Published payout event for Lightning melt: ${meltQuote.amount} sats`);
+          } catch (payoutEventError) {
+            console.error('Failed to publish payout event:', payoutEventError);
+            // Don't fail the entire melt operation if payout event publishing fails
           }
           
           // Update the round as completed

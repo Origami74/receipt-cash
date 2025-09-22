@@ -149,6 +149,7 @@ class IncomingPaymentSplitter {
    */
   async _getSplitPercentage(receiptEvent) {
     try {
+
       const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEvent.id)
 
       // !! TODO: investigate, probably wrongly chose encryption key to properly follow nip44 encryption scheme.

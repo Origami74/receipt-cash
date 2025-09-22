@@ -9,7 +9,9 @@ export const KIND_GIFTWRAPPED_MSG = 1059
 export const KIND_REPORT = 1314
 
 export const DEFAULT_RELAYS = [
-  'wss://nos.lol',
+  'wss://soloco.nl/',
+  'wss://nostr.mom/',
+  'wss://nostr-pub.wellorder.net/',
   'wss://relay.getalby.com',
   'wss://relay.damus.io',
   'wss://relay.primal.net'

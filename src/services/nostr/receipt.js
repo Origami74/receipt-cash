@@ -1,14 +1,12 @@
-import { combineLatest, defer, distinct, filter, flatMap, from, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, tap, timeout, timer } from "rxjs";
+import { combineLatest, defer, distinct, filter, map, merge, mergeAll, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, timer } from "rxjs";
 import { cacheRequest, globalEventLoader, globalEventStore, globalPool } from "./applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION, KIND_SETTLEMENT_PAYOUT } from "./constants";
 import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
-import { metadata } from "@vueuse/core/metadata.cjs";
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
 import { getTagValue } from "applesauce-core/helpers";
-import { createEventLoader } from "applesauce-loaders/loaders";
 
 const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),
@@ -29,7 +27,10 @@ const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
             // save and remove duplactes
             mapEventsToStore(globalEventStore),
             // turn into an ordered timeline (array)
-            mapEventsToTimeline()
+            mapEventsToTimeline(),
+            // Temp fix till applesauce v4
+            // withImmediateValueOrDefault([]),
+            startWith([])
         )
     }),
     // Only create one single relay subscription for all our confirmation events
@@ -44,7 +45,7 @@ const payouts$ = ownedReceiptsStorageManager.receipts$.pipe(
             authors: pubkeys,
         }
         const newPayouts$ = globalPool.subscription(DEFAULT_RELAYS, filter)
-        .pipe(onlyEvents(),)
+        .pipe(onlyEvents())
 
         const cachedPayouts$ = defer( () => cacheRequest([filter]))
         .pipe(mergeAll())
@@ -91,7 +92,7 @@ function receiptConfirmations(receiptEventId){
             confirmations.filter(confirmation => 
                 confirmation.tags.some(t => t[0] == "e" && t[1] == receiptEventId)
             )
-        )
+        ),
     )
 }
 
@@ -119,9 +120,12 @@ export const receiptModel = (receiptEventId) => {
             map(receipts => receipts.find(r => r.eventId == receiptEventId)),
             filter(metadata => !!metadata),
             switchMap(metadata => {
-
+            
             const event$ = globalEventStore.hasEvent(metadata.id) 
-                ? globalEventStore.event(metadata.eventId).pipe(filter(e => !!e), take(1), startWith(undefined))
+                ? globalEventStore.event(metadata.eventId).pipe(
+                    
+                    filter(e => !!e), 
+                    take(1))
                 : globalEventLoader({id: metadata.eventId}).pipe(take(1))
 
 
@@ -136,6 +140,7 @@ export const receiptModel = (receiptEventId) => {
                 payouts: payouts$,
                 metadata: of(metadata)
             })
+            
         }),
         share({connector: () => new ReplaySubject(1), resetOnRefCountZero: () => timer( 60000 )})
     )

@@ -279,6 +279,80 @@ export default {
       return `${days}d ago`;
     };
 
+    // Handle retry payout functionality
+    const handleRetryPayout = async (payout) => {
+      try {
+        console.log(`🔄 Retrying payout for ${payout.type}: ${payout.amount} sats`);
+
+        if (payout.type === 'lightning') {
+          // For Lightning payouts, we need to restart the melting process
+          await retryLightningPayout(payout);
+        } else if (payout.type === 'cashu') {
+          // For Cashu payouts, we can trigger a new payout attempt
+          await retryCashuPayout(payout);
+        }
+        
+      } catch (error) {
+        console.error('Error retrying payout:', error);
+      }
+    };
+
+    // Retry Lightning payout by creating a new melt session
+    const retryLightningPayout = async (payout) => {
+      if (!payout.sessionId || !props.receiptId) {
+        console.error('Cannot retry Lightning payout: missing session ID or receipt ID');
+        return;
+      }
+
+      // Import the lightningMelter service
+      const { lightningMelter } = await import('../../services/new/payout/lightningMelter.js');
+      const { getReceiveAddress } = await import('../../services/storageService.js');
+      const { validateReceiveAddress } = await import('../../utils/receiveAddressValidationUtils.js');
+      const { moneyStorageManager } = await import('../../services/new/storage/moneyStorageManager.js');
+
+      // Get the receive address
+      const receiveAddress = getReceiveAddress();
+      if (!receiveAddress) {
+        console.error('Cannot retry payout: no receive address found');
+        return;
+      }
+
+      const validation = validateReceiveAddress(receiveAddress);
+      if (!validation.isValid || validation.type !== 'lightning') {
+        console.error('Cannot retry payout: invalid or non-Lightning receive address');
+        return;
+      }
+
+      // Get the settlement ID from the payout session ID
+      const settlementId = props.settlement.id || props.settlement.event?.id;
+      if (!settlementId) {
+        console.error('Cannot retry payout: no settlement ID found');
+        return;
+      }
+
+      // Get the payer money for this settlement
+      const moneyKey = `${props.receiptId}-${settlementId}`;
+      const payerMoney = moneyStorageManager.payer.getByKey(moneyKey);
+      
+      if (!payerMoney || !payerMoney.proofs || payerMoney.proofs.length === 0) {
+        console.error(`Cannot retry payout: no payer money found for key ${moneyKey}`);
+        return;
+      }
+
+      // Start a new melting session
+      await lightningMelter.melt(payerMoney.proofs, receiveAddress, payerMoney.mint, {
+        sessionId: payout.sessionId // Reuse the same session ID to continue the session
+      });
+
+      console.log(`✅ Started retry for Lightning payout session: ${payout.sessionId}`);
+    };
+
+    // Retry Cashu payout (placeholder for future implementation)
+    const retryCashuPayout = async (payout) => {
+      console.log('🥜 Cashu payout retry not yet implemented');
+      // TODO: Implement Cashu payout retry logic
+    };
+
     return {
       isExpanded,
       isCompleted,
@@ -286,7 +360,8 @@ export default {
       allPayouts,
       toggleExpanded,
       formatTime,
-      formatSats
+      formatSats,
+      handleRetryPayout
     };
   }
 };
