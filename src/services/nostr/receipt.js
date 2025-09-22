@@ -1,4 +1,4 @@
-import { combineLatest, defer, distinct, filter, map, merge, mergeAll, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, timer } from "rxjs";
+import { combineLatest, defer, distinct, filter, flatMap, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, timer } from "rxjs";
 import { cacheRequest, globalEventLoader, globalEventStore, globalPool } from "./applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION, KIND_SETTLEMENT_PAYOUT } from "./constants";
@@ -6,64 +6,12 @@ import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
-import { getTagValue } from "applesauce-core/helpers";
+import { getTagValue, unlockHiddenContent } from "applesauce-core/helpers";
+import { decryptAndParsePayout } from "../../utils/payoutUtils";
+import confirmations$ from "./confirmations";
+import payouts$ from "./payouts";
+import { SimpleSigner } from "applesauce-signers";
 
-const confirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
-    map(receipts => receipts.map(r => r.pubkey)),
-    switchMap((pubkeys) => {
-        const filter = {
-            kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: pubkeys,
-        }
-        const newConfirmations$ = globalPool.subscription(DEFAULT_RELAYS, filter)
-        .pipe(onlyEvents())
-
-        const cachedConfirmations$ = defer( () => cacheRequest([filter]))
-        .pipe(mergeAll())
-
-        return merge(newConfirmations$, cachedConfirmations$)
-        .pipe(
-            onlyEvents(),
-            // save and remove duplactes
-            mapEventsToStore(globalEventStore),
-            // turn into an ordered timeline (array)
-            mapEventsToTimeline(),
-            // Temp fix till applesauce v4
-            // withImmediateValueOrDefault([]),
-            startWith([])
-        )
-    }),
-    // Only create one single relay subscription for all our confirmation events
-    shareReplay(1)
-)
-
-const payouts$ = ownedReceiptsStorageManager.receipts$.pipe(
-    map(receipts => receipts.map(r => r.pubkey)),
-    switchMap((pubkeys) => {
-        const filter = {
-            kinds: [KIND_SETTLEMENT_PAYOUT],
-            authors: pubkeys,
-        }
-        const newPayouts$ = globalPool.subscription(DEFAULT_RELAYS, filter)
-        .pipe(onlyEvents())
-
-        const cachedPayouts$ = defer( () => cacheRequest([filter]))
-        .pipe(mergeAll())
-
-        return merge(newPayouts$, cachedPayouts$)
-        .pipe(
-            onlyEvents(),
-            // save and remove duplactes
-            mapEventsToStore(globalEventStore),
-            // turn into an ordered timeline (array)
-            mapEventsToTimeline(),
-            // Always create an array
-            startWith([])
-        )
-    }),
-    // Only create one single relay subscription for all our confirmation events
-    shareReplay(1)
-)
 
 function receiptSettlements(receiptEventId){
     const filter = {kinds: [KIND_SETTLEMENT], "#e": [receiptEventId]}
@@ -96,10 +44,12 @@ function receiptConfirmations(receiptEventId){
     )
 }
 
+// Create a stream of all payouts related to a receipt
 function receiptPayouts(receiptEventId){
-    return payouts$
-    .pipe(
-        map(payouts => 
+    return payouts$.pipe(
+        // Every time the payouts array updates create a stream of events
+        mergeMap(payouts => 
+            // Select payouts for this receipt
             payouts.filter(payout => 
                 payout.tags.some(t => t[0] == "e" && t[1] == receiptEventId)
             )
@@ -128,16 +78,32 @@ export const receiptModel = (receiptEventId) => {
                     take(1))
                 : globalEventLoader({id: metadata.eventId}).pipe(take(1))
 
+            const ownerSigner = metadata.privateKey ? SimpleSigner.fromKey(metadata.privateKey) : undefined
+            const sharedSigner = metadata.privateKey ? SimpleSigner.fromKey(metadata.sharedEncryptionKey) : undefined
 
             const settlements$ = receiptSettlements(metadata.eventId)
             const confirmations$ = receiptConfirmations(metadata.eventId)
-            const payouts$ = receiptPayouts(metadata.eventId)
+            const payouts$ = ownerSigner ? 
+                // If we own the receipt fetch the payouts
+                receiptPayouts(metadata.eventId).pipe(
+                    // Every time the payouts array updates
+                    mergeMap(payout => 
+                        // Decrypt the hidden content and then return the event again
+                        unlockHiddenContent(payout, ownerSigner).then(() => payout)
+                    ),
+                    // Add events to timeline (array)
+                    mapEventsToTimeline()
+                )
+                // Otherwise ingore payouts
+                : of([])
 
             return combineLatest({
                 event: event$,
                 settlements: settlements$,
                 confirmations: confirmations$,
                 payouts: payouts$,
+                ownerSigner: of(ownerSigner),
+                sharedSigner: of(sharedSigner),
                 metadata: of(metadata)
             })
             
@@ -148,7 +114,6 @@ export const receiptModel = (receiptEventId) => {
     receiptModelCache.set(receiptEventId, receipt$)
     return receipt$
 }
-
 
 const fullReceiptModelCache = new Map()
 export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => {
@@ -162,6 +127,7 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
             map(receiptModel => {
                 const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
                 const encryptionKey = sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey;
+                const receiptOwnerKeyHex = receiptModel.metadata.privateKey;
                 
                 // More efficient approach: Create a Set of confirmed settlement IDs first
                 const confirmedSettlementIds = new Set(

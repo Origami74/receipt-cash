@@ -3,7 +3,7 @@ import { globalPool } from "../../nostr/applesauce.js";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_PAYOUT } from "../../nostr/constants.js";
 import { nip44 } from 'nostr-tools';
 import { setEncryptedContent, setHiddenContent } from "applesauce-factory/operations/content";
-import { setEncryptedContentEncryptionMethod, setHiddenContentEncryptionMethod } from "applesauce-core/helpers";
+import { setHiddenContentEncryptionMethod } from "applesauce-core/helpers";
 
 /**
  * Payout Event Publisher Service
@@ -52,7 +52,7 @@ class PayoutEventPublisher {
             ['p', publicKeyBytes] // Self-addressed
           ]
         }, 
-        setHiddenContent(publicKeyBytes, plaintext)
+        setHiddenContent(plaintext)
       );
 
       // Sign the event
@@ -102,6 +102,9 @@ class PayoutEventPublisher {
 
       const publicKeyBytes = await signer.getPublicKey();
       
+      // Create conversation key for self-encryption
+      const conversationKey = nip44.getConversationKey(privateKeyBytes, publicKeyBytes);
+
       // Create payout content with all sensitive data
       const payoutContent = {
         type: 'cashu',
@@ -114,20 +117,20 @@ class PayoutEventPublisher {
         }
       };
 
+      // Encrypt the entire content
+      const encryptedContent = await nip44.encrypt(JSON.stringify(payoutContent), conversationKey);
+
       // Create the event with only necessary tags in plain text
       const factory = new EventFactory({ signer });
-      const plaintext = JSON.stringify(payoutContent)
       const draft = await factory.build({
-          kind: KIND_SETTLEMENT_PAYOUT,
-          tags: [
-            ['e', receiptEventId],
-            ['e', settlementEventId],
-            ['p', publicKeyBytes] // Self-addressed
-          ]
-        },
-        setHiddenContentEncryptionMethod(KIND_SETTLEMENT_PAYOUT, "nip44"),
-        setEncryptedContent(publicKeyBytes, plaintext)
-      );
+        kind: KIND_SETTLEMENT_PAYOUT,
+        content: encryptedContent,
+        tags: [
+          ['e', receiptEventId],
+          ['e', settlementEventId],
+          ['p', publicKeyBytes] // Self-addressed
+        ]
+      });
 
       // Sign the event
       const signedEvent = await factory.sign(draft);
