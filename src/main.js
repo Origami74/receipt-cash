@@ -9,17 +9,20 @@ import { incomingPaymentSplitter } from './services/new/incomingPaymentSplitter'
 import { devPayoutManager } from './services/new/payout/devPayoutManager';
 import { cashuDmSender } from './services/new/payout/cashuDmSender';
 import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
+import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 
-// Initialize services
-// receiptLifecycleManager.start()
 
-incomingPaymentSplitter.start()
+// incomingPaymentSplitter.start()
 
-devPayoutManager.start()
-payerPayoutManager.start()
+// devPayoutManager.start()
+// payerPayoutManager.start()
 
-cashuDmSender.start()
+// cashuDmSender.start()
 
+//  // Run recovery service after a short delay to ensure app is fully initialized
+// setTimeout(async () => {
+//   mintQuoteRecoveryService.start();
+// }, 1000);
 
 // Initialize debug logging if it was previously enabled
 if (localStorage.getItem('debug-logging-enabled') === 'true') {

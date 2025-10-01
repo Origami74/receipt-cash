@@ -74,13 +74,6 @@ import { showNotification, useNotification } from '../services/notificationServi
 import { formatSats, convertFromSats, getDevPercentageEmoji, formatDevPercentage } from '../utils/pricingUtils';
 import { formatRelativeTime } from '../utils/dateUtils';
 import btcPriceService from '../services/btcPriceService';
-import { nip44 } from 'nostr-tools';
-import { Buffer } from 'buffer';
-import { globalEventStore, globalEventLoader, globalPool } from '../services/nostr/applesauce';
-import { onlyEvents } from 'applesauce-relay';
-import { mapEventsToStore } from 'applesauce-core';
-import { safeParseSettlementContent } from '../parsing/settlementparser';
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
 import { fullReceiptModel, receiptModel } from '../services/nostr/receipt';
 
 

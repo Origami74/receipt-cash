@@ -97,11 +97,6 @@ export default {
       window.addEventListener('report-logs', (event) => {
         openReportModal('User-initiated log report');
       });
-      
-      // Run recovery service after a short delay to ensure app is fully initialized
-      setTimeout(async () => {
-        mintQuoteRecoveryService.start();
-      }, 1000);
     });
     
     // Open the report modal with the current error message

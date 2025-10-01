@@ -1,8 +1,8 @@
-import { combineLatest, defer, distinct, filter, flatMap, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, timer } from "rxjs";
+import { combineLatest, defer, distinct, filter, flatMap, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, tap, timer } from "rxjs";
 import { cacheRequest, globalEventLoader, globalEventStore, globalPool } from "./applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION, KIND_SETTLEMENT_PAYOUT } from "./constants";
-import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
+import { mapEventsToStore, mapEventsToTimeline, withImmediateValueOrDefault } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
@@ -26,8 +26,8 @@ function receiptSettlements(receiptEventId){
         distinct(e => e.id),
         // create a timeline of events
         mapEventsToTimeline(),
-        // always start with empty list
-        startWith([])
+        // Temp fix till applesauce v4
+        withImmediateValueOrDefault([]),
     )
 
     return settlements$
@@ -92,7 +92,9 @@ export const receiptModel = (receiptEventId) => {
                         unlockHiddenContent(payout, ownerSigner).then(() => payout)
                     ),
                     // Add events to timeline (array)
-                    mapEventsToTimeline()
+                    mapEventsToTimeline(),
+                    // Temp fix till applesauce v4
+                    withImmediateValueOrDefault([]),
                 )
                 // Otherwise ingore payouts
                 : of([])
@@ -192,4 +194,3 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
     return fullReceiptModel$
     
 }
-

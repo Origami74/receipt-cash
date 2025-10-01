@@ -2,11 +2,11 @@ import { defer, map, merge, mergeAll, shareReplay, startWith, switchMap } from "
 import { cacheRequest, globalEventStore, globalPool } from "./applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_PAYOUT } from "./constants";
-import { mapEventsToStore, mapEventsToTimeline } from "applesauce-core";
+import { mapEventsToStore, mapEventsToTimeline, withImmediateValueOrDefault } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 
 /**
- * Obeservable of all known payouts of all local receipts
+ * Obeservable of all known payouts of alllocal receipts
  */
 const payouts$ = ownedReceiptsStorageManager.receipts$.pipe(
     map(receipts => receipts.map(r => r.pubkey)),
@@ -28,8 +28,8 @@ const payouts$ = ownedReceiptsStorageManager.receipts$.pipe(
             mapEventsToStore(globalEventStore),
             // turn into an ordered timeline (array)
             mapEventsToTimeline(),
-            // Always create an array
-            startWith([])
+            // Temp fix till applesauce v4
+            withImmediateValueOrDefault([]),
         )
     }),
     // Only create one single relay subscription for all our confirmation events

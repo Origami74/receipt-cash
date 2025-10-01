@@ -29,7 +29,7 @@ const initCache = async () => {
 export async function cacheRequest(filters) {
   return initCache().then((cache) => {
     return getEventsForFilters(cache, filters).then((events) => {
-      console.log("loaded events from cache", events.length);
+      console.log("loaded events from cache", events.length, "for filters", filters);
       return events;
     });
   });
@@ -41,6 +41,7 @@ export const globalEventLoader = createEventLoader(globalPool,
     eventStore: globalEventStore,
     cacheRequest: cacheRequest,
     extraRelays: DEFAULT_RELAYS,
+    bufferTime: 500
   });
 
 // Example get confirmation events
@@ -58,3 +59,4 @@ setHiddenContentEncryptionMethod(KIND_SETTLEMENT_PAYOUT, "nip44")
 // TODO: AI write docs on cache
 
 window.globalEventLoader = globalEventLoader
+window.globalEventStore = globalEventStore
