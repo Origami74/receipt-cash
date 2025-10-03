@@ -414,13 +414,15 @@ export default {
             service: publicKey,
             globalPool,
             relays: walletServiceInfo.value.relays
-          
           }
         )
 
       
+        
         // Step 2: Get the auth URI
-        const authUri = walletConnect.getAuthURI()
+        const authUri = walletConnect.getAuthURI({
+          methods: selectedCommands.value
+        })
         console.log('Step 1 - Generated auth URI:', authUri)
         
         // Step 3: Send auth string to :3737

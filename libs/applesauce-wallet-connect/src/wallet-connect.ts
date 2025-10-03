@@ -222,6 +222,7 @@ export class WalletConnect {
     );
 
     this.waitForService$ = this.events$.pipe(
+      tap(x => console.warn("WAITFORSERVICE: ", x)),
       // Complete when the service is set
       takeUntil(this.service$),
       // Only listen for wallet info events
