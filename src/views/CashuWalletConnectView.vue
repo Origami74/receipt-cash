@@ -406,7 +406,11 @@ export default {
       try {
         // Step 1: Create a new WalletConnect client with random secret key
         privateKey = generateSecretKey()
+        publicKey = getPublicKey(privateKey)
 
+        console.log("relays",  walletServiceInfo.value.relays)
+        console.log("privateKey", privateKey)
+        console.log("publicKey", publicKey)
         WalletConnect.pool = globalPool;
         walletConnect = new WalletConnect(
           { 
@@ -417,12 +421,11 @@ export default {
           }
         )
 
-      
-        
         // Step 2: Get the auth URI
         const authUri = walletConnect.getAuthURI({
           methods: selectedCommands.value
         })
+
         console.log('Step 1 - Generated auth URI:', authUri)
         
         // Step 3: Send auth string to :3737
@@ -444,10 +447,24 @@ export default {
         const result = await response.json()
         console.log('Step 2 - Sent to wallet service:', result)
         
-        // Step 4: Wait for the service to respond
+        // Step 4: Wait for the service to respond (with timeout)
         console.log('Step 3 - Waiting for wallet service to respond...')
-        await walletConnect.waitForService()
-        console.log('Step 4 - Connected to wallet service!')
+        try {
+          // Create an AbortController for timeout
+          const abortController = new AbortController()
+          const timeoutId = setTimeout(() => abortController.abort(), 10000) // 10 second timeout
+          
+          await walletConnect.waitForService(abortController.signal)
+          clearTimeout(timeoutId)
+          console.log('Step 4 - Connected to wallet service!')
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            console.log('Step 4 - Timeout waiting for service response')
+            throw new Error('Wallet service did not respond within 10 seconds')
+          } else {
+            throw err // Re-throw other errors
+          }
+        }
         
         // Get public key for display
         publicKey = await walletConnect.signer.getPublicKey()
