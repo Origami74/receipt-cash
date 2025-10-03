@@ -22,6 +22,11 @@ const routes = [
     component: () => import('../views/ActivityView.vue')
   },
   {
+    path: '/wallet-connect',
+    name: 'WalletConnect',
+    component: () => import('../views/CashuWalletConnectView.vue')
+  },
+  {
     path: '/receipt/:eventId/:decryptionKey',
     name: 'ReceiptView',
     component: () => import('../views/ReceiptView.vue'),

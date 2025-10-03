@@ -30,6 +30,28 @@
           <div>
             <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Payment</h4>
             <div class="space-y-4">
+              <!-- Wallet Connect Link -->
+              <div>
+                <router-link
+                  to="/wallet-connect"
+                  class="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  @click="$emit('close')"
+                >
+                  <div class="flex items-center space-x-3">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                    </svg>
+                    <div>
+                      <p class="text-sm font-medium text-blue-900">Wallet Connect</p>
+                      <p class="text-xs text-blue-700">Connect NWC wallet for Lightning payments</p>
+                    </div>
+                  </div>
+                  <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </router-link>
+              </div>
+              
               <ReceiveAddressInput
                 v-model="settings.receiveAddress"
                 label="Receive Address"

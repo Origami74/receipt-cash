@@ -25,6 +25,7 @@
     "applesauce-loaders": "^3.1.0",
     "applesauce-relay": "^3.1.0",
     "applesauce-signers": "^3.1.0",
+    "applesauce-wallet-connect": "file:./libs/applesauce-wallet-connect",
     "canvas-confetti": "^1.9.3",
     "nostr-idb": "^2.4.0",
     "pinia": "^2.1.7",

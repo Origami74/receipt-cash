@@ -1,0 +1,83 @@
+{
+  "name": "applesauce-wallet-connect",
+  "version": "3.1.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch:build": "tsc --watch > /dev/null",
+    "test": "vitest run --passWithNoTests",
+    "watch:test": "vitest"
+  },
+  "keywords": [
+    "nostr",
+    "applesauce",
+    "nwc"
+  ],
+  "author": "hzrd149",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wallet-connect": {
+      "import": "./dist/wallet-connect.js",
+      "require": "./dist/wallet-connect.js",
+      "types": "./dist/wallet-connect.d.ts"
+    },
+    "./wallet-service": {
+      "import": "./dist/wallet-service.js",
+      "require": "./dist/wallet-service.js",
+      "types": "./dist/wallet-service.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "require": "./dist/types.js",
+      "types": "./dist/types.d.ts"
+    },
+    "./helpers": {
+      "import": "./dist/helpers/index.js",
+      "require": "./dist/helpers/index.js",
+      "types": "./dist/helpers/index.d.ts"
+    },
+    "./helpers/*": {
+      "import": "./dist/helpers/*.js",
+      "require": "./dist/helpers/*.js",
+      "types": "./dist/helpers/*.d.ts"
+    },
+    "./blueprints": {
+      "import": "./dist/blueprints/index.js",
+      "require": "./dist/blueprints/index.js",
+      "types": "./dist/blueprints/index.d.ts"
+    },
+    "./blueprints/*": {
+      "import": "./dist/blueprints/*.js",
+      "require": "./dist/blueprints/*.js",
+      "types": "./dist/blueprints/*.d.ts"
+    }
+  },
+  "dependencies": {
+    "applesauce-core": "^3.1.0",
+    "applesauce-factory": "^3.1.0",
+    "nostr-tools": "~2.15",
+    "@noble/hashes": "^1.7.1",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@hirez_io/observer-spy": "^2.2.0",
+    "@types/debug": "^4.1.12",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.3"
+  },
+  "funding": {
+    "type": "lightning",
+    "url": "lightning:nostrudel@geyser.fund"
+  }
+}
