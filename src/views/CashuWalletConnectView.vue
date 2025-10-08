@@ -47,91 +47,28 @@
         </div>
       </div>
 
-      <!-- Wallet Service Status -->
-      <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-gray-900">Local Wallet Service</h2>
-          <button
-            @click="getWalletServiceInfo"
-            :disabled="isLoadingServiceInfo"
-            class="text-blue-600 hover:text-blue-800 p-1"
-            title="Refresh wallet service info"
-          >
-            <svg class="w-5 h-5" :class="{ 'animate-spin': isLoadingServiceInfo }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+      <!-- Connect Button -->
+      <div v-if="!isConnected" class="bg-white rounded-lg shadow-sm p-6 mb-6 text-center">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">System Wallet Connection</h2>
+        <p class="text-gray-600 mb-6">Connect to your system wallet to enable lightning payments</p>
+        
+        <button
+          @click="connect"
+          :disabled="isConnecting"
+          class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+        >
+          <span v-if="isConnecting" class="flex items-center justify-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-          </button>
-        </div>
-
-        <!-- No Wallet Warning -->
-        <div v-if="!walletServiceInfo && !isLoadingServiceInfo" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-          <div class="flex">
-            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-            </svg>
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-yellow-800">No System Wallet Found</h3>
-              <p class="text-sm text-yellow-700 mt-1">
-                No system wallet detected Make sure your wallet is running.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Wallet Service Info -->
-        <div v-if="walletServiceInfo" class="space-y-3">
-          <div>
-            <p class="text-sm text-gray-500">Status</p>
-            <p class="font-medium text-green-600">System wallet available</p>
-          </div>
-          <div>
-            <p class="text-sm text-gray-500">Relays</p>
-            <div class="text-xs text-gray-700">
-              <div v-for="relay in walletServiceInfo.relays" :key="relay" class="truncate">
-                {{ relay }}
-              </div>
-            </div>
-          </div>
-          <div v-if="walletServiceInfo.supported_commands?.length">
-            <p class="text-sm text-gray-500">Supported Commands</p>
-            <div class="flex flex-wrap gap-1 mt-1">
-              <span
-                v-for="command in walletServiceInfo.supported_commands"
-                :key="command"
-                class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
-              >
-                {{ command }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Advanced Settings (Collapsible) -->
-        <div class="mt-4 pt-3 border-t border-gray-200">
-          <button
-            @click="showAdvancedSettings = !showAdvancedSettings"
-            class="flex items-center text-sm text-gray-600 hover:text-gray-800"
-          >
-            <svg class="w-4 h-4 mr-1" :class="{ 'transform rotate-90': showAdvancedSettings }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-            </svg>
-            Advanced Settings
-          </button>
-          
-          <div v-if="showAdvancedSettings" class="mt-3">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Wallet Service URL
-            </label>
-            <input
-              v-model="walletServiceUrl"
-              type="text"
-              placeholder="http://localhost:3737"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
-            <p class="text-gray-500 text-xs mt-1">
-              URL of your local wallet service
-            </p>
-          </div>
+            Connecting...
+          </span>
+          <span v-else>Connect to System Wallet</span>
+        </button>
+        
+        <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-sm text-red-700">{{ error }}</p>
         </div>
       </div>
 
@@ -231,13 +168,32 @@
           </div>
           
           <div>
-            <p class="text-sm text-gray-500">Wallet Auth URI</p>
-            <div class="flex items-center space-x-2">
-              <p class="font-mono text-xs text-gray-700 break-all flex-1">{{ connectedWallet.authUri }}</p>
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-gray-500">Balance</p>
               <button
-                @click="copyWalletAuthUri"
+                @click="getBalance"
+                :disabled="isLoadingBalance"
                 class="text-blue-600 hover:text-blue-800 p-1"
-                title="Copy wallet auth URI"
+                title="Refresh balance"
+              >
+                <svg class="w-4 h-4" :class="{ 'animate-spin': isLoadingBalance }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </button>
+            </div>
+            <p v-if="balance" class="font-medium text-green-600">{{ formatSats(balance.balance) }} sats</p>
+            <p v-else-if="isLoadingBalance" class="text-gray-500">Loading...</p>
+            <p v-else class="text-gray-500">Click refresh to load balance</p>
+          </div>
+          
+          <div>
+            <p class="text-sm text-gray-500">Connection String</p>
+            <div class="flex items-center space-x-2">
+              <p class="font-mono text-xs text-gray-700 break-all flex-1">{{ connectedWallet.connectionString }}</p>
+              <button
+                @click="copyConnectionString"
+                class="text-blue-600 hover:text-blue-800 p-1"
+                title="Copy connection string"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
@@ -302,18 +258,14 @@ export default {
   name: 'CashuWalletConnectView',
   setup() {
     const walletServiceUrl = ref('http://localhost:3737')
-    const walletServiceInfo = ref(null)
-    const isLoadingServiceInfo = ref(false)
     const isConnected = ref(false)
     const isConnecting = ref(false)
     const isTestingPayment = ref(false)
     const connectedWallet = ref(null)
-    const selectedCommands = ref([])
-    const budget = ref(10000)
-    const expiryDays = ref(30)
     const testAmount = ref(1000)
     const error = ref('')
-    const showAdvancedSettings = ref(false)
+    const balance = ref(null)
+    const isLoadingBalance = ref(false)
     
     let privateKey = null
     let publicKey = null
@@ -341,19 +293,17 @@ export default {
 
         const data = await response.json()
         
-        // Validate response format
-        if (!data.relays || !data.supported_commands) {
-          throw new Error('Invalid response format from wallet service')
+        // For the new polling API, we might get different response format
+        // Set default values if not provided
+        walletServiceInfo.value = {
+          relays: data.relays || ['ws://localhost:4869'],
+          supported_commands: data.supported_commands || ['pay_invoice', 'get_balance', 'make_invoice', 'get_info']
         }
-        
-        walletServiceInfo.value = data
         
         // Pre-select common commands
-        if (data.supported_commands) {
-          selectedCommands.value = data.supported_commands.filter(cmd =>
-            ['pay_invoice', 'get_balance', 'make_invoice'].includes(cmd)
-          )
-        }
+        selectedCommands.value = walletServiceInfo.value.supported_commands.filter(cmd =>
+          ['pay_invoice', 'get_balance', 'make_invoice'].includes(cmd)
+        )
         
       } catch (err) {
         console.error('Failed to get wallet service info:', err)
@@ -394,99 +344,113 @@ export default {
     //   return walletAuthUri
     // }
 
-    const connect = async () => {
-      if (selectedCommands.value.length === 0) {
-        error.value = 'Please select at least one command'
-        return
+    const pollForConnectionString = async (requestId, maxAttempts = 30) => {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          console.log(`Poll attempt ${attempt + 1}/${maxAttempts}...`)
+          const response = await fetch(`${walletServiceUrl.value}/poll/${requestId}`)
+          
+          if (!response.ok) {
+            throw new Error(`Poll failed with status ${response.status}`)
+          }
+          
+          const data = await response.json()
+          console.log('Poll response:', data)
+          
+          switch (data.status) {
+            case 'approved':
+              if (data.nwc_uri) {
+                console.log('🎉 Connection approved!')
+                return data.nwc_uri
+              } else {
+                throw new Error('Connection approved but NWC URI not available')
+              }
+            case 'rejected':
+              throw new Error('Connection rejected by user')
+            case 'pending':
+              console.log('Status: pending (waiting for user approval)')
+              break
+            case 'not_found':
+              throw new Error('Connection request not found or expired')
+            default:
+              console.log(`Unknown status: ${data.status}`)
+          }
+          
+          // Wait 2 seconds before next poll (matching shell script)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        } catch (err) {
+          if (err.message.includes('rejected') || err.message.includes('not found') || err.message.includes('not available')) {
+            throw err // Don't retry these errors
+          }
+          console.warn(`Poll attempt ${attempt + 1} failed:`, err)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
       }
+      
+      throw new Error('Timeout: Connection was not approved within 60 seconds')
+    }
 
+    const connect = async () => {
       isConnecting.value = true
       error.value = ''
 
       try {
-        // Step 1: Create a new WalletConnect client with random secret key
-        privateKey = generateSecretKey()
-        publicKey = getPublicKey(privateKey)
-
-        console.log("relays",  walletServiceInfo.value.relays)
-        console.log("privateKey", privateKey)
-        console.log("publicKey", publicKey)
-        WalletConnect.pool = globalPool;
-        walletConnect = new WalletConnect(
-          { 
-            secret: privateKey,
-            service: publicKey,
-            globalPool,
-            relays: walletServiceInfo.value.relays
-          }
-        )
-
-        // Step 2: Get the auth URI
-        const authUri = walletConnect.getAuthURI({
-          methods: selectedCommands.value
-        })
-
-        console.log('Step 1 - Generated auth URI:', authUri)
-        
-        // Step 3: Send auth string to :3737
+        // Step 1: Send empty GET request to get request_id
+        console.log('Step 1 - Requesting wallet connection...')
         const response = await fetch(walletServiceUrl.value, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            nwa: authUri
-          })
+          method: 'GET'
         })
 
         if (!response.ok) {
-          console.error("Error sending authUri:", await response.text())
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
         const result = await response.json()
-        console.log('Step 2 - Sent to wallet service:', result)
+        console.log('Step 2 - Got request ID:', result)
         
-        // Step 4: Wait for the service to respond (with timeout)
-        console.log('Step 3 - Waiting for wallet service to respond...')
-        try {
-          // Create an AbortController for timeout
-          const abortController = new AbortController()
-          const timeoutId = setTimeout(() => abortController.abort(), 10000) // 10 second timeout
-          
-          await walletConnect.waitForService(abortController.signal)
-          clearTimeout(timeoutId)
-          console.log('Step 4 - Connected to wallet service!')
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            console.log('Step 4 - Timeout waiting for service response')
-            throw new Error('Wallet service did not respond within 10 seconds')
-          } else {
-            throw err // Re-throw other errors
-          }
+        if (!result.request_id) {
+          throw new Error('No request_id received from wallet service')
         }
+        
+        // Step 2: Poll for NWC URI
+        console.log('Step 3 - Polling for NWC URI...')
+        const nwcUri = await pollForConnectionString(result.request_id)
+        console.log('Step 4 - Got NWC URI:', nwcUri)
+        
+        // Step 3: Create WalletConnect from NWC URI
+        WalletConnect.pool = globalPool
+        walletConnect = WalletConnect.fromConnectURI(nwcUri, {
+          relay: ["ws://localhost:4869"],
+          pool: globalPool
+        })
+
+        // try {
+        //   const info = await walletConnect.getInfo();
+        //   console.warn("wallet info", info)
+        // } catch (infoErr) {
+        //   console.warn("Failed to get wallet info, but continuing:", infoErr)
+        // }
         
         // Get public key for display
         publicKey = await walletConnect.signer.getPublicKey()
         
         isConnected.value = true
         connectedWallet.value = {
-          name: 'Local Wallet Service',
+          name: 'System Wallet',
           publicKey: publicKey,
-          authUri: authUri,
-          commands: selectedCommands.value,
-          budget: budget.value,
+          connectionString: nwcUri,
+          commands: ['pay_invoice', 'get_balance', 'make_invoice', 'get_info'],
+          budget: 0,
           walletConnect: walletConnect
         }
 
         // Store connection for persistence
         localStorage.setItem('wallet_auth', JSON.stringify({
-          privateKey: Array.from(privateKey),
+          connectionString: nwcUri,
           publicKey: publicKey,
-          authUri: authUri,
           serviceUrl: walletServiceUrl.value,
-          commands: selectedCommands.value,
-          budget: budget.value
+          commands: ['pay_invoice', 'get_balance', 'make_invoice', 'get_info'],
+          budget: 0
         }))
         
         console.log('Wallet connect established successfully!')
@@ -500,6 +464,30 @@ export default {
         }
       } finally {
         isConnecting.value = false
+      }
+    }
+
+    const getBalance = async () => {
+      if (!walletConnect) {
+        error.value = 'No wallet connected'
+        return
+      }
+
+      isLoadingBalance.value = true
+      error.value = ''
+
+      try {
+        console.log('Fetching wallet balance...')
+        const balanceResult = await walletConnect.getBalance()
+        console.log('Balance result:', balanceResult)
+        
+        balance.value = balanceResult
+        
+      } catch (err) {
+        console.error('Failed to get balance:', err)
+        error.value = `Failed to get balance: ${err.message}`
+      } finally {
+        isLoadingBalance.value = false
       }
     }
 
@@ -556,45 +544,50 @@ export default {
       return new Intl.NumberFormat().format(sats)
     }
 
-    const copyWalletAuthUri = async () => {
-      if (walletAuthUri) {
+    const copyConnectionString = async () => {
+      if (connectedWallet.value?.connectionString) {
         try {
-          await navigator.clipboard.writeText(walletAuthUri)
-          alert('Wallet Auth URI copied to clipboard!')
+          await navigator.clipboard.writeText(connectedWallet.value.connectionString)
+          alert('Connection string copied to clipboard!')
         } catch (err) {
           console.error('Failed to copy to clipboard:', err)
         }
       }
     }
 
-    // Check for existing connection on mount and load wallet service info
+    // Check for existing connection on mount
     onMounted(async () => {
-      // Load wallet service info immediately
-      await getWalletServiceInfo()
-      
       // Check for existing connection
       const savedAuth = localStorage.getItem('wallet_auth')
       if (savedAuth) {
         try {
           const authData = JSON.parse(savedAuth)
-          privateKey = new Uint8Array(authData.privateKey)
-          publicKey = authData.publicKey
-          walletAuthUri = authData.authUri
-          walletServiceUrl.value = authData.serviceUrl
-          selectedCommands.value = authData.commands
-          budget.value = authData.budget
           
-          // Reinitialize applesauce WalletConnect
-          walletConnect = new WalletConnect(walletAuthUri)
-          
-          isConnected.value = true
-          connectedWallet.value = {
-            name: 'Local Wallet Service',
-            publicKey: publicKey,
-            authUri: walletAuthUri,
-            commands: authData.commands,
-            budget: authData.budget,
-            walletConnect: walletConnect
+          // Handle both old and new format
+          if (authData.connectionString) {
+            // New format with connection string
+            WalletConnect.pool = globalPool
+            walletConnect = WalletConnect.fromConnectURI(authData.connectionString, {
+              pool: globalPool
+            })
+            
+            publicKey = authData.publicKey
+            walletServiceUrl.value = authData.serviceUrl
+            selectedCommands.value = authData.commands
+            budget.value = authData.budget
+            
+            isConnected.value = true
+            connectedWallet.value = {
+              name: 'System Wallet',
+              publicKey: publicKey,
+              connectionString: authData.connectionString,
+              commands: authData.commands,
+              budget: authData.budget,
+              walletConnect: walletConnect
+            }
+          } else {
+            // Old format - clear it
+            localStorage.removeItem('wallet_auth')
           }
         } catch (err) {
           console.error('Failed to restore saved auth:', err)
@@ -606,24 +599,20 @@ export default {
 
     return {
       walletServiceUrl,
-      walletServiceInfo,
-      isLoadingServiceInfo,
       isConnected,
       isConnecting,
       isTestingPayment,
       connectedWallet,
-      selectedCommands,
-      budget,
-      expiryDays,
       testAmount,
       error,
-      showAdvancedSettings,
-      getWalletServiceInfo,
+      balance,
+      isLoadingBalance,
       connect,
       disconnect,
       testPayment,
+      getBalance,
       formatSats,
-      copyWalletAuthUri
+      copyConnectionString
     }
   }
 }
