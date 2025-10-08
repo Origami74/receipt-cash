@@ -231,6 +231,97 @@
         </button>
       </div>
 
+      <!-- Get Token from System Wallet -->
+      <div v-if="isConnected" class="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Get Token from System Wallet</h2>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Amount (sats)
+          </label>
+          <input
+            v-model.number="cashuAmount"
+            type="number"
+            min="1"
+            placeholder="1000"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        <button
+          @click="getTokenFromSystemWallet"
+          :disabled="!cashuAmount || isGeneratingToken"
+          class="w-full bg-orange-600 text-white py-2 px-4 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-orange-700 transition-colors mb-4"
+        >
+          <span v-if="isGeneratingToken" class="flex items-center justify-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Getting Token...
+          </span>
+          <span v-else>Get Token from Wallet</span>
+        </button>
+
+        <!-- Token Display with QR Code -->
+        <div v-if="generatedToken" class="mt-4">
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <h3 class="text-md font-semibold text-gray-900 mb-3">Cashu Token from System Wallet</h3>
+            
+            <!-- QR Code -->
+            <div class="flex justify-center mb-4">
+              <div class="p-4 border-4 border-orange-500 rounded-2xl bg-white shadow-lg">
+                <QRCodeVue
+                  :value="generatedToken"
+                  :size="200"
+                  level="M"
+                  render-as="svg"
+                />
+              </div>
+            </div>
+            
+            <!-- Token String -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Token String</label>
+              <div class="flex items-center space-x-2">
+                <textarea
+                  :value="generatedToken"
+                  readonly
+                  rows="3"
+                  class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs font-mono"
+                ></textarea>
+                <button
+                  @click="copyToken"
+                  class="text-blue-600 hover:text-blue-800 p-2"
+                  title="Copy token"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <p class="text-sm text-gray-600">
+              Share this QR code or token string to receive {{ formatSats(cashuAmount) }} sats
+            </p>
+          </div>
+        </div>
+
+        <!-- Token Error Display -->
+        <div v-if="tokenError" class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div class="flex">
+            <svg class="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-red-800">Token Generation Error</h3>
+              <p class="text-sm text-red-700 mt-1">{{ tokenError }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Error Display -->
       <div v-if="error" class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
         <div class="flex">
@@ -253,9 +344,16 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools'
 import { nip19 } from 'nostr-tools'
 import { WalletConnect } from 'applesauce-wallet-connect'
 import { globalPool } from '../services/nostr/applesauce.js'
+import QRCodeVue from 'qrcode.vue'
+import { createPaymentRequest } from '../utils/cashuUtils.js'
+import { PaymentRequest as CashuPaymentRequest } from '@cashu/cashu-ts'
+import { firstValueFrom } from 'rxjs'
 
 export default {
   name: 'CashuWalletConnectView',
+  components: {
+    QRCodeVue
+  },
   setup() {
     const walletServiceUrl = ref('http://localhost:3737')
     const isConnected = ref(false)
@@ -266,6 +364,12 @@ export default {
     const error = ref('')
     const balance = ref(null)
     const isLoadingBalance = ref(false)
+    
+    // Cashu token generation
+    const cashuAmount = ref(21)
+    const generatedToken = ref('')
+    const isGeneratingToken = ref(false)
+    const tokenError = ref('')
     
     let privateKey = null
     let publicKey = null
@@ -512,6 +616,95 @@ export default {
       localStorage.removeItem('wallet_auth_secret')
     }
 
+    const getTokenFromSystemWallet = async () => {
+      if (!walletConnect || !cashuAmount.value) {
+        tokenError.value = 'No wallet connected or invalid amount'
+        return
+      }
+
+      isGeneratingToken.value = true
+      tokenError.value = ''
+      generatedToken.value = ''
+
+      try {
+        console.log(`Getting cashu token from system wallet for ${cashuAmount.value} sats...`)
+        
+        // Create a simple payment request without transport (wallet doesn't support nostr transport)
+        const requestId = 'token_request_' + Date.now()
+        
+        // Create a simple cashu payment request without transport
+        const request = new CashuPaymentRequest(
+          [], // Empty transport array - no nostr transport
+          requestId,
+          cashuAmount.value,
+          'sat',
+          [], // Use default mints
+          `Token request for ${cashuAmount.value} sats`,
+          false // Not single use
+        )
+        
+        const paymentRequest = request.toEncodedRequest()
+        
+        console.log('Created payment request:', paymentRequest)
+        
+        // Use the wallet's pay_cashu_request method to get a token
+        const responseObservable = walletConnect.request({
+          method: 'pay_cashu_request',
+          params: {
+            payment_request: paymentRequest,
+            amount: cashuAmount.value
+          }
+        })
+        
+        console.log('Response observable:', responseObservable)
+        
+        // Convert Observable to Promise and get the actual response
+        const response = await firstValueFrom(responseObservable)
+        
+        console.log('Wallet response:', response)
+        console.log('Response type:', typeof response)
+        console.log('Response keys:', Object.keys(response || {}))
+        
+        // Extract the token from the response
+        if (response && response.result && response.result.token) {
+          generatedToken.value = response.result.token
+          console.log('✅ Cashu token received from system wallet successfully')
+          console.log('Token preview:', response.result.token.substring(0, 50) + '...')
+        } else if (response && response.token) {
+          generatedToken.value = response.token
+          console.log('✅ Cashu token received from system wallet successfully')
+          console.log('Token preview:', response.token.substring(0, 50) + '...')
+        } else {
+          console.error('Unexpected response format:', response)
+          throw new Error(`No token found in wallet response. Response: ${JSON.stringify(response, null, 2)}`)
+        }
+        
+      } catch (err) {
+        console.error('Token generation failed:', err)
+        tokenError.value = `Failed to get token from wallet: ${err.message}`
+      } finally {
+        isGeneratingToken.value = false
+      }
+    }
+
+    const copyToken = async () => {
+      if (!generatedToken.value) return
+      
+      try {
+        await navigator.clipboard.writeText(generatedToken.value)
+        console.log('Token copied to clipboard')
+      } catch (err) {
+        console.error('Failed to copy token:', err)
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = generatedToken.value
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+    }
+
     const testPayment = async () => {
       if (!connectedWallet.value || !testAmount.value || !walletConnect) return
 
@@ -607,10 +800,16 @@ export default {
       error,
       balance,
       isLoadingBalance,
+      cashuAmount,
+      generatedToken,
+      isGeneratingToken,
+      tokenError,
       connect,
       disconnect,
       testPayment,
       getBalance,
+      getTokenFromSystemWallet,
+      copyToken,
       formatSats,
       copyConnectionString
     }
