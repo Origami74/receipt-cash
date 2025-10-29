@@ -22,6 +22,11 @@ const routes = [
     component: () => import('../views/ActivityView.vue')
   },
   {
+    path: '/debug-recovery',
+    name: 'DebugRecovery',
+    component: () => import('../views/DebugRecoveryView.vue')
+  },
+  {
     path: '/receipt/:eventId/:decryptionKey',
     name: 'ReceiptView',
     component: () => import('../views/ReceiptView.vue'),
