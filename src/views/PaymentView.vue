@@ -8,8 +8,7 @@
     @retry="fetchReceipt"
   >
     <ReceiptHeader
-      :title="title || 'No Title'"
-      :date="date || 'yyyy-mm-dd'"
+      :receiptModel="receiptModel"
       :selectedCurrency="selectedCurrency"
       backButtonText="Back"
       @back-click="goBack"
@@ -31,13 +30,8 @@
       
       <!-- Receipt Summary -->
       <ReceiptSummary
-        :receiptBtcPrice="btcPrice"
-        :currentBtcPrice="currentBtcPrice"
-        :currency="currency"
+        :receiptModel="paymentReceiptModel"
         :selectedCurrency="selectedCurrency"
-        :splitPercentage="devPercentage"
-        :totalAmount="selectedSubtotal"
-        :toFiat="toFiat"
       />
     </div>
 
@@ -51,7 +45,7 @@
       :cashuPaymentLocked="cashuPaymentLocked"
       @pay-lightning="payWithLightning"
       @pay-cashu="payWithCashu"
-      @scan-receipt="goToHome"
+      @go-to-receipt="goToReceiptOverview"
     />
 
     <!-- Payment Modals -->
@@ -110,10 +104,10 @@ import { Buffer } from 'buffer';
 import { globalEventStore, globalEventLoader, globalPool } from '../services/nostr/applesauce';
 import { onlyEvents } from 'applesauce-relay';
 import { mapEventsToStore } from 'applesauce-core';
-import { safeParseSettlementContent } from '../parsing/settlementparser';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '../services/nostr/constants';
 import { saveMintQuote } from '../services/storageService';
-import {createPaymentRequest} from '../utils/cashuUtils'
+import { createPaymentRequest } from '../utils/cashuUtils';
+import { fullReceiptModel } from '../services/nostr/receipt';
 
 export default {
   name: 'PaymentView',
@@ -139,22 +133,13 @@ export default {
   },
   setup(props) {
     const router = useRouter();
-    const title = ref('');
-    const date = ref('');
+    const receiptModel = ref(null);
     const items = ref([]);
-    const loading = ref(true);
-    const error = ref(null);
-    const errorDetails = ref(null);
-    const btcPrice = ref(0);
-    const currency = ref('USD');
     const selectedCurrency = ref('USD');
     const currentBtcPrice = ref(0);
-    const receiptAuthorPubkey = ref('');
-    const preferredMints = ref([]);
     const showSettings = ref(false);
-    const settlements = ref([]);
-    const expandedSettlements = ref(new Set());
-    const devPercentage = ref(0);
+    const error = ref(null);
+    const errorDetails = ref(null);
 
     // Payment state
     const paymentInProgress = ref(false);
@@ -182,14 +167,35 @@ export default {
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
 
+    // Loading is based on receiptModel being null
+    const loading = computed(() => receiptModel.value === null);
+
+    // Computed properties from receiptModel
+    const receiptAuthorPubkey = computed(() => receiptModel.value?.receiptModel?.event?.pubkey || '');
+    const preferredMints = computed(() => {
+      // Extract from the raw receipt content if available
+      if (receiptModel.value?.receiptModel?.event?.content) {
+        try {
+          const decryptionKey = Uint8Array.from(Buffer.from(props.decryptionKey, 'hex'));
+          const decryptedContent = nip44.decrypt(receiptModel.value.receiptModel.event.content, decryptionKey);
+          const receiptData = JSON.parse(decryptedContent);
+          return receiptData.preferredMints || [];
+        } catch (err) {
+          console.error('Error extracting preferred mints:', err);
+          return [];
+        }
+      }
+      return [];
+    });
+
     // Function to navigate back
     const goBack = () => {
       router.go(-1);
     };
     
-    // Function to navigate to home
-    const goToHome = () => {
-      router.push('/');
+    // Function to navigate to receipt overview
+    const goToReceiptOverview = () => {
+      router.push(`/receipt/${props.eventId}/${props.decryptionKey}`);
     };
 
     // Computed properties
@@ -203,32 +209,8 @@ export default {
 
     // Computed property for items with settlement quantities
     const itemsWithSettlements = computed(() => {
-      return items.value.map(item => {
-        let confirmedQuantity = 0;
-        let unconfirmedQuantity = 0;
-
-        // Calculate quantities from all settlements
-        settlements.value.forEach(settlement => {
-          settlement.settledItems.forEach(settledItem => {
-            // Match by name and price
-            if (settledItem.name === item.name && settledItem.price === item.price) {
-              const quantity = settledItem.selectedQuantity || settledItem.quantity;
-              
-              if (settlement.status === 'confirmed') {
-                confirmedQuantity += quantity;
-              } else {
-                unconfirmedQuantity += quantity;
-              }
-            }
-          });
-        });
-
-        return {
-          ...item,
-          confirmedQuantity,
-          unconfirmedQuantity
-        };
-      });
+      // Items already have confirmedQuantity and unconfirmedQuantity from updateItemSettlementQuantities
+      return items.value;
     });
 
     // Item quantity management
@@ -254,82 +236,95 @@ export default {
       });
     };
 
-    // Handle receipt event from eventLoader
-    const handleReceiptEvent = async (receiptEvent) => {
+    // Computed property for payment-specific receipt model with selected items
+    const paymentReceiptModel = computed(() => {
+      if (!receiptModel.value) return null;
+      
+      return {
+        ...receiptModel.value,
+        total: selectedSubtotal.value
+      };
+    });
+
+    // Fetch receipt data using receiptModel
+    const fetchReceipt = async () => {
       try {
-        if (!receiptEvent) {
-          throw new Error('Receipt not found');
-        }
+        error.value = null;
+        errorDetails.value = null;
 
-        // Decrypt and parse the receipt content
-        const decryptionKey = Uint8Array.from(Buffer.from(props.decryptionKey, 'hex'));
-        const decryptedContent = await nip44.decrypt(receiptEvent.content, decryptionKey);
-        const receiptData = JSON.parse(decryptedContent);
-        
-        // Add event metadata to receipt data
-        receiptData.authorPubkey = receiptEvent.pubkey;
-        receiptData.createdAt = receiptEvent.created_at;
-        
-        // Validate that preferred mints exist
-        if (!receiptData.preferredMints || !Array.isArray(receiptData.preferredMints) || receiptData.preferredMints.length === 0) {
-          throw new Error('Receipt is malformed: no preferred mints specified');
-        }
-        
-        // Update component state with the fetched data
-        title.value = receiptData.title;
-        date.value = receiptData.date;
-        currency.value = receiptData.currency;
-        selectedCurrency.value = receiptData.currency;
-        btcPrice.value = receiptData.btcPrice;
-        receiptAuthorPubkey.value = receiptData.authorPubkey;
-        preferredMints.value = receiptData.preferredMints;
-        devPercentage.value = receiptData.splitPercentage || 0;
-        
-        // Initialize items with UI-specific fields
-        items.value = receiptData.items.map(item => ({
-          ...item,
-          selectedQuantity: 0,
-          settled: false,
-          confirmedQuantity: 0,
-          pendingQuantity: 0
-        }));
+        // Load the receipt model
+        fullReceiptModel(props.eventId, props.decryptionKey).subscribe(model => {
+          receiptModel.value = model;
+          
+          // Set initial selected currency from model
+          if (model?.currency) {
+            selectedCurrency.value = model.currency;
+          }
+          
+          // Initialize items with UI-specific fields for payment
+          items.value = (model?.items || []).map(item => ({
+            ...item,
+            selectedQuantity: 0,
+            settled: false,
+            confirmedQuantity: 0,
+            unconfirmedQuantity: 0,
+            pendingQuantity: 0
+          }));
 
-        // Fetch current BTC price for the selected currency
-        try {
-          currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
-        } catch (error) {
-          console.error('Error fetching current BTC price:', error);
-          currentBtcPrice.value = receiptData.btcPrice;
-        }
-        
-        // Load settlements AFTER receipt is fully loaded
-        await loadSettlements();
-        
+          // Update settlement quantities from confirmed and unconfirmed settlements
+          updateItemSettlementQuantities();
+          
+          // Fetch current BTC price for the currency
+          btcPriceService.fetchBtcPrice(selectedCurrency.value)
+            .then(price => {
+              currentBtcPrice.value = price;
+            })
+            .catch(error => {
+              console.error('Error fetching current BTC price:', error);
+              currentBtcPrice.value = model?.btcPrice || 0;
+            });
+        });
       } catch (err) {
-        console.error('Error processing receipt event:', err);
-        error.value = 'Failed to load receipt data. Please try again.';
+        console.error('Error loading receipt:', err);
+        error.value = 'Failed to load receipt. Please try again.';
         errorDetails.value = {
           message: err.message,
           stack: err.stack,
           eventId: props.eventId,
           timestamp: new Date().toISOString()
         };
-      } finally {
-        loading.value = false;
       }
     };
 
-    // Fetch receipt data using eventLoader
-    const fetchReceipt = () => {
-      loading.value = true;
-      error.value = null;
-      errorDetails.value = null;
+    // Update item settlement quantities from receiptModel
+    const updateItemSettlementQuantities = () => {
+      if (!receiptModel.value) return;
 
-      // Fetch receipt event using eventLoader
-      globalEventLoader({
-        id: props.eventId,
-        relays: DEFAULT_RELAYS,
-      }).subscribe(handleReceiptEvent);
+      items.value.forEach(item => {
+        let confirmedQuantity = 0;
+        let unconfirmedQuantity = 0;
+
+        // Calculate from confirmed settlements
+        receiptModel.value.confirmedSettlements?.forEach(settlement => {
+          settlement.items?.forEach(settledItem => {
+            if (settledItem.name === item.name && settledItem.price === item.price) {
+              confirmedQuantity += settledItem.selectedQuantity || settledItem.quantity;
+            }
+          });
+        });
+
+        // Calculate from unconfirmed settlements
+        receiptModel.value.unConfirmedSettlements?.forEach(settlement => {
+          settlement.items?.forEach(settledItem => {
+            if (settledItem.name === item.name && settledItem.price === item.price) {
+              unconfirmedQuantity += settledItem.selectedQuantity || settledItem.quantity;
+            }
+          });
+        });
+
+        item.confirmedQuantity = confirmedQuantity;
+        item.unconfirmedQuantity = unconfirmedQuantity;
+      });
     };
 
     // Currency handling
@@ -565,91 +560,6 @@ export default {
       mintQuoteWallet.value = null;
     };
 
-    // Load settlements using applesauce
-    const loadSettlements = async () => {
-      try {
-        // Subscribe to settlement events using applesauce
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT],
-            '#e': [props.eventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          // .subscribe(handleSettlementEvent);
-
-        // Subscribe to confirmation events
-        globalPool.subscription(DEFAULT_RELAYS, {
-            kinds: [KIND_SETTLEMENT_CONFIRMATION],
-            authors: [receiptAuthorPubkey.value],
-            '#e': [props.eventId],
-          })
-          .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
-          // .subscribe(handleConfirmationEvent);
-          
-      } catch (error) {
-        console.error('Error loading settlements:', error);
-      }
-    };
-
-    // Handle settlement events
-    const handleSettlementEvent = async (settlementEvent) => {
-      try {
-        // Decrypt the content using the same key as the receipt
-        const decryptionKey = Uint8Array.from(Buffer.from(props.decryptionKey, 'hex'));
-        const decryptedContent = await nip44.decrypt(settlementEvent.content, decryptionKey);
-        const settlementData = safeParseSettlementContent(decryptedContent);
-        
-        if (settlementData) {
-          // Get payment type from tags
-          const paymentTag = settlementEvent.tags.find(tag => tag[0] === 'payment');
-          const paymentType = paymentTag ? paymentTag[1] : 'unknown';
-          
-          // Create settlement object
-          const settlement = {
-            id: settlementEvent.id,
-            settledItems: settlementData.settledItems,
-            paymentType: paymentType,
-            status: 'unconfirmed', // Default to unconfirmed
-            createdAt: settlementEvent.created_at,
-            totalAmount: settlementData.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0)
-          };
-
-          // Add to settlements list if not already present
-          if (!settlements.value.find(s => s.id === settlement.id)) {
-            settlements.value.push(settlement);
-          }
-        }
-        
-      } catch (error) {
-        console.error('Error processing settlement event:', error);
-      }
-    };
-
-    // Handle confirmation events
-    const handleConfirmationEvent = async (confirmationEvent) => {
-      // console.log("New confirmation event:", confirmationEvent)
-      try {
-        // Extract all event IDs from the confirmation event
-        const eTags = confirmationEvent.tags.filter(tag => tag[0] === 'e');
-        const eventIds = eTags.map(tag => tag[1]);
-
-        // Check each of our settlements to see if it's being confirmed
-        for (const settlement of settlements.value) {
-          if (eventIds.includes(settlement.id) && settlement.status !== 'confirmed') {
-            settlement.status = 'confirmed';
-          }
-        }
-        
-        // If this is for the current payment settlement and it's a Cashu payment, mark as successful
-        if (eventIds.includes(settlementEventId.value) && currentPaymentType.value === 'cashu') {
-          paymentSuccess.value = true;
-          paymentInProgress.value = false;
-          showNotification('Cashu payment confirmed by recipient!', 'success');
-        }
-      } catch (error) {
-        console.error('Error processing confirmation event:', error);
-      }
-    };
-
     // Component lifecycle
     onMounted(() => {
       fetchReceipt();
@@ -660,16 +570,13 @@ export default {
     });
 
     return {
-      title,
-      date,
+      receiptModel,
+      paymentReceiptModel,
       items,
       loading,
       error,
       errorDetails,
       showSettings,
-      devPercentage,
-      btcPrice,
-      currency,
       selectedCurrency,
       currentBtcPrice,
       selectedItems,
@@ -689,7 +596,7 @@ export default {
       paymentErrorMessage,
       invoiceError,
       goBack,
-      goToHome,
+      goToReceiptOverview,
       onCurrencyChange,
       toFiat,
       incrementQuantity,

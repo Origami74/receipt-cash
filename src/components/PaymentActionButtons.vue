@@ -35,15 +35,15 @@
         </div>
       </template>
       
-      <!-- Show scan receipt button when payment is successful -->
+      <!-- Show go to receipt overview button when payment is successful -->
       <button
         v-if="paymentSuccess"
-        @click="$emit('scan-receipt')"
-        @touchend.prevent="$emit('scan-receipt')"
+        @click="$emit('go-to-receipt')"
+        @touchend.prevent="$emit('go-to-receipt')"
         class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg touch-manipulation"
         style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
       >
-        📱 Scan a Receipt
+        📋 Go to Receipt Overview
       </button>
     </div>
   </div>
@@ -52,7 +52,7 @@
 <script>
 export default {
   name: 'PaymentActionButtons',
-  emits: ['pay-lightning', 'pay-cashu', 'scan-receipt'],
+  emits: ['pay-lightning', 'pay-cashu', 'go-to-receipt'],
   props: {
     selectedItems: {
       type: Array,

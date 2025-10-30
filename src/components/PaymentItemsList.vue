@@ -62,20 +62,23 @@
           </div>
           
           <!-- Settlement Progress Bar -->
-          <div class="w-full bg-gray-200 rounded-full h-1.5 my-1">
+          <div class="w-full bg-gray-200 rounded-full h-2 my-1">
             <div class="flex h-full rounded-full overflow-hidden">
-              <!-- Confirmed settlements (green) -->
+              <!-- Confirmed settlements - always green for payers (non-owned receipts) -->
               <div
-                v-if="item.confirmedQuantity > 0"
-                :style="{ width: (Math.min(item.confirmedQuantity, item.quantity) / item.quantity * 100) + '%' }"
-                :class="item.confirmedQuantity >= item.quantity ? 'bg-green-500' : 'bg-green-400'"
+                v-if="getCollectedPercent(item) > 0"
+                :style="{ width: getCollectedPercent(item) + '%' }"
+                :class="{
+                  'bg-green-500': getCollectedPercent(item) >= 100,
+                  'bg-green-400': getCollectedPercent(item) < 100
+                }"
                 class="transition-all duration-300"
               ></div>
-              <!-- Unconfirmed settlements (orange) -->
+              <!-- Pending settlements (yellow) - only show if not fully collected -->
               <div
-                v-if="item.unconfirmedQuantity > 0"
-                :style="{ width: (item.unconfirmedQuantity / item.quantity * 100) + '%' }"
-                class="bg-orange-400 transition-all duration-300"
+                v-if="getPendingPercent(item) > 0 && getCollectedPercent(item) < 100"
+                :style="{ width: getPendingPercent(item) + '%' }"
+                class="bg-yellow-400 transition-all duration-300"
               ></div>
             </div>
           </div>
@@ -83,12 +86,15 @@
           <div class="text-sm text-gray-500">
             <!-- Settlement status with confirmation counter -->
             <span
-              :class="item.confirmedQuantity >= item.quantity ? 'text-green-600 font-medium' : 'text-gray-500'"
+              :class="{
+                'text-green-600 font-medium': getCollectedPercent(item) >= 100,
+                'text-gray-500': getCollectedPercent(item) < 100
+              }"
             >
-              ({{ item.confirmedQuantity }}/{{ item.quantity }})
+              (<span :class="item.confirmedQuantity > item.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ item.confirmedQuantity }}</span>/{{ item.quantity }})
             </span>
             × {{ formatSats(item.price) }} sats
-            <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
+            <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span><span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
           </div>
         </div>
       </div>
@@ -126,7 +132,17 @@ export default {
     }
   },
   methods: {
-    formatSats
+    formatSats,
+    getCollectedPercent(item) {
+      if (!item.quantity || item.quantity === 0) return 0;
+      return Math.min(100, (item.confirmedQuantity / item.quantity) * 100);
+    },
+    getPendingPercent(item) {
+      if (!item.quantity || item.quantity === 0) return 0;
+      const remaining = item.quantity - item.confirmedQuantity;
+      if (remaining <= 0) return 0;
+      return Math.min(100 - this.getCollectedPercent(item), (item.unconfirmedQuantity / item.quantity) * 100);
+    }
   }
 };
 </script>

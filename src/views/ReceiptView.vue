@@ -31,6 +31,7 @@
         <!-- Settlements List -->
         <ReceiptSettlementsList
           :receiptModel="receiptModel"
+          :selectedCurrency="selectedCurrency"
         />
          <!-- :toFiat="toFiat" -->
 
