@@ -15,26 +15,19 @@
           </div>
           
           <!-- Enhanced Settlement Progress Bar -->
-          <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-            <div class="flex h-full rounded-full overflow-hidden">
-              <!-- Confirmed settlements (green) - always fill 100% width if fully settled -->
-              <div
-                v-if="itemWithSettlements.collectedPercent > 0"
-                :style="{ width: itemWithSettlements.collectedPercent + '%' }"
-                :class="{
-                  'bg-green-500': itemWithSettlements.collectedColor === 'green' && itemWithSettlements.collectedPercent >= 100,
-                  'bg-green-400': itemWithSettlements.collectedColor === 'green' && itemWithSettlements.collectedPercent < 100,
-                  'bg-yellow-400': itemWithSettlements.collectedColor === 'orange',
-                }"
-                class="transition-all duration-300"
-              ></div>
-              <!-- Pending settlements (orange) - only show if not fully collected -->
-              <div
-                v-if="itemWithSettlements.pendingPercent > 0 && itemWithSettlements.collectedPercent < 100"
-                :style="{ width: itemWithSettlements.pendingPercent + '%' }"
-                class="bg-yellow-400 transition-all duration-300"
-              ></div>
-            </div>
+          <div class="w-full bg-gray-200 rounded-full h-2 mb-2 relative">
+            <!-- Collected but not distributed (yellow) -->
+            <div
+              v-if="itemWithSettlements.collectedPercent > 0"
+              :style="{ width: itemWithSettlements.collectedPercent + '%' }"
+              class="bg-yellow-400 h-2 rounded-full transition-all duration-300 absolute"
+            ></div>
+            <!-- Distributed (green overlay) -->
+            <div
+              v-if="itemWithSettlements.distributedPercent > 0"
+              :style="{ width: itemWithSettlements.distributedPercent + '%' }"
+              class="bg-green-500 h-2 rounded-full transition-all duration-300 absolute"
+            ></div>
           </div>
           
           <div class="text-sm text-gray-500">
@@ -96,6 +89,7 @@ export default {
       return props.receiptModel.items.map(item => {
         const totalAmount = item.price * item.quantity;
         let confirmedQuantity = 0;
+        let distributedQuantity = 0;
         let pendingQuantity = 0;
 
         // Go through confirmed settlements and sum up confirmed quantities for this item
@@ -106,6 +100,11 @@ export default {
               settlement.items.forEach(settledItem => {
                 if (settledItem.name === item.name && settledItem.price === item.price) {
                   confirmedQuantity += settledItem.selectedQuantity;
+                  
+                  // If this settlement is fully paid out, add to distributed quantity
+                  if (settlement.fullyPaidOut === true) {
+                    distributedQuantity += settledItem.selectedQuantity;
+                  }
                 }
               });
             }
@@ -128,23 +127,25 @@ export default {
 
         // Calculate percentages based on quantities
         const collectedPercent = item.quantity > 0 ? Math.min(Math.round((confirmedQuantity / item.quantity) * 100), 100) : 0;
+        const distributedPercent = item.quantity > 0 ? Math.min(Math.ceil((distributedQuantity / item.quantity) * 100), 100) : 0;
         const pendingPercent = item.quantity > 0 ? Math.min(Math.round((pendingQuantity / item.quantity) * 100), 100) : 0;
 
         // Determine color based on ownership and payout status
         const isOwnedReceipt = props.receiptModel?.isOwnedReceipt || false;
-        const hasPayouts = props.receiptModel?.payouts && props.receiptModel.payouts.length > 0;
         
         // Color logic:
-        // - Owned receipt + no payouts = orange (collected but not distributed)
-        // - Owned receipt + has payouts = green (collected and distributed)
+        // - Owned receipt + no distribution = orange (collected but not distributed)
+        // - Owned receipt + has distribution = green (collected and distributed)
         // - Not owned receipt = green (collected, payout status irrelevant)
-        const collectedColor = isOwnedReceipt && !hasPayouts ? 'orange' : 'green';
+        const collectedColor = isOwnedReceipt && distributedPercent === 0 ? 'orange' : 'green';
 
         return {
           ...item,
           confirmedQuantity,
+          distributedQuantity,
           pendingQuantity,
           collectedPercent,
+          distributedPercent,
           pendingPercent,
           collectedColor
         };
