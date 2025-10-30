@@ -79,7 +79,7 @@ import { ref, onMounted } from 'vue';
 const ACCEPTANCE_STORAGE_KEY = 'receipt-cash-experimental-warning-accepted';
 
 export default {
-  name: 'ExperimentalBanner',
+  name: 'ExperimentalModal',
   
   setup() {
     const isOpen = ref(false);

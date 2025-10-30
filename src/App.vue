@@ -1,7 +1,7 @@
 <template>
   <div class="h-full flex flex-col">
     <!-- Experimental warning banner -->
-    <ExperimentalBanner />
+    <ExperimentalModal />
     
     <!-- Global notification component -->
     <Notification
@@ -45,7 +45,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { showNotification, useNotification } from './services/notificationService';
 import Notification from './components/Notification.vue';
-import ExperimentalBanner from './components/ExperimentalBanner.vue';
+import ExperimentalModal from './components/ExperimentalModal.vue';
 import ReportModal from './components/ReportModal.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
@@ -57,7 +57,7 @@ export default {
   name: 'App',
   components: {
     Notification,
-    ExperimentalBanner,
+    ExperimentalModal,
     ReportModal,
     BottomTabBar,
     SettingsMenu
