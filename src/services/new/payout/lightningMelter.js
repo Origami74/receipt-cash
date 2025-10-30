@@ -127,132 +127,6 @@ class LightningMelter {
   }
 
   /**
-   * Melt Cashu proofs to Lightning with multiple cycles for fee handling
-   * @param {Array} proofs - Array of Cashu proofs to melt
-   * @param {String} lightningAddress - Lightning address to pay to
-   * @param {String} mintUrl - The mint URL to use for melting
-   * @returns {Promise<Object>} Result object with success status and any remaining proofs
-   */
-  async meltToLightning(proofs, lightningAddress, mintUrl) {
-    try {
-      
-      if (!proofs || proofs.length === 0) {
-        throw new Error('No proofs provided for melting');
-      }
-      
-      if (!lightningAddress) {
-        throw new Error('Lightning address is required');
-      }
-      
-      if (!mintUrl) {
-        throw new Error('Mint URL is required');
-      }
-      
-      console.log(`Starting melt to Lightning address: ${lightningAddress}`);
-      console.log(`Total proofs to melt: ${proofs.length}, Total amount: ${proofs.reduce((sum, p) => sum + p.amount, 0)} sats`);
-      
-      // Get wallet instance
-      const wallet = await cashuWalletManager.getWallet(mintUrl);
-      
-      const totalAvailable = sumProofs(proofs)
-      let remainingProofs = [...proofs];
-      let totalMelted = 0;
-      let meltAttempts = 0;
-      const maxAttempts = 10;
-      const reductionPercentage = 0.02; // 2% reduction per attempt
-      
-      // Start with 100% of available amount and reduce by 2% each attempt
-      let currentAttemptPercentage = 1.0;
-      
-      while (meltAttempts < maxAttempts && remainingProofs.length > 0) {
-        meltAttempts++;
-        const targetAmount = Math.floor(totalAvailable * currentAttemptPercentage);
-        
-        // Don't attempt if target amount is too small (less than 1 sat)
-        if (targetAmount < 1) {
-          console.log(`Target amount too small (${targetAmount} sats), stopping attempts`);
-          break;
-        }
-        
-        console.log(`Melt attempt ${meltAttempts}: Trying ${targetAmount} sats (${Math.round(currentAttemptPercentage * 100)}% of ${totalAvailable} sats)`);
-        
-        try {
-          // Create invoice for target amount
-          const lightningInvoice = await this.requestInvoice(lightningAddress, targetAmount);
-          console.log(`✅ Invoice received for ${targetAmount} sats: ${lightningInvoice.substring(0, 50)}...`);
-          
-          // Get melt quote
-          const meltQuote = await wallet.createMeltQuote(lightningInvoice);
-          const totalNeeded = meltQuote.amount + meltQuote.fee_reserve;
-          console.log(`Melt quote: ${meltQuote.amount} sats + ${meltQuote.fee_reserve} sats fee = ${totalNeeded} sats needed`);
-          
-          // Check if we have enough proofs
-          const availableAmount = remainingProofs.reduce((sum, p) => sum + p.amount, 0);
-          if (availableAmount < totalNeeded) {
-            console.log(`Insufficient funds: need ${totalNeeded} sats, have ${availableAmount} sats. Reducing target amount.`);
-            
-            // Intelligently reduce by the fee amount to get closer to a workable amount
-            const feeAmount = meltQuote.fee_reserve;
-            const newTargetAmount = Math.max(1, targetAmount - feeAmount); // Subtract fee + 1 sat buffer
-            currentAttemptPercentage = newTargetAmount / totalAvailable;
-            
-            console.log(`Reducing target by ${feeAmount} sats (fee amount) for next attempt`);
-            continue;
-          }
-          
-          // Split proofs to get exact amount needed
-          const { keep: keepProofs, send: sendProofs } = await wallet.send(totalNeeded, remainingProofs);
-          
-          // Attempt to melt
-          const meltResult = await wallet.meltProofs(meltQuote, sendProofs);
-          console.log('Melt result:', meltResult);
-          
-          const meltedAmount = sendProofs.reduce((sum, p) => sum + p.amount, 0);
-          totalMelted += meltedAmount;
-          console.log(`✅ Melt successful! Melted ${meltedAmount} sats`);
-          
-          // Update remaining proofs
-          remainingProofs = keepProofs;
-          
-          // Add any change from the melt operation
-          if (meltResult.change && meltResult.change.length > 0) {
-            remainingProofs.push(...meltResult.change);
-            const changeAmount = meltResult.change.reduce((sum, p) => sum + p.amount, 0);
-            console.log(`Received ${changeAmount} sats in change`);
-          }
-          
-          break; // Successfully melted, done
-          
-        } catch (error) {
-          console.error(`Melt attempt ${meltAttempts} failed:`, error);
-          // Reduce target amount for next attempt
-          currentAttemptPercentage -= reductionPercentage;
-          continue;
-        }
-      }
-      
-      const finalRemainingAmount = sumProofs(remainingProofs)
-      
-      console.log(`Melt to Lightning completed:`);
-      console.log(`- Total melted: ${totalMelted} sats`);
-      console.log(`- Remaining: ${finalRemainingAmount} sats in ${remainingProofs.length} proofs`);
-      console.log(`- Attempts made: ${meltAttempts}`);
-      
-      return {
-        success: totalMelted > 0,
-        totalMelted,
-        remainingProofs,
-        remainingAmount: finalRemainingAmount,
-        attempts: meltAttempts
-      };
-      
-    } catch (error) {
-      console.error('Error in meltToLightning:', error);
-      throw new Error(`Failed to melt to Lightning: ${error.message}`);
-    }
-  }
-
-  /**
    * Melt Cashu proofs to Lightning address with change handling
    * @param {Array} proofs - Array of Cashu proofs to melt
    * @param {String} lightningAddress - Lightning address to pay to
@@ -381,6 +255,21 @@ class LightningMelter {
         if (storeChangeInJar && finalRemainingProofs.length > 0) {
           await storeChangeForMint(mintUrl, finalRemainingProofs);
           console.log(`💰 Stored ${finalRemainingAmount} sats in change jar for mint: ${mintUrl}`);
+          
+          // Publish change jar payout event
+          try {
+            const { signer, receiptEventId, settlementEventId } = await this._createSignerFromSessionId(finalSessionId);
+            await payoutEventPublisher.publishChangeJarPayout(signer, receiptEventId, settlementEventId, {
+              amount: finalRemainingAmount,
+              mint: mintUrl,
+              proofsCount: finalRemainingProofs.length,
+              sessionId: finalSessionId
+            });
+            console.log(`📝 Published change jar payout event: ${finalRemainingAmount} sats`);
+          } catch (payoutEventError) {
+            console.error('Failed to publish change jar payout event:', payoutEventError);
+            // Don't fail the entire operation if payout event publishing fails
+          }
         }
       }
       
@@ -583,6 +472,17 @@ class LightningMelter {
       console.log(`- Total melted: ${totalMelted} sats`);
       console.log(`- Remaining: ${finalRemainingAmount} sats in ${remainingProofs.length} proofs`);
       console.log(`- Attempts made: ${meltAttempts}`);
+      
+      // Automatically store remaining proofs in change jar if melt was successful
+      if (totalMelted > 0 && remainingProofs.length > 0) {
+        try {
+          await storeChangeForMint(mintUrl, remainingProofs);
+          console.log(`💰 Automatically stored ${finalRemainingAmount} sats in change jar for mint: ${mintUrl}`);
+        } catch (changeError) {
+          console.error('Failed to store remaining proofs in change jar:', changeError);
+          // Don't fail the whole operation if change storage fails
+        }
+      }
       
       return {
         success: totalMelted > 0,

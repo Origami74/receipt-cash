@@ -163,6 +163,104 @@
         </div>
       </div>
 
+      <!-- Incomplete Melt Sessions Section -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Incomplete Melt Sessions
+          </h2>
+          <button
+            @click="loadMeltSessions"
+            class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+        
+        <p class="text-sm text-gray-600 mb-4">
+          Lightning melt sessions that were not completed and still have remaining proofs.
+        </p>
+
+        <div v-if="incompleteMeltSessions.length === 0" class="text-sm text-gray-500 italic text-center py-8">
+          No incomplete melt sessions found
+        </div>
+
+        <div v-else class="space-y-4">
+          <!-- Summary Card -->
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <div class="text-sm font-medium text-amber-900 mb-1">Summary</div>
+            <div class="text-xs text-amber-700">
+              {{ incompleteMeltSessions.length }} incomplete session(s) with {{ totalIncompleteSats }} sats remaining
+            </div>
+          </div>
+
+          <!-- Individual Sessions -->
+          <div v-for="session in incompleteMeltSessions" :key="session.sessionId" class="border border-gray-200 rounded-lg p-3">
+            <div class="flex justify-between items-start mb-2">
+              <div class="flex-1">
+                <div class="text-sm font-medium text-gray-900 break-all">
+                  {{ formatSessionId(session.sessionId) }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                  Created: {{ formatDate(session.createdAt) }}
+                </div>
+                <div class="text-xs text-gray-500">
+                  Status: <span class="font-medium text-amber-600">{{ session.status }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-gray-50 rounded p-2 mt-2">
+              <div class="text-xs text-gray-600 space-y-1">
+                <div><span class="font-medium">Target:</span> {{ session.lightningAddress }}</div>
+                <div><span class="font-medium">Mint:</span> {{ session.mintUrl }}</div>
+                <div><span class="font-medium">Initial:</span> {{ session.initialAmount }} sats</div>
+                <div><span class="font-medium">Melted:</span> {{ session.totalMelted }} sats</div>
+                <div><span class="font-medium">Remaining:</span> {{ session.remainingAmount }} sats ({{ session.remainingProofs.length }} proofs)</div>
+                <div><span class="font-medium">Rounds:</span> {{ session.rounds.length }}</div>
+              </div>
+            </div>
+
+            <div class="space-y-2 mt-3">
+              <div class="flex space-x-2">
+                <button
+                  @click="copyMeltSessionProofs(session)"
+                  class="flex-1 text-xs bg-blue-100 text-blue-800 px-3 py-2 rounded hover:bg-blue-200 transition-colors"
+                >
+                  Copy Remaining Token
+                </button>
+                <button
+                  @click="copyMeltSessionRaw(session.remainingProofs)"
+                  class="flex-1 text-xs bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors"
+                >
+                  Copy Raw JSON
+                </button>
+              </div>
+              <div class="flex space-x-2">
+                <button
+                  @click="moveToChangeJar(session)"
+                  class="flex-1 text-xs bg-green-100 text-green-800 px-3 py-2 rounded hover:bg-green-200 transition-colors"
+                >
+                  Move to Change Jar
+                </button>
+                <button
+                  @click="deleteMeltSession(session.sessionId)"
+                  class="text-xs bg-red-100 text-red-800 px-3 py-2 rounded hover:bg-red-200 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Storage Info Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <h2 class="text-lg font-semibold mb-3 flex items-center">
@@ -251,14 +349,16 @@
 <script>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { getProofs } from '../services/storageService';
 import { getEncodedToken } from '@cashu/cashu-ts';
+import meltSessionStorageManager from '../services/new/storage/meltSessionStorageManager';
+import { storeChangeForMint } from '../services/storageService';
 
 export default {
   name: 'DebugRecoveryView',
   setup() {
     const router = useRouter();
     const v2Proofs = ref({});
+    const incompleteMeltSessions = ref([]);
     const showConfirmModal = ref(false);
     const confirmMessage = ref('');
     const confirmAction = ref(null);
@@ -266,6 +366,10 @@ export default {
     const toastMessage = ref('');
     const fileInput = ref(null);
     const importStatus = ref(null);
+
+    const totalIncompleteSats = computed(() => {
+      return incompleteMeltSessions.value.reduce((sum, session) => sum + session.remainingAmount, 0);
+    });
 
     const storageInfo = computed(() => {
       const keys = Object.keys(localStorage);
@@ -287,9 +391,145 @@ export default {
       router.back();
     };
 
+    const loadMeltSessions = () => {
+      try {
+        // Get all sessions and filter for those with remaining proofs
+        const allSessions = meltSessionStorageManager.getAllItems();
+        const sessionsWithRemainingProofs = allSessions.filter(session => {
+          return session.remainingProofs &&
+                 session.remainingProofs.length > 0 &&
+                 session.remainingAmount > 0;
+        });
+        
+        incompleteMeltSessions.value = sessionsWithRemainingProofs;
+        console.log('Loaded melt sessions with remaining proofs:', sessionsWithRemainingProofs);
+      } catch (error) {
+        console.error('Error loading melt sessions:', error);
+        showToastMessage('Error loading melt sessions');
+      }
+    };
+
+    const formatSessionId = (sessionId) => {
+      if (sessionId.length <= 20) return sessionId;
+      return `${sessionId.substring(0, 10)}...${sessionId.substring(sessionId.length - 10)}`;
+    };
+
+    const copyMeltSessionProofs = async (session) => {
+      try {
+        if (!session.remainingProofs || session.remainingProofs.length === 0) {
+          showToastMessage('No remaining proofs to copy');
+          return;
+        }
+
+        const tokenData = {
+          mint: session.mintUrl,
+          proofs: session.remainingProofs
+        };
+        const token = getEncodedToken(tokenData);
+        
+        await navigator.clipboard.writeText(token);
+        showToastMessage(`Copied ${session.remainingAmount} sats token to clipboard`);
+      } catch (error) {
+        console.error('Error copying melt session proofs:', error);
+        showToastMessage('Error copying token');
+      }
+    };
+
+    const copyMeltSessionRaw = async (proofs) => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(proofs, null, 2));
+        showToastMessage('Copied raw proofs to clipboard');
+      } catch (error) {
+        console.error('Error copying raw proofs:', error);
+        showToastMessage('Error copying raw proofs');
+      }
+    };
+
+    const moveToChangeJar = async (session) => {
+      confirmMessage.value = `Move ${session.remainingAmount} sats from melt session to change jar? This will store the remaining proofs for later use.`;
+      confirmAction.value = async () => {
+        try {
+          if (!session.remainingProofs || session.remainingProofs.length === 0) {
+            showToastMessage('No remaining proofs to move');
+            return;
+          }
+
+          // Store proofs in change jar
+          const success = await storeChangeForMint(session.mintUrl, session.remainingProofs);
+          
+          if (success) {
+            // Delete the melt session after successfully storing proofs
+            meltSessionStorageManager.removeByKey(session.sessionId);
+            loadMeltSessions();
+            showToastMessage(`Moved ${session.remainingAmount} sats to change jar`);
+          } else {
+            showToastMessage('Error storing proofs in change jar');
+          }
+        } catch (error) {
+          console.error('Error moving to change jar:', error);
+          showToastMessage('Error moving to change jar');
+        }
+      };
+      showConfirmModal.value = true;
+    };
+
+    const deleteMeltSession = (sessionId) => {
+      confirmMessage.value = `Delete melt session ${formatSessionId(sessionId)}? This will remove the session but proofs can still be recovered from the token.`;
+      confirmAction.value = () => {
+        try {
+          meltSessionStorageManager.removeByKey(sessionId);
+          loadMeltSessions();
+          showToastMessage('Melt session deleted');
+        } catch (error) {
+          console.error('Error deleting melt session:', error);
+          showToastMessage('Error deleting session');
+        }
+      };
+      showConfirmModal.value = true;
+    };
+
     const loadV2Proofs = () => {
       try {
-        v2Proofs.value = getProofs();
+        const allProofs = {};
+        
+        // Load from v2 storage keys
+        const v2Keys = {
+          'incoming': 'receipt-cash-v2-money-incoming',
+          'dev': 'receipt-cash-v2-money-dev',
+          'payer': 'receipt-cash-v2-money-payer'
+        };
+        
+        Object.entries(v2Keys).forEach(([category, storageKey]) => {
+          const stored = localStorage.getItem(storageKey);
+          if (stored) {
+            try {
+              const data = JSON.parse(stored);
+              // The v2 storage uses a Map structure with keys like "receiptId-settlementId"
+              Object.entries(data).forEach(([key, item]) => {
+                if (item && item.proofs && Array.isArray(item.proofs) && item.proofs.length > 0) {
+                  // Use the key as transaction ID
+                  if (!allProofs[key]) {
+                    allProofs[key] = {
+                      timestamp: item.timestamp || Date.now(),
+                      categories: {}
+                    };
+                  }
+                  
+                  allProofs[key].categories[category] = {
+                    proofs: item.proofs,
+                    mintUrl: item.mintUrl || item.mint || 'Mint URL not stored',
+                    status: 'v2-storage',
+                    lastUpdated: item.timestamp || Date.now()
+                  };
+                }
+              });
+            } catch (e) {
+              console.error(`Error parsing ${storageKey}:`, e);
+            }
+          }
+        });
+        
+        v2Proofs.value = allProofs;
         console.log('Loaded v2 proofs:', v2Proofs.value);
       } catch (error) {
         console.error('Error loading v2 proofs:', error);
@@ -465,10 +705,13 @@ export default {
 
     onMounted(() => {
       loadV2Proofs();
+      loadMeltSessions();
     });
 
     return {
       v2Proofs,
+      incompleteMeltSessions,
+      totalIncompleteSats,
       storageInfo,
       showConfirmModal,
       confirmMessage,
@@ -478,11 +721,17 @@ export default {
       importStatus,
       goBack,
       loadV2Proofs,
+      loadMeltSessions,
       formatTransactionId,
+      formatSessionId,
       formatDate,
       calculateProofAmount,
       copyProofs,
       copyProofsRaw,
+      copyMeltSessionProofs,
+      copyMeltSessionRaw,
+      moveToChangeJar,
+      deleteMeltSession,
       exportAllProofs,
       exportLocalStorage,
       handleFileSelect,

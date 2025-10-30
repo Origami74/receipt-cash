@@ -59,6 +59,7 @@
           <span v-if="payoutDetails.recipient === 'developer'">👨‍💻</span>
           <span v-else-if="payoutDetails.type === 'lightning'">⚡</span>
           <span v-else-if="payoutDetails.type === 'cashu'">🥜</span>
+          <span v-else-if="payoutDetails.type === 'changejar'">💰</span>
         </div>
 
         <!-- Payout Details -->
@@ -146,6 +147,8 @@ export default {
           return 'LN-melt';
         case 'cashu':
           return 'Cashu payout';
+        case 'changejar':
+          return 'Saved Change'
         default:
           return 'Payout';
       }

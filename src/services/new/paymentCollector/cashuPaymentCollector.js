@@ -99,7 +99,6 @@ class CashuPaymentCollector {
       }
 
       // TODO: check if accepted mint
-
       const wallet = await cashuWalletManager.getWallet(incomingPayment.mintUrl)
 
       // Swap tokens so they cannot be spent after confirmation.
