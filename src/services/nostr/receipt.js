@@ -34,13 +34,42 @@ function receiptSettlements(receiptEventId){
 }
 
 function receiptConfirmations(receiptEventId){
-    return confirmations$
-    .pipe(
-        map(confirmations => 
-            confirmations.filter(confirmation => 
-                confirmation.tags.some(t => t[0] == "e" && t[1] == receiptEventId)
+    // For owned receipts, use the global confirmations$ stream
+    // For non-owned receipts, fetch confirmations directly
+    const filter = {kinds: [KIND_SETTLEMENT_CONFIRMATION], "#e": [receiptEventId]}
+    
+    const directConfirmations$ = merge(
+        globalEventStore.filters(filter),
+        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(onlyEvents())
+    ).pipe(
+        onlyEvents(),
+        mapEventsToStore(globalEventStore),
+        distinct(e => e.id),
+        mapEventsToTimeline(),
+        withImmediateValueOrDefault([]),
+    )
+    
+    // Combine both sources and deduplicate
+    return merge(
+        confirmations$.pipe(
+            map(confirmations =>
+                confirmations.filter(confirmation =>
+                    confirmation.tags.some(t => t[0] == "e" && t[1] == receiptEventId)
+                )
             )
         ),
+        directConfirmations$
+    ).pipe(
+        // Merge the arrays and deduplicate by event id
+        map(confirmations => {
+            const seen = new Set();
+            return confirmations.filter(c => {
+                if (seen.has(c.id)) return false;
+                seen.add(c.id);
+                return true;
+            });
+        }),
+        shareReplay(1)
     )
 }
 

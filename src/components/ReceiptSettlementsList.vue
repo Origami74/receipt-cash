@@ -28,8 +28,8 @@
                 <div class="flex items-center space-x-2">
                   <span
                     :class="{
-                      'text-green-600 font-medium': hasPayoutForSettlement(settlement),
-                      'text-orange-600 font-medium': !hasPayoutForSettlement(settlement)
+                      'text-green-600 font-medium': hasPayoutForSettlement(settlement) || !isOwnedReceipt,
+                      'text-orange-600 font-medium': !hasPayoutForSettlement(settlement) && isOwnedReceipt
                     }"
                   >
                     {{ hasPayoutForSettlement(settlement) ? 'Distributed' : 'Collected' }}
@@ -137,6 +137,11 @@ export default {
       }
     };
 
+    // Determine if receipt is owned
+    const isOwnedReceipt = computed(() => {
+      return props.receiptModel?.isOwnedReceipt || false;
+    });
+
     // Get confirmed settlements only
     const confirmedSettlements = computed(() => {
       return props.receiptModel?.confirmedSettlements || [];
@@ -170,6 +175,7 @@ export default {
     });
 
     return {
+      isOwnedReceipt,
       confirmedSettlements,
       expandedSettlements,
       hasPayoutForSettlement,
