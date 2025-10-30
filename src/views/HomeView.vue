@@ -290,18 +290,12 @@ export default {
     // Watch for changes to receiptId
     watch(receiptId, (newValue, oldValue) => {
       // If we're transitioning from having a receipt to no receipt,
-      // initialize the camera for scanning a new receipt
+      // don't automatically request camera - let user click button
       if (oldValue && !newValue) {
-        requestCameraPermission();
+        console.log('Returned to camera view, waiting for user to enable camera');
       }
     });
 
-    onMounted(() => {
-      // Only initialize camera if we're not showing a receipt
-      if (!receiptId.value) {
-        requestCameraPermission();
-      }
-    });
 
     onUnmounted(() => {
       if (qrScanner.value) {

@@ -71,11 +71,12 @@ npm run build
     - [ ] Recover proofs
     - [ ] Recover receipts (unique id per receipt)
 - [ ] Mint rate-limit issues
-- [ ] Bolt12
+- [ ] Bolt12 payouts
 - [ ] UX
-    - [ ] Make it faster
-    - [ ] Better recovery options
+    - [ ] Speed
+    - [ ] Recovery options / auto recover
     - [ ] State management
+    - [ ] Onboarding / Education
 
 
 ## Contributing
