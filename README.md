@@ -64,6 +64,20 @@ npm run build
 - **Cashu**: Ecash payments
 - **ppq.ai API**: Receipt OCR and data extraction
 
+
+## Roadmap
+- [ ] Use OTRTA (Routstr) for LLM calls
+- [ ] Seedphrase
+    - [ ] Recover proofs
+    - [ ] Recover receipts (unique id per receipt)
+- [ ] Mint rate-limit issues
+- [ ] Bolt12
+- [ ] UX
+    - [ ] Make it faster
+    - [ ] Better recovery options
+    - [ ] State management
+
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. 

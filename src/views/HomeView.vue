@@ -31,10 +31,10 @@
             <div class="flex items-center justify-center space-x-2">
               <img
                 src="/receipt-cash-logo.png"
-                alt="Receipt.Cash Logo"
+                alt="SugarDaddy.Cash Logo"
                 class="w-8 h-8"
               />
-              <h1 class="text-white text-center text-xl font-bold">Receipt.Cash</h1>
+              <h1 class="text-white text-center text-xl font-bold">SugarDaddy.Cash</h1>
             </div>
           </div>
           

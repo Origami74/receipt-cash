@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between">
       <div class="flex-1">
         <h3 class="font-medium">Update Available!</h3>
-        <p class="text-sm text-blue-100">A new version of Receipt.Cash is ready to install.</p>
+        <p class="text-sm text-blue-100">A new version of SugarDaddy.Cash is ready to install.</p>
       </div>
       <div class="flex gap-2 ml-4">
         <button 

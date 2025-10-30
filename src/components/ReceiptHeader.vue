@@ -11,7 +11,7 @@
       <!-- Logo in the center -->
       <img
         src="/receipt-cash-logo.png"
-        alt="Receipt.Cash Logo"
+        alt="SugarDaddy.Cash Logo"
         class="w-8 h-8"
       />
       

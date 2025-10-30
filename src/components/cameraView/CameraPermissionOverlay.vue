@@ -5,10 +5,10 @@
       <div class="flex items-center justify-center space-x-2 mb-4">
         <img
           src="/receipt-cash-logo.png"
-          alt="Receipt.Cash Logo"
+          alt="SugarDaddy.Cash Logo"
           class="w-8 h-8"
         />
-        <h1 class="text-xl font-bold">Receipt.Cash</h1>
+        <h1 class="text-xl font-bold">SugarDaddy.Cash</h1>
       </div>
       <div class="text-lg mb-2">Initializing Camera...</div>
       <div class="text-sm text-gray-300">Please wait while we set up your camera</div>
@@ -21,10 +21,10 @@
       <div class="flex items-center justify-center space-x-2 mb-4">
         <img
           src="/receipt-cash-logo.png"
-          alt="Receipt.Cash Logo"
+          alt="SugarDaddy.Cash Logo"
           class="w-10 h-10"
         />
-        <h1 class="text-2xl font-bold text-white">Receipt.Cash</h1>
+        <h1 class="text-2xl font-bold text-white">SugarDaddy.Cash</h1>
       </div>
       <div class="text-xl mb-4 text-white font-semibold">Camera Access Needed</div>
       <div class="text-base text-gray-100 mb-6 max-w-sm leading-relaxed">
