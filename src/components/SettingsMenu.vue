@@ -88,7 +88,6 @@
                   <option value="gpt-5-mini">gpt-5-mini</option>
                   <option value="gpt-5-codex">gpt-5-codex</option>
                   <option value="gpt-5">gpt-5</option>
-                  <option value="grok-4">grok-4</option>
                 </select>
               </div>
             </div>
