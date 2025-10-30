@@ -85,7 +85,10 @@
                   <option value="gpt-4.1-mini">gpt-4.1-mini</option>
                   <option value="gpt-4-turbo">gpt-4-turbo</option>
                   <option value="gpt-4o">gpt-4o</option>
-                  <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
+                  <option value="gpt-5-mini">gpt-5-mini</option>
+                  <option value="gpt-5-codex">gpt-5-codex</option>
+                  <option value="gpt-5">gpt-5</option>
+                  <option value="grok-4">grok-4</option>
                 </select>
               </div>
             </div>
