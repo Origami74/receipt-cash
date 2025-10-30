@@ -175,7 +175,7 @@ export default {
     onMounted(async () => {
       try {
         // Load the receipt model
-        fullReceiptModel(props.eventId).subscribe(model => {
+        fullReceiptModel(props.eventId, props.decryptionKey).subscribe(model => {
           console.warn(`📝🥜🥜🥜 Full Receipt Model:`, model);
           receiptModel.value = model;
           

@@ -59,35 +59,44 @@ function receiptPayouts(receiptEventId){
 
 const receiptModelCache = new Map()
 
-export const receiptModel = (receiptEventId) => {
+export const receiptModel = (receiptEventId, sharedEncryptionKey = null) => {
 
     if(receiptModelCache.has(receiptEventId)){
         return receiptModelCache.get(receiptEventId)
     }
 
-    const receipt$ = ownedReceiptsStorageManager.receipts$
+    // Create an observable that emits the metadata if the receipt is owned, or undefined if not
+    const metadata$ = ownedReceiptsStorageManager.receipts$
         .pipe(
             map(receipts => receipts.find(r => r.eventId == receiptEventId)),
-            filter(metadata => !!metadata),
+            startWith(undefined), // Start with undefined so we don't wait for owned receipts
+        )
+
+    const receipt$ = metadata$
+        .pipe(
             switchMap(metadata => {
             
-            const event$ = globalEventStore.hasEvent(metadata.id) 
-                ? globalEventStore.event(metadata.eventId).pipe(
-                    
-                    filter(e => !!e), 
+            // Always try to load the event from store or fetch it
+            const event$ = globalEventStore.hasEvent(receiptEventId)
+                ? globalEventStore.event(receiptEventId).pipe(
+                    filter(e => !!e),
                     take(1))
-                : globalEventLoader({id: metadata.eventId}).pipe(take(1))
+                : globalEventLoader({id: receiptEventId}).pipe(take(1))
 
-            const ownerSigner = metadata.privateKey ? SimpleSigner.fromKey(metadata.privateKey) : undefined
-            const sharedSigner = metadata.privateKey ? SimpleSigner.fromKey(metadata.sharedEncryptionKey) : undefined
+            // Use provided sharedEncryptionKey or fall back to metadata
+            const effectiveSharedKey = sharedEncryptionKey || metadata?.sharedEncryptionKey
+            
+            // Create signers only if we have metadata (owned receipt)
+            const ownerSigner = metadata?.privateKey ? SimpleSigner.fromKey(metadata.privateKey) : undefined
+            const sharedSigner = effectiveSharedKey ? SimpleSigner.fromKey(effectiveSharedKey) : undefined
 
-            const settlements$ = receiptSettlements(metadata.eventId)
-            const confirmations$ = receiptConfirmations(metadata.eventId)
-            const payouts$ = ownerSigner ? 
+            const settlements$ = receiptSettlements(receiptEventId)
+            const confirmations$ = receiptConfirmations(receiptEventId)
+            const payouts$ = ownerSigner ?
                 // If we own the receipt fetch the payouts
-                receiptPayouts(metadata.eventId).pipe(
+                receiptPayouts(receiptEventId).pipe(
                     // Every time the payouts array updates
-                    mergeMap(payout => 
+                    mergeMap(payout =>
                         // Decrypt the hidden content and then return the event again
                         unlockHiddenContent(payout, ownerSigner).then(() => payout)
                     ),
@@ -96,7 +105,7 @@ export const receiptModel = (receiptEventId) => {
                     // Temp fix till applesauce v4
                     withImmediateValueOrDefault([]),
                 )
-                // Otherwise ingore payouts
+                // Otherwise ignore payouts
                 : of([])
 
             return combineLatest({
@@ -124,12 +133,13 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
         return fullReceiptModelCache.get(receiptEventId)
     }
 
-    const fullReceiptModel$ = receiptModel(receiptEventId)
+    const fullReceiptModel$ = receiptModel(receiptEventId, sharedEncryptionKey)
         .pipe(
             map(receiptModel => {
-                const receiptContent = decryptAndParseReceipt(receiptModel.event, sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey)
-                const encryptionKey = sharedEncryptionKey ?? receiptModel.metadata.sharedEncryptionKey;
-                const receiptOwnerKeyHex = receiptModel.metadata.privateKey;
+                const effectiveEncryptionKey = sharedEncryptionKey ?? receiptModel.metadata?.sharedEncryptionKey;
+                const receiptContent = decryptAndParseReceipt(receiptModel.event, effectiveEncryptionKey)
+                const encryptionKey = effectiveEncryptionKey;
+                const receiptOwnerKeyHex = receiptModel.metadata?.privateKey;
                 
                 // More efficient approach: Create a Set of confirmed settlement IDs first
                 const confirmedSettlementIds = new Set(
