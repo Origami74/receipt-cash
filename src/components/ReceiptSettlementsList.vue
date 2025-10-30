@@ -28,11 +28,11 @@
                 <div class="flex items-center space-x-2">
                   <span
                     :class="{
-                      'text-green-600 font-medium': hasPayoutForSettlement(settlement) || !isOwnedReceipt,
-                      'text-orange-600 font-medium': !hasPayoutForSettlement(settlement) && isOwnedReceipt
+                      'text-green-600 font-medium': isPaidOut(settlement) || !isOwnedReceipt,
+                      'text-orange-600 font-medium': !isPaidOut(settlement) && isOwnedReceipt
                     }"
                   >
-                    {{ hasPayoutForSettlement(settlement) ? 'Distributed' : 'Collected' }}
+                    {{ isPaidOut(settlement) ? 'Distributed' : 'Collected' }}
                   </span>
                   <span class="text-gray-500">•</span>
                   <span class="font-medium">{{ formatSats(settlement.total || 0) }} sats</span>
@@ -147,11 +147,14 @@ export default {
       return props.receiptModel?.confirmedSettlements || [];
     });
 
-    // Check if settlement has payout (distributed) - placeholder for now
-    const hasPayoutForSettlement = (settlement) => {
-      // TODO: Check if this settlement has corresponding payout data
-      // For now, we'll check if there are any payouts in the receipt model
-      return props.receiptModel?.payouts && props.receiptModel.payouts.length > 0;
+    // Check if settlement has payout (distributed)
+    const isPaidOut = (settlement) => {
+      // For owned receipts, check the fullyPaidOut boolean
+      // For non-owned receipts, we don't track payouts so always return false
+      if (!isOwnedReceipt.value) {
+        return false;
+      }
+      return settlement.fullyPaidOut || false;
     };
 
     // Toggle settlement expansion
@@ -178,7 +181,7 @@ export default {
       isOwnedReceipt,
       confirmedSettlements,
       expandedSettlements,
-      hasPayoutForSettlement,
+      isPaidOut,
       toggleSettlement,
       formatFiat
     };

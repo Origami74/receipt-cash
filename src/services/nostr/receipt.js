@@ -1,13 +1,12 @@
-import { combineLatest, defer, distinct, filter, flatMap, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, tap, timer } from "rxjs";
-import { cacheRequest, globalEventLoader, globalEventStore, globalPool } from "./applesauce";
+import { combineLatest, distinct, filter, map, merge, mergeMap, of, ReplaySubject, share, shareReplay, startWith, switchMap, take, timer } from "rxjs";
+import { globalEventLoader, globalEventStore, globalPool } from "./applesauce";
 import { onlyEvents } from "applesauce-relay";
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION, KIND_SETTLEMENT_PAYOUT } from "./constants";
+import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from "./constants";
 import { mapEventsToStore, mapEventsToTimeline, withImmediateValueOrDefault } from "applesauce-core";
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
-import { getTagValue, unlockHiddenContent } from "applesauce-core/helpers";
-import { decryptAndParsePayout } from "../../utils/payoutUtils";
+import { getTagValue, unlockHiddenContent, getEncryptedContent } from "applesauce-core/helpers";
 import confirmations$ from "./confirmations";
 import payouts$ from "./payouts";
 import { SimpleSigner } from "applesauce-signers";
@@ -184,13 +183,60 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                     .filter(settlement => confirmedSettlementIds.has(settlement.id))
                     .map(settlement => {
                         const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
+                        const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
+                        
+                        // Calculate total payouts for this settlement (only if owned)
+                        let totalPayouts = 0;
+                        let fullyPaidOut = false;
+                        
+                        if (receiptModel.ownerSigner && receiptModel.payouts) {
+                            // Filter payouts that reference this settlement
+                            const settlementPayouts = receiptModel.payouts.filter(payout =>
+                                payout.tags.some(tag => tag[0] === 'e' && tag[1] === settlement.id)
+                            );
+                            
+                            
+                            // Deduplicate payouts by event ID
+                            const uniquePayouts = [];
+                            const seenIds = new Set();
+                            settlementPayouts.forEach(payout => {
+                                if (!seenIds.has(payout.id)) {
+                                    seenIds.add(payout.id);
+                                    uniquePayouts.push(payout);
+                                } else {
+                                    console.log(`   ⚠️ Duplicate payout detected: ${payout.id.substring(0, 8)}`);
+                                }
+                            });
+                            
+                            
+                            // Sum up payout amounts from decrypted content
+                            totalPayouts = uniquePayouts.reduce((sum, payout, index) => {
+                                try {
+                                    // Payout content should already be decrypted by receiptModel
+                                    const payoutContent = JSON.parse(getEncryptedContent(payout))
+                                    const amount = payoutContent?.amount || 0;
+                                    return sum + amount;
+                                } catch (error) {
+                                    console.error(`   Error parsing payout ${index + 1}:`, error);
+                                    return sum;
+                                }
+                            }, 0);
+                            
+                            // Check if fully paid out (within 1% tolerance)
+                            const tolerance = settlementTotal * 0.01;
+                            fullyPaidOut = Math.abs(totalPayouts - settlementTotal) <= tolerance;
+                        } else {
+                            console.log(`🔍 Skipping payout check for settlement ${settlement.id.substring(0, 8)} (not owned or no payouts)`);
+                        }
+                        
                         return {
                             event: settlement,
             
                             // settlement
                             paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
-                            total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
+                            total: settlementTotal,
+                            fullyPaidOut
                         }
                     })
     
@@ -198,13 +244,17 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                     .filter(settlement => !confirmedSettlementIds.has(settlement.id))
                     .map(settlement => {
                         const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
+                        const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
+                        
+                        // Unconfirmed settlements are never fully paid out
                         return {
                             event: settlement,
             
                             // settlement
                             paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
-                            total: parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0),
+                            total: settlementTotal,
+                            fullyPaidOut: false,
                         }
                     });
     

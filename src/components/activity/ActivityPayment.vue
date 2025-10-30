@@ -22,8 +22,8 @@
 
         <!-- Payment Status Icon -->
         <div class="mr-3">
-          <div v-if="true" class="w-3 h-3 bg-orange-500 rounded-full"></div>
-          <div v-else class="w-3 h-3 bg-green-500 rounded-full"></div>
+          <div v-if="settlement.fullyPaidOut" class="w-3 h-3 bg-green-500 rounded-full"></div>
+          <div v-else class="w-3 h-3 bg-orange-500 rounded-full"></div>
         </div>
 
         <!-- Payment Details -->
@@ -143,9 +143,10 @@ export default {
 
     const settlement = computed(() => {
       return props.settlement
-    }); 
+    });
     // Processing payments start expanded, completed payments start collapsed
-    const isExpanded = ref(true);
+    // If settlement is fully paid out, start collapsed
+    const isExpanded = ref(!props.settlement.fullyPaidOut);
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;

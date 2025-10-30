@@ -40,7 +40,7 @@
               <span v-if="!isErrorState">
                 {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
                 <span v-if="receiptStatus === 'processing'"> • Processing payouts</span>
-                <span v-if="receiptStatus === 'completed'"> • Fully paid out</span>
+                <span v-if="receiptStatus === 'completed'"> • All settlements paid out</span>
                 <span v-if="receiptStatus === 'pending'"> • Awaiting payments</span>
                 <span v-if="receiptStatus === 'error'"> • Errors detected</span>
               </span>
@@ -136,21 +136,15 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
-    // Determine if should be expanded based on activity
-    const hasActivity = computed(() => {
-      const hasUnconfirmed = (props.receiptModel.unConfirmedSettlements || []).length > 0;
-      const hasConfirmedWithoutPayouts = (props.receiptModel.confirmedSettlements || []).some(settlement => {
-        const payouts = props.receiptModel.receiptModel?.payouts || [];
-        return !payouts.some(payout => {
-          const payoutSettlementRefs = (payout.tags || []).filter(tag => tag[0] === 'e');
-          const settlementId = settlement.id || settlement.event?.id;
-          return payoutSettlementRefs.some(tag => tag[1] === settlementId);
-        });
-      });
-      return hasUnconfirmed || hasConfirmedWithoutPayouts;
+    // Determine if should be expanded based on payout status
+    // Collapse only if ALL confirmed settlements are fully paid out
+    const allSettlementsPaidOut = computed(() => {
+      const confirmedSettlements = props.receiptModel.confirmedSettlements || [];
+      if (confirmedSettlements.length === 0) return false;
+      return confirmedSettlements.every(settlement => settlement.fullyPaidOut === true);
     });
     
-    const isExpanded = ref(props.defaultExpanded || hasActivity.value);
+    const isExpanded = ref(props.defaultExpanded || !allSettlementsPaidOut.value);
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
@@ -178,11 +172,6 @@ export default {
         items: settlement.items || []
       }));
     });
-
-    const settlementsCount = computed(() => {
-      return allSettlements.value.length;
-    });
-
 
     const receiptTextClasses = computed(() => {
       switch (receiptStatus.value) {
@@ -243,8 +232,7 @@ export default {
       return props.receiptModel.title || "Untitled Receipt";
     });
 
-    // Receipt status will be derived from child ActivityPayment components
-    // For now, simple logic based on presence of payments
+    // Receipt status based on settlement payout status
     const receiptStatus = computed(() => {
       const payments = confirmedSettlements.value;
       
@@ -255,8 +243,12 @@ export default {
         return isOld ? 'error' : 'pending';
       }
 
-      // TODO: This should aggregate status from child ActivityPayment components
-      // For now, assume processing if we have payments
+      // Check if all settlements are fully paid out
+      if (allSettlementsPaidOut.value) {
+        return 'completed';
+      }
+
+      // Some settlements are still being processed
       return 'processing';
     });
 
