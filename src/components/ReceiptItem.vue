@@ -62,7 +62,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatSats, convertFromSats } from '../utils/pricingUtils.js';
 import { formatDate } from '../utils/dateUtils';
-import { receiptModel } from '../services/nostr/receipt.js';
+import { fullReceiptModel } from '../services/nostr/receipt.js';
 import { decryptAndParseReceipt } from '../utils/receiptUtils.js';
 import { decryptAndParseSettlement } from '../utils/settlementUtils.js';
 
@@ -78,51 +78,43 @@ export default {
     const router = useRouter();
     const decryptedContent = ref();
     const receiptEvent = ref();
-    const confirmedSettlementIds = ref([]);
     const confirmedSettlements = ref([]);
 
     const {privateKey: receiptPrivateKey, pubkey: receiptPubkey, eventId: receiptEventId, sharedEncryptionKey} = props.receipt;
 
-    // Calculate collected amount (settlements that have been received in app, not necessarily distributed yet)
+    // Calculate collected amount (settlements that have been confirmed)
     const collectedAmount = computed(() => {
+      return confirmedSettlements.value.reduce((total, settlement) => {
+        return total + (settlement.total || 0);
+      }, 0);
+    });
 
-      var total = 0
-      confirmedSettlements.value.forEach(settlementEvent => {
-        // get decrypted contents for calculation  
-        const decryptedSettlement = decryptAndParseSettlement(settlementEvent, sharedEncryptionKey)
-          
-        const settlementTotal = decryptedSettlement.settledItems.reduce((sum, item) => sum + item.total, 0);
-
-        total += settlementTotal;
-      })
-
-      return total
+    // Calculate distributed amount (settlements that are fully paid out)
+    const distributedAmount = computed(() => {      
+      const distributed = confirmedSettlements.value
+        .filter(settlement => settlement.fullyPaidOut === true)
+        .reduce((total, settlement) => {
+          return total + (settlement.total || 0);
+        }, 0);
+      
+      return distributed;
     });
 
     const receipt = computed(() => {
       
       // Calculate total from parsed items
       const totalAmount = decryptedContent.value?.items?.reduce((sum, item) => sum + (item.total || item.quantity * item.price || 0), 0) || 0;
-      
-      // console.log('Debug receipt calculation:', {
-      //   hasDecryptedContent: !!decryptedContent.value,
-      //   hasItems: !!decryptedContent.value?.items,
-      //   itemsCount: decryptedContent.value?.items?.length,
-      //   items: decryptedContent.value?.items,
-      //   calculatedTotal: totalAmount,
-      //   confirmedAmount: collectedAmount.value
-      // });
 
       return {
         id: receiptEvent.value?.id,
         eventId: receiptEvent.value?.id,
-        title: decryptedContent.value?.title, // No merchant in simplified model
+        title: decryptedContent.value?.title,
         created_at: receiptEvent.value?.created_at,
         totalAmount,
         currency: decryptedContent.value?.currency,
         btcPrice: decryptedContent.value?.btcPrice,
         itemCount: decryptedContent.value?.items?.length || 0,
-        distributedAmount: 0, // Hardcoded to 0 as requested
+        distributedAmount: distributedAmount.value,
         collectedAmount: collectedAmount.value,
       };
     });
@@ -161,34 +153,23 @@ export default {
     });
 
     const distributedPercent = computed(() => {
-      const distributedAmount = receipt.value.distributedAmount || 0;
       if (!receipt.value.totalAmount) return 0;
-      const percent = Math.round(distributedAmount / receipt.value.totalAmount * 100);
+      const distributedAmt = receipt.value.distributedAmount || 0;
+      if (distributedAmt === 0) return 0;
+      
+      // Calculate percentage - use Math.ceil to show at least 1% if there's any distributed amount
+      const percent = Math.ceil((distributedAmt / receipt.value.totalAmount) * 100);
       return Math.min(percent, 100); // Cap at 100%
     });
 
     onMounted(() => {
-      receiptModel(receiptEventId)
-      .subscribe(receipt => {
-        receiptEvent.value = receipt.event
-        decryptedContent.value = decryptAndParseReceipt(receipt.event, sharedEncryptionKey)
+      fullReceiptModel(receiptEventId, sharedEncryptionKey)
+      .subscribe(fullReceipt => {
+        receiptEvent.value = fullReceipt.receiptModel.event
+        decryptedContent.value = decryptAndParseReceipt(fullReceipt.receiptModel.event, sharedEncryptionKey)
         
-        // More efficient approach: Create a Set of confirmed settlement IDs first
-        confirmedSettlementIds.value = new Set(
-          receipt.confirmations.flatMap(confirmation =>
-            confirmation.tags
-              .filter(tag => tag[0] === 'e')
-              .map(tag => tag[1])
-          )
-        );
-        
-        // Then filter settlements using O(1) Set lookup
-        confirmedSettlements.value = receipt.settlements.filter(settlement =>
-          confirmedSettlementIds.value.has(settlement.id)
-        );
-
-        // TODO: payouts
-
+        // Use confirmed settlements from fullReceiptModel which includes fullyPaidOut boolean
+        confirmedSettlements.value = fullReceipt.confirmedSettlements || [];
       })
     });
 
