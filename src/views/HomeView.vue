@@ -6,7 +6,17 @@
       :decryption-key="decryptionKey"
     />
     <template v-else>
-      <div v-if="!capturedReceipt" class="camera-container">
+      <!-- Show captured image immediately after taking photo -->
+      <div v-if="capturedImage && !capturedReceipt" class="h-full flex flex-col bg-gray-900">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <img :src="capturedImage" alt="Captured receipt" class="max-w-full max-h-full object-contain" />
+        </div>
+        <div class="p-4 bg-black/50 text-white text-center">
+          <p class="text-sm">Processing receipt...</p>
+        </div>
+      </div>
+      
+      <div v-else-if="!capturedReceipt && !capturedImage" class="camera-container">
         <video ref="videoElement" class="h-full w-full object-cover"></video>
         
         <!-- Camera Permission Overlay Component -->
@@ -194,6 +204,8 @@ export default {
       }
     };
 
+    const capturedImage = ref(null);
+    
     const captureReceipt = async () => {
       if (!hasPermission.value) {
         await requestCameraPermission();
@@ -201,8 +213,6 @@ export default {
       }
 
       try {
-        isProcessing.value = true;
-        
         // Create a canvas element
         const canvas = document.createElement('canvas');
         const video = videoElement.value;
@@ -225,19 +235,34 @@ export default {
           reader.readAsDataURL(blob);
         });
         
-        showNotification('Processing receipt...', 'info');
-        
-        // Use receipt service to process the image
-        const processedReceipt = await receiptService.processReceiptImage(base64Image);
-        
-        // Store the processed receipt data
-        capturedReceipt.value = processedReceipt;
-        
-        showNotification('Receipt processed successfully!', 'success');
-        
-        // Stop the camera since we don't need it anymore
+        // Stop the camera immediately after capture
         if (qrScanner.value) {
           qrScanner.value.stop();
+        }
+        
+        // Show the captured image immediately
+        capturedImage.value = `data:image/jpeg;base64,${base64Image}`;
+        
+        isProcessing.value = true;
+        showNotification('Processing receipt...', 'info');
+        
+        // Process the image in the background
+        try {
+          const processedReceipt = await receiptService.processReceiptImage(base64Image);
+          
+          // Clear the image and show the processed receipt
+          capturedImage.value = null;
+          capturedReceipt.value = processedReceipt;
+          
+          showNotification('Receipt processed successfully!', 'success');
+        } catch (processingError) {
+          console.error('Error processing receipt:', processingError);
+          showNotification(processingError.message);
+          // Clear the image on error and restart camera
+          capturedImage.value = null;
+          if (hasPermission.value && qrScanner.value) {
+            qrScanner.value.start();
+          }
         }
         
       } catch (error) {
@@ -250,6 +275,7 @@ export default {
 
     const resetCapture = () => {
       capturedReceipt.value = null;
+      capturedImage.value = null;
       // Restart the camera if we have permission
       if (hasPermission.value && qrScanner.value) {
         qrScanner.value.start();
@@ -337,6 +363,7 @@ export default {
     return {
       videoElement,
       capturedReceipt,
+      capturedImage,
       hasPermission,
       notification,
       clearNotification,
@@ -349,7 +376,8 @@ export default {
       resetCapture,
       handleToggleActivity,
       handleQrCodeResult,
-      handleImageUpload
+      handleImageUpload,
+      requestCameraPermission
     };
   }
 };
