@@ -24,39 +24,48 @@
       style="bottom: 8rem;"
     >
       <!-- My Receipts -->
-      <router-link
-        to="/my-receipts"
-        @click="closeMenu"
-        class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
-        title="My Receipts"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5l-3-3H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v4.586a1 1 0 01-.293.707l-1.414 1.414A1 1 0 0018 13v4.586a1 1 0 01-.293.707L15 21z" />
-        </svg>
-      </router-link>
+      <div class="flex items-center justify-end gap-3">
+        <span class="text-white text-xs font-medium bg-black/50 px-3 py-1.5 rounded whitespace-nowrap">My Receipts</span>
+        <router-link
+          to="/my-receipts"
+          @click="closeMenu"
+          class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
+          title="My Receipts"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5l-3-3H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v4.586a1 1 0 01-.293.707l-1.414 1.414A1 1 0 0018 13v4.586a1 1 0 01-.293.707L15 21z" />
+          </svg>
+        </router-link>
+      </div>
 
       <!-- Paid Receipts -->
-      <router-link
-        to="/paid-receipts"
-        @click="closeMenu"
-        class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
-        title="Paid Receipts"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </router-link>
+      <div class="flex items-center justify-end gap-3">
+        <span class="text-white text-xs font-medium bg-black/50 px-3 py-1.5 rounded whitespace-nowrap">Paid Receipts</span>
+        <router-link
+          to="/paid-receipts"
+          @click="closeMenu"
+          class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
+          title="Paid Receipts"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </router-link>
+      </div>
 
       <!-- Activity -->
-      <button
-        @click="handleActivity"
-        class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
-        title="Activity"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
-        </svg>
-      </button>
+      <div class="flex items-center justify-end gap-3">
+        <span class="text-white text-xs font-medium bg-black/50 px-3 py-1.5 rounded whitespace-nowrap">Activity</span>
+        <button
+          @click="handleActivity"
+          class="w-12 h-12 rounded-lg bg-black/50 border-2 border-white/50 flex items-center justify-center hover:bg-black/70 active:bg-black/90 transition-colors group cursor-pointer"
+          title="Activity"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
+          </svg>
+        </button>
+      </div>
 
     </div>
 
@@ -65,7 +74,6 @@
       v-if="isMenuOpen"
       @click="closeMenu"
       class="fixed inset-0 bg-transparent"
-      <!-- style="z-index: 9;" -->
     ></div>
   </div>
 </template>
@@ -120,7 +128,9 @@ export default {
 }
 
 .camera-quick-nav button,
-.camera-quick-nav a {
+.camera-quick-nav a,
+.camera-quick-nav span,
+.camera-quick-nav div > div {
   pointer-events: auto;
 }
 

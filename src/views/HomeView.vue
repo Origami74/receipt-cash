@@ -284,7 +284,7 @@ export default {
     
     const handleToggleActivity = () => {
       console.log('Activity toggle requested from camera quick nav');
-      // TODO: Implement activity functionality
+      router.push('/activity');
     };
 
     // Watch for changes to receiptId
