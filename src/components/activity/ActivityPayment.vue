@@ -51,7 +51,7 @@
       </div>
 
       <!-- Payout Operations (Full Width) -->
-      <div v-if="(payouts && payouts.length > 0) || (activeMeltRounds && activeMeltRounds.length > 0)" class="ml-8">
+      <div v-if="(payouts && payouts.length > 0) || (activeMeltRounds && activeMeltRounds.length > 0) || (unsentPayerTokens && unsentPayerTokens.length > 0) || (unsentDevTokens && unsentDevTokens.length > 0)" class="ml-8">
         <p class="text-xs text-gray-600 mb-2">Payout operations:</p>
         <div class="space-y-1">
           <!-- Active Lightning Melt Rounds -->
@@ -59,6 +59,22 @@
             v-for="meltRound in activeMeltRounds"
             :key="`${meltRound.sessionId}-${meltRound.roundNumber}`"
             :melt-round="meltRound"
+          />
+          
+          <!-- Unsent Payer Tokens -->
+          <ActivityUnsentToken
+            v-for="unsentToken in unsentPayerTokens"
+            :key="`unsent-payer-${unsentToken.receiptEventId}-${unsentToken.settlementEventId}`"
+            :text="`Unsent Payer payout`"
+            :unsent-token="unsentToken"
+          />
+          
+          <!-- Unsent Dev Tokens -->
+          <ActivityUnsentToken
+            v-for="unsentToken in unsentDevTokens"
+            :key="`unsent-dev-${unsentToken.receiptEventId}-${unsentToken.settlementEventId}`"
+            :text="`Unsent Dev payout`"
+            :unsent-token="unsentToken"
           />
           
           <!-- Completed Payouts -->
@@ -79,17 +95,20 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
 import ActivityPayout from './ActivityPayout.vue';
 import ActivityMeltRound from './ActivityMeltRound.vue';
+import ActivityUnsentToken from './ActivityUnsentToken.vue';
 import { receiptModel } from '../../services/nostr/receipt.js';
 import { globalEventStore } from '../../services/nostr/applesauce.js';
 import { KIND_SETTLEMENT, KIND_SETTLEMENT_PAYOUT } from '../../services/nostr/constants.js';
 import meltSessionStorageManager from '../../services/new/storage/meltSessionStorageManager.js';
+import { moneyStorageManager } from '../../services/new/storage/moneyStorageManager.js';
 import { watchEventsUpdates } from 'applesauce-core';
 
 export default {
   name: 'ActivityPayment',
   components: {
     ActivityPayout,
-    ActivityMeltRound
+    ActivityMeltRound,
+    ActivityUnsentToken
   },
   props: {
     settlement: {
@@ -105,6 +124,8 @@ export default {
   setup(props) {
     const payouts = ref([])
     const activeMeltRounds = ref([])
+    const unsentPayerTokens = ref([])
+    const unsentDevTokens = ref([])
     
     globalEventStore.timeline({
       kinds: [KIND_SETTLEMENT_PAYOUT],
@@ -113,6 +134,45 @@ export default {
     .subscribe( p => {
       payouts.value = p
     })
+
+    // Get unsent payer tokens for this settlement
+    const updateUnsentPayerTokens = () => {
+      const key = `${props.receiptId}-${props.settlement.event.id}`;
+      const payerToken = moneyStorageManager.payer.getByKey(key);
+      
+      if (payerToken && !payerToken.isSpent && payerToken.proofs && payerToken.proofs.length > 0) {
+        console.log(`📦 Found unsent payer token for settlement ${key}: ${payerToken.splitAmount} sats`);
+        unsentPayerTokens.value = [payerToken];
+      } else {
+        unsentPayerTokens.value = [];
+      }
+    };
+
+    // Get unsent dev tokens for this settlement
+    const updateUnsentDevTokens = () => {
+      const key = `${props.receiptId}-${props.settlement.event.id}`;
+      const devToken = moneyStorageManager.dev.getByKey(key);
+      
+      if (devToken && !devToken.isSpent && devToken.proofs && devToken.proofs.length > 0) {
+        console.log(`📦 Found unsent dev token for settlement ${key}: ${devToken.splitAmount} sats`);
+        unsentDevTokens.value = [devToken];
+      } else {
+        unsentDevTokens.value = [];
+      }
+    };
+
+    // Initial load of unsent tokens
+    updateUnsentPayerTokens();
+    updateUnsentDevTokens();
+
+    // Subscribe to money storage changes
+    const payerMoneySubscription = moneyStorageManager.payer.items$.subscribe(() => {
+      updateUnsentPayerTokens();
+    });
+
+    const devMoneySubscription = moneyStorageManager.dev.items$.subscribe(() => {
+      updateUnsentDevTokens();
+    });
 
     // Get active melt rounds for this settlement
     const updateActiveMeltRounds = () => {
@@ -139,9 +199,11 @@ export default {
       updateActiveMeltRounds();
     });
 
-    // Cleanup subscription on unmount
+    // Cleanup subscriptions on unmount
     onUnmounted(() => {
       subscription.unsubscribe();
+      payerMoneySubscription.unsubscribe();
+      devMoneySubscription.unsubscribe();
     });
 
     const settlement = computed(() => {
@@ -174,6 +236,8 @@ export default {
     return {
       payouts,
       activeMeltRounds,
+      unsentPayerTokens,
+      unsentDevTokens,
       settlement,
       isExpanded,
       toggleExpanded,

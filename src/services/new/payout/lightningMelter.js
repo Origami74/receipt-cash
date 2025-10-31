@@ -122,7 +122,6 @@ class LightningMelter {
       
     } catch (error) {
       console.error('Error requesting invoice:', error);
-      console.error(JSON.stringify(error.stack));
       throw new Error(`Failed to request invoice from ${lnAddress}: ${error.message}`);
     }
   }

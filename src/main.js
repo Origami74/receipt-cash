@@ -10,8 +10,10 @@ import { cashuDmSender } from './services/new/payout/cashuDmSender';
 import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import lightningMelter from './services/new/payout/lightningMelter';
+import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
 
 
+receiptLifecycleManager.start()
 incomingPaymentSplitter.start()
 
 devPayoutManager.start()
