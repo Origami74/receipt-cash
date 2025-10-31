@@ -222,9 +222,9 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                                 }
                             }, 0);
                             
-                            // Check if fully paid out (within 1% tolerance)
-                            const tolerance = settlementTotal * 0.01;
-                            fullyPaidOut = Math.abs(totalPayouts - settlementTotal) <= tolerance;
+                            // Check if fully paid out (>= 99% of settlement total)
+                            const payoutPercentage = (totalPayouts / settlementTotal) * 100;
+                            fullyPaidOut = payoutPercentage >= 99;
                         } else {
                             console.log(`🔍 Skipping payout check for settlement ${settlement.id.substring(0, 8)} (not owned or no payouts)`);
                         }
