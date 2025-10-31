@@ -4,12 +4,12 @@ import App from './App.vue';
 import router from './router';
 import './style.css';
 import debugLogger from './services/debugService';
-import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
 import { incomingPaymentSplitter } from './services/new/incomingPaymentSplitter';
 import { devPayoutManager } from './services/new/payout/devPayoutManager';
 import { cashuDmSender } from './services/new/payout/cashuDmSender';
 import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
+import lightningMelter from './services/new/payout/lightningMelter';
 
 
 incomingPaymentSplitter.start()
@@ -18,6 +18,11 @@ devPayoutManager.start()
 payerPayoutManager.start()
 
 cashuDmSender.start()
+
+ // Run recovery service after a short delay to ensure app is fully initialized
+setTimeout(async () => {
+  lightningMelter.start();
+}, 1000);
 
  // Run recovery service after a short delay to ensure app is fully initialized
 setTimeout(async () => {

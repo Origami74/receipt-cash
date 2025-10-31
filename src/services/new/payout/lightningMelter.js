@@ -87,7 +87,7 @@ class LightningMelter {
    * @param {Number} amount - Amount in satoshis
    * @returns {Promise<String>} Lightning invoice (payment request)
    */
-  async requestInvoice(lnAddress, amount) {
+  async requestInvoice(lnAddress, amount, comment = "Receipt Cash payment") {
     try {
       if (!lnAddress || !lnAddress.includes('@')) {
         throw new Error('Invalid Lightning address format');
@@ -114,7 +114,7 @@ class LightningMelter {
       // Request the invoice
       const invoice = await ln.requestInvoice({
         satoshi: amount,
-        comment: "Receipt Cash payment"
+        comment: comment
       });
       
       console.log(`✅ Invoice received: ${invoice.paymentRequest.substring(0, 50)}...`);
@@ -122,6 +122,7 @@ class LightningMelter {
       
     } catch (error) {
       console.error('Error requesting invoice:', error);
+      console.error(JSON.stringify(error.stack));
       throw new Error(`Failed to request invoice from ${lnAddress}: ${error.message}`);
     }
   }
@@ -206,12 +207,17 @@ class LightningMelter {
       
       if (!meltResult.success) {
         console.error('❌ Lightning melt failed - no sats were successfully melted');
+        
+        // Fail the session since no sats could be melted after all attempts
+        meltSessionStorageManager.failSession(finalSessionId, meltResult.error || 'Melt operation failed after all attempts');
+        
         return {
           success: false,
-          error: 'Melt operation failed',
+          error: meltResult.error || 'Melt operation failed',
           totalMelted: 0,
           remainingProofs: proofs,
-          remainingAmount: proofs.reduce((sum, p) => sum + p.amount, 0)
+          remainingAmount: proofs.reduce((sum, p) => sum + p.amount, 0),
+          sessionId: finalSessionId
         };
       }
 
@@ -449,6 +455,13 @@ class LightningMelter {
         } catch (error) {
           console.error(`Melt attempt ${meltAttempts} failed:`, error);
           
+          // Check if error is due to already spent tokens
+          const isTokenSpentError = error.message && (
+            error.message.includes('Token already spent') ||
+            error.message.includes('already spent') ||
+            error.message.includes('Tokens already spent')
+          );
+          
           // Mark current round as failed
           try {
             meltSessionStorageManager.updateCurrentRound(sessionId, false, {
@@ -458,6 +471,20 @@ class LightningMelter {
             });
           } catch (sessionError) {
             console.error('Failed to update round:', sessionError);
+          }
+          
+          // If tokens are already spent, fail the session immediately
+          if (isTokenSpentError) {
+            console.error('❌ Tokens already spent - failing session immediately');
+            meltSessionStorageManager.failSession(sessionId, 'Tokens already spent');
+            return {
+              success: false,
+              totalMelted: 0,
+              remainingProofs: [],
+              remainingAmount: 0,
+              attempts: meltAttempts,
+              error: 'Tokens already spent'
+            };
           }
           
           // Reduce target amount for next attempt
@@ -499,26 +526,43 @@ class LightningMelter {
   }
 
   /**
-   * Check for resumable sessions on startup
+   * Check for resumable sessions on startup and attempt to resume them
    */
   async _checkForResumableSessions() {
     try {
       const resumableSessions = meltSessionStorageManager.getResumableSessions();
       const incompleteSessions = meltSessionStorageManager.getIncompleteSessions();
       
-      if (resumableSessions.length > 0) {
-        console.log(`🔄 Found ${resumableSessions.length} resumable melt sessions`);
-        for (const session of resumableSessions) {
-          console.log(`⏸️  Session ${session.sessionId}: ${session.remainingAmount} sats remaining`);
-          // TODO: Implement automatic resumption or provide manual trigger
-        }
-      }
+      // Combine both types of sessions for resumption
+      const allResumableSessions = [...resumableSessions, ...incompleteSessions];
       
-      if (incompleteSessions.length > 0) {
-        console.log(`📋 Found ${incompleteSessions.length} incomplete melt sessions`);
-        for (const session of incompleteSessions) {
-          console.log(`⏸️  Session ${session.sessionId}: ${session.remainingAmount} sats can be resumed`);
+      if (allResumableSessions.length > 0) {
+        console.log(`🔄 Found ${allResumableSessions.length} resumable melt sessions, attempting to resume...`);
+        
+        for (const session of allResumableSessions) {
+          console.log(`⏸️  Resuming session ${session.sessionId}: ${session.remainingAmount} sats remaining`);
+          
+          try {
+            // Attempt to resume the session
+            const result = await this.resumeSession(session.sessionId);
+            
+            if (result.success && result.totalMelted > 0) {
+              console.log(`✅ Successfully resumed session ${session.sessionId}: melted ${result.totalMelted} sats`);
+            } else {
+              console.log(`⚠️ Session ${session.sessionId} resumed but no additional sats were melted`);
+            }
+          } catch (resumeError) {
+            console.error(`❌ Failed to resume session ${session.sessionId}:`, resumeError);
+            // Continue with other sessions even if one fails
+          }
+          
+          // Add a small delay between resumptions to avoid overwhelming the system
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+        
+        console.log(`✅ Finished processing ${allResumableSessions.length} resumable sessions`);
+      } else {
+        console.log('✅ No resumable melt sessions found');
       }
       
       // Clean up old sessions
@@ -558,12 +602,12 @@ class LightningMelter {
     console.log(`🔄 Resuming melt session: ${sessionId}`);
     console.log(`📊 Progress: ${session.totalMelted} sats melted, ${session.remainingAmount} sats remaining`);
     
-    // Resume with current session ID
-    return await this.melt(
+    // Resume by calling meltToLightningWithSession directly (session already exists)
+    return await this.meltToLightningWithSession(
+      sessionId,
       session.remainingProofs,
       session.lightningAddress,
-      session.mintUrl,
-      { ...options, sessionId }
+      session.mintUrl
     );
 
   }

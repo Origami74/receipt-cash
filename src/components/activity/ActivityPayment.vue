@@ -120,12 +120,15 @@ export default {
       const session = meltSessionStorageManager.getByKey(sessionId);
       
       if (session && session.status === 'active' && session.rounds) {
-        // Get all running rounds
-        const runningRounds = session.rounds.filter(round => round.running === true);
-        activeMeltRounds.value = runningRounds;
+        // Only show rounds that are NOT successfully completed
+        // Successful rounds have corresponding payout events shown separately
+        const incompleteRounds = session.rounds.filter(round => round.success !== true);
+        console.log(`✅ Showing ${incompleteRounds.length} incomplete rounds (filtered ${session.rounds.length - incompleteRounds.length} completed) for session ${sessionId}`);
+        activeMeltRounds.value = incompleteRounds;
       } else {
         activeMeltRounds.value = [];
       }
+      
     };
 
     // Initial load of active melt rounds
