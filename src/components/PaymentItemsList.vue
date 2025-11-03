@@ -83,12 +83,6 @@
                 }"
                 class="transition-all duration-300"
               ></div>
-              <!-- Pending settlements (yellow) - only show if not fully collected -->
-              <div
-                v-if="getPendingPercent(item) > 0 && getCollectedPercent(item) < 100"
-                :style="{ width: getPendingPercent(item) + '%' }"
-                class="bg-yellow-400 transition-all duration-300"
-              ></div>
             </div>
           </div>
           
@@ -103,7 +97,7 @@
               (<span :class="item.confirmedQuantity > item.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ item.confirmedQuantity }}</span><template v-if="item.selectedQuantity > 0 && !paymentInProgress && !paymentSuccess"><span class="text-blue-600 font-semibold"> + {{ item.selectedQuantity }}</span></template>/{{ item.quantity }})
             </span>
             × {{ formatSats(item.price) }} sats
-            <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span><span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
+            <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span>
           </div>
         </div>
       </div>
@@ -158,12 +152,6 @@ export default {
     getCollectedPercent(item) {
       if (!item.quantity || item.quantity === 0) return 0;
       return Math.min(100, (item.confirmedQuantity / item.quantity) * 100);
-    },
-    getPendingPercent(item) {
-      if (!item.quantity || item.quantity === 0) return 0;
-      const remaining = item.quantity - item.confirmedQuantity;
-      if (remaining <= 0) return 0;
-      return Math.min(100 - this.getCollectedPercent(item), (item.unconfirmedQuantity / item.quantity) * 100);
     }
   }
 };
