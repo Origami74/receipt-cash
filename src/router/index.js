@@ -14,7 +14,7 @@ const routes = [
   {
     path: '/paid-receipts',
     name: 'PaidReceipts',
-    component: () => import('../views/ReceiptHistoryView.vue')
+    component: () => import('../views/PaidReceiptsView.vue')
   },
   {
     path: '/activity',
