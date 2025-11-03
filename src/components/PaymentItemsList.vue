@@ -42,7 +42,10 @@
               class="px-2 py-1 text-sm border rounded hover:bg-gray-50"
               :disabled="item.selectedQuantity <= 0 || item.settled"
             >-</button>
-            <span class="w-8 text-center">{{ item.selectedQuantity }}</span>
+            <span
+              class="w-8 text-center transition-colors duration-300"
+              :class="{ 'text-blue-600 font-semibold': item.selectedQuantity > 0 }"
+            >{{ item.selectedQuantity }}</span>
             <button
               @click="$emit('increment-quantity', index)"
               class="px-2 py-1 text-sm border rounded hover:bg-gray-50"
@@ -64,6 +67,12 @@
           <!-- Settlement Progress Bar -->
           <div class="w-full bg-gray-200 rounded-full h-2 my-1">
             <div class="flex h-full rounded-full overflow-hidden">
+              <!-- Your selection (blue) - shows first if not in payment -->
+              <div
+                v-if="getSelectedPercent(item) > 0 && !paymentInProgress && !paymentSuccess"
+                :style="{ width: getSelectedPercent(item) + '%' }"
+                class="bg-blue-500 transition-all duration-500 ease-out"
+              ></div>
               <!-- Confirmed settlements - always green for payers (non-owned receipts) -->
               <div
                 v-if="getCollectedPercent(item) > 0"
@@ -91,7 +100,7 @@
                 'text-gray-500': getCollectedPercent(item) < 100
               }"
             >
-              (<span :class="item.confirmedQuantity > item.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ item.confirmedQuantity }}</span>/{{ item.quantity }})
+              (<span :class="item.confirmedQuantity > item.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ item.confirmedQuantity }}</span><template v-if="item.selectedQuantity > 0 && !paymentInProgress && !paymentSuccess"><span class="text-blue-600 font-semibold"> + {{ item.selectedQuantity }}</span></template>/{{ item.quantity }})
             </span>
             × {{ formatSats(item.price) }} sats
             <span class="text-xs text-gray-400 ml-1">({{ toFiat(item.price) }})</span><span v-if="item.unconfirmedQuantity > 0" class="text-orange-600"> + {{ item.unconfirmedQuantity }} pending payment</span>
@@ -99,9 +108,18 @@
         </div>
       </div>
       
-      <div :class="{ 'font-medium': !item.settled, 'text-gray-400': item.settled }" class="text-right">
+      <div
+        :class="{
+          'font-medium': !item.settled,
+          'text-gray-400': item.settled,
+          'text-blue-600': item.selectedQuantity > 0 && !item.settled && !paymentInProgress && !paymentSuccess
+        }"
+        class="text-right transition-colors duration-300"
+      >
         <div>{{ formatSats(item.price * item.selectedQuantity) }} sats</div>
-        <div class="text-xs text-gray-500">{{ toFiat(item.price * item.selectedQuantity) }}</div>
+        <div class="text-xs" :class="item.selectedQuantity > 0 && !item.settled && !paymentInProgress && !paymentSuccess ? 'text-blue-500' : 'text-gray-500'">
+          {{ toFiat(item.price * item.selectedQuantity) }}
+        </div>
       </div>
     </div>
   </div>
@@ -133,6 +151,10 @@ export default {
   },
   methods: {
     formatSats,
+    getSelectedPercent(item) {
+      if (!item.quantity || item.quantity === 0) return 0;
+      return Math.min(100, (item.selectedQuantity / item.quantity) * 100);
+    },
     getCollectedPercent(item) {
       if (!item.quantity || item.quantity === 0) return 0;
       return Math.min(100, (item.confirmedQuantity / item.quantity) * 100);
