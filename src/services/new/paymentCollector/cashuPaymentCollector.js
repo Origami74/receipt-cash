@@ -9,6 +9,8 @@ import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
 import { moneyStorageManager } from "../storage/moneyStorageManager";
 import cashuWalletManager from "../../flows/shared/cashuWalletManager";
+import { getEncodedToken } from "@cashu/cashu-ts";
+import { sumProofs } from "../../../utils/cashuUtils";
 
 /**
  * Collects cashu payments for a specific receipt
@@ -101,10 +103,18 @@ class CashuPaymentCollector {
       // TODO: check if accepted mint
       const wallet = await cashuWalletManager.getWallet(incomingPayment.mintUrl)
 
-      // Swap tokens so they cannot be spent after confirmation.
-      // NOTE: there is a small window between swap() and setItem() where there is a chance of proofs getting lost if processing stops right in between.
-      const {keep, send} = await wallet.swap(0, incomingPayment.proofs)
-      incomingPayment.proofs = keep;
+      // Construct token for wallet.receive()
+      const tokenData = {
+        mint: incomingPayment.mintUrl,
+        proofs: incomingPayment.proofs
+      };
+      const token = getEncodedToken(tokenData);
+      
+      // Receive tokens - this swaps them to fresh proofs that can't be double-spent
+      // NOTE: there is a small window between receive() and setItem() where there is a chance of proofs getting lost if processing stops right in between.
+      const receivedProofs = await wallet.receive(token);
+      console.log(`💰 Received ${receivedProofs.length} proofs (${sumProofs(receivedProofs)} sats) from ${incomingPayment.mintUrl}`);
+      incomingPayment.proofs = receivedProofs;
     
       // Store the proofs in browser storage
       await moneyStorageManager.incoming.setItem(incomingPayment)

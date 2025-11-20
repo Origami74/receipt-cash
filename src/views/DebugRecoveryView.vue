@@ -18,13 +18,13 @@
 
     <!-- Content -->
     <div class="p-4 space-y-6">
-      <!-- LocalStorage Export/Import Section -->
+      <!-- Database Export/Import Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <h2 class="text-lg font-semibold mb-3 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
           </svg>
-          LocalStorage Backup
+          Database Backup
         </h2>
         <p class="text-sm text-gray-600 mb-4">
           Export all app data to a file for backup or debugging. Import to restore from a previous backup.
@@ -38,7 +38,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Export LocalStorage
+            Download Database
           </button>
           
           <div class="relative">
@@ -56,7 +56,7 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Import LocalStorage
+              Import Database
             </button>
           </div>
           
@@ -69,14 +69,14 @@
         </div>
       </div>
 
-      <!-- V2 Proofs Section -->
+      <!-- Proofs Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-lg font-semibold flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            V2 Proofs
+            Proofs
           </h2>
           <button
             @click="loadV2Proofs"
@@ -90,11 +90,11 @@
         </div>
         
         <p class="text-sm text-gray-600 mb-4">
-          All Cashu v2 proofs stored in the app. Copy individual proofs or export all at once.
+          All Cashu proofs stored in the app. Copy individual proofs or export all at once.
         </p>
 
         <div v-if="Object.keys(v2Proofs).length === 0" class="text-sm text-gray-500 italic text-center py-8">
-          No v2 proofs found in storage
+          No proofs found in storage
         </div>
 
         <div v-else class="space-y-4">
@@ -144,18 +144,31 @@
                 </div>
               </div>
 
-              <div class="flex space-x-2 mt-2">
+              <div class="space-y-2 mt-2">
+                <div class="flex space-x-2">
+                  <button
+                    @click="copyProofs(txId, catName, category)"
+                    class="flex-1 text-xs bg-blue-100 text-blue-800 px-3 py-2 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    Copy Token
+                  </button>
+                  <button
+                    @click="copyProofsRaw(category.proofs)"
+                    class="flex-1 text-xs bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors"
+                  >
+                    Copy Raw JSON
+                  </button>
+                </div>
                 <button
-                  @click="copyProofs(txId, catName, category)"
-                  class="flex-1 text-xs bg-blue-100 text-blue-800 px-3 py-2 rounded hover:bg-blue-200 transition-colors"
+                  @click="checkProofsSpent(txId, catName, category)"
+                  :disabled="checkingProofs[`${txId}-${catName}`]"
+                  class="w-full text-xs px-3 py-2 rounded transition-colors"
+                  :class="checkingProofs[`${txId}-${catName}`]
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-amber-100 text-amber-800 hover:bg-amber-200'"
                 >
-                  Copy Token
-                </button>
-                <button
-                  @click="copyProofsRaw(category.proofs)"
-                  class="flex-1 text-xs bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors"
-                >
-                  Copy Raw JSON
+                  <span v-if="checkingProofs[`${txId}-${catName}`]">Checking...</span>
+                  <span v-else>Check if Spent</span>
                 </button>
               </div>
             </div>
@@ -301,7 +314,7 @@
           @click="confirmClearAll"
           class="w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors"
         >
-          Clear All LocalStorage
+          Clear All Database
         </button>
       </div>
     </div>
@@ -347,11 +360,12 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { getEncodedToken } from '@cashu/cashu-ts';
 import meltSessionStorageManager from '../services/new/storage/meltSessionStorageManager';
 import { storeChangeForMint } from '../services/storageService';
+import cashuService from '../services/flows/shared/cashuService';
 
 export default {
   name: 'DebugRecoveryView',
@@ -366,6 +380,7 @@ export default {
     const toastMessage = ref('');
     const fileInput = ref(null);
     const importStatus = ref(null);
+    const checkingProofs = reactive({});
 
     const totalIncompleteSats = computed(() => {
       return incompleteMeltSessions.value.reduce((sum, session) => sum + session.remainingAmount, 0);
@@ -506,6 +521,11 @@ export default {
               const data = JSON.parse(stored);
               // The v2 storage uses a Map structure with keys like "receiptId-settlementId"
               Object.entries(data).forEach(([key, item]) => {
+                // Skip items that are marked as spent
+                if (item && item.isSpent === true) {
+                  return;
+                }
+                
                 if (item && item.proofs && Array.isArray(item.proofs) && item.proofs.length > 0) {
                   // Use the key as transaction ID
                   if (!allProofs[key]) {
@@ -581,6 +601,26 @@ export default {
       } catch (error) {
         console.error('Error copying raw proofs:', error);
         showToastMessage('Error copying raw proofs');
+      }
+    };
+
+    const checkProofsSpent = async (txId, catName, category) => {
+      const key = `${txId}-${catName}`;
+      checkingProofs[key] = true;
+      
+      try {
+        const isSpent = await cashuService.checkProofsClaimed(category.proofs, category.mintUrl);
+        
+        if (isSpent) {
+          showToastMessage(`✅ All ${category.proofs.length} proofs are SPENT`);
+        } else {
+          showToastMessage(`⚠️ Some proofs are still UNSPENT - check console for details`);
+        }
+      } catch (error) {
+        console.error('Error checking proofs:', error);
+        showToastMessage('❌ Error checking proofs with mint');
+      } finally {
+        checkingProofs[key] = false;
       }
     };
 
@@ -732,6 +772,8 @@ export default {
       copyMeltSessionRaw,
       moveToChangeJar,
       deleteMeltSession,
+      checkProofsSpent,
+      checkingProofs,
       exportAllProofs,
       exportLocalStorage,
       handleFileSelect,

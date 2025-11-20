@@ -287,7 +287,10 @@ class IncomingPaymentSplitter {
         console.log(`👤 Payer share ${payerResult.wasAdded ? 'added' : 'updated'}: ${actualPayerAmount} sats`);
       }
 
-      console.log(`✅ Payment split completed: ${payment.receiptEventId.slice(0, 8)}...`);
+      // Mark the original incoming payment as spent after successful split
+      const spentPayment = { ...payment, isSpent: true };
+      moneyStorageManager.incoming.setItem(spentPayment);
+      console.log(`✅ Payment split completed and marked as spent: ${payment.receiptEventId.slice(0, 8)}...`);
 
     } catch (error) {
       console.error('❌ Error splitting payment:', error);
