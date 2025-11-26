@@ -391,6 +391,11 @@ class LightningMelter {
           // Split proofs to get exact amount needed
           const { keep: keepProofs, send: sendProofs } = await wallet.send(totalNeeded, remainingProofs);
           
+          // CRITICAL: Update remainingProofs IMMEDIATELY after split, before melt attempt
+          // This ensures if browser closes during melt, we don't have partially spent state
+          remainingProofs = keepProofs;
+          meltSessionStorageManager.updateSession(sessionId, 'active', remainingProofs, totalMelted);
+          
           // Create and save the round before attempting melt
           const round = {
             running: true,
@@ -408,9 +413,6 @@ class LightningMelter {
           const meltedAmount = sendProofs.reduce((sum, p) => sum + p.amount, 0);
           totalMelted += meltedAmount;
           console.log(`✅ Melt successful! Melted ${meltedAmount} sats`);
-          
-          // Update remaining proofs
-          remainingProofs = keepProofs;
           
           // Add any change from the melt operation
           let changeProofs = [];

@@ -170,6 +170,12 @@
                   <span v-if="checkingProofs[`${txId}-${catName}`]">Checking...</span>
                   <span v-else>Check if Spent</span>
                 </button>
+                <div v-if="proofCheckResults[`${txId}-${catName}`]" class="text-xs p-2 rounded mt-2" :class="{
+                  'bg-green-50 text-green-800': proofCheckResults[`${txId}-${catName}`].success,
+                  'bg-red-50 text-red-800': !proofCheckResults[`${txId}-${catName}`].success
+                }">
+                  {{ proofCheckResults[`${txId}-${catName}`].message }}
+                </div>
               </div>
             </div>
           </div>
@@ -224,7 +230,13 @@
                   Created: {{ formatDate(session.createdAt) }}
                 </div>
                 <div class="text-xs text-gray-500">
-                  Status: <span class="font-medium text-amber-600">{{ session.status }}</span>
+                  Status: <span class="font-medium" :class="{
+                    'text-amber-600': session.status !== 'failed',
+                    'text-red-600': session.status === 'failed'
+                  }">{{ session.status }}</span>
+                </div>
+                <div v-if="session.status === 'failed' && session.error" class="text-xs text-red-600 mt-1">
+                  Reason: {{ session.error }}
                 </div>
               </div>
             </div>
@@ -237,6 +249,59 @@
                 <div><span class="font-medium">Melted:</span> {{ session.totalMelted }} sats</div>
                 <div><span class="font-medium">Remaining:</span> {{ session.remainingAmount }} sats ({{ session.remainingProofs.length }} proofs)</div>
                 <div><span class="font-medium">Rounds:</span> {{ session.rounds.length }}</div>
+              </div>
+            </div>
+
+            <!-- Rounds Details (Collapsible) -->
+            <div v-if="session.rounds && session.rounds.length > 0" class="mt-3">
+              <button
+                @click="toggleRounds(session.sessionId)"
+                class="w-full flex items-center justify-between text-xs text-gray-700 hover:text-gray-900 bg-gray-100 px-3 py-2 rounded"
+              >
+                <span class="font-medium">View Rounds ({{ session.rounds.length }})</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" :class="{ 'rotate-180': expandedRounds[session.sessionId] }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <div v-if="expandedRounds[session.sessionId]" class="mt-2 space-y-2">
+                <div v-for="(round, index) in session.rounds" :key="index" class="border border-gray-200 rounded p-2 bg-white">
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="text-xs font-medium text-gray-900">
+                      Round {{ index + 1 }}
+                    </div>
+                    <div class="text-xs" :class="{
+                      'text-green-600': round.success,
+                      'text-red-600': !round.success,
+                      'text-amber-600': round.success === undefined
+                    }">
+                      {{ round.success ? '✅ Success' : round.success === false ? '❌ Failed' : '⏳ Pending' }}
+                    </div>
+                  </div>
+
+                  <div class="text-xs text-gray-600 space-y-1 mb-2">
+                    <div><span class="font-medium">Input:</span> {{ calculateProofAmount(round.inputProofs) }} sats ({{ round.inputProofs.length }} proofs)</div>
+                    <div v-if="round.meltedAmount"><span class="font-medium">Melted:</span> {{ round.meltedAmount }} sats</div>
+                    <div v-if="round.changeProofs"><span class="font-medium">Change:</span> {{ calculateProofAmount(round.changeProofs) }} sats ({{ round.changeProofs.length }} proofs)</div>
+                    <div v-if="round.quote"><span class="font-medium">Quote:</span> {{ round.quote.slice(0, 16) }}...</div>
+                    <div v-if="round.error" class="text-red-600"><span class="font-medium">Error:</span> {{ round.error }}</div>
+                  </div>
+
+                  <div class="flex space-x-2">
+                    <button
+                      @click="copyRoundInputProofs(session, round, index)"
+                      class="flex-1 text-xs bg-blue-100 text-blue-800 px-2 py-1.5 rounded hover:bg-blue-200 transition-colors"
+                    >
+                      Copy Input Token
+                    </button>
+                    <button
+                      @click="copyRoundInputProofsRaw(round.inputProofs)"
+                      class="flex-1 text-xs bg-gray-100 text-gray-800 px-2 py-1.5 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Copy Input JSON
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -255,19 +320,52 @@
                   Copy Raw JSON
                 </button>
               </div>
-              <div class="flex space-x-2">
-                <button
-                  @click="moveToChangeJar(session)"
-                  class="flex-1 text-xs bg-green-100 text-green-800 px-3 py-2 rounded hover:bg-green-200 transition-colors"
-                >
-                  Move to Change Jar
-                </button>
-                <button
-                  @click="deleteMeltSession(session.sessionId)"
-                  class="text-xs bg-red-100 text-red-800 px-3 py-2 rounded hover:bg-red-200 transition-colors"
-                >
-                  Delete
-                </button>
+              <div class="space-y-2">
+                <div class="flex space-x-2">
+                  <button
+                    @click="checkMeltSessionTokenStatus(session)"
+                    :disabled="checkingProofs[session.sessionId]"
+                    class="flex-1 text-xs px-3 py-2 rounded transition-colors"
+                    :class="checkingProofs[session.sessionId]
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-amber-100 text-amber-800 hover:bg-amber-200'"
+                  >
+                    <span v-if="checkingProofs[session.sessionId]">Checking...</span>
+                    <span v-else>Check Token Status</span>
+                  </button>
+                  <button
+                    v-if="session.status === 'failed'"
+                    @click="recoverMeltSession(session)"
+                    :disabled="checkingProofs[`recover-${session.sessionId}`]"
+                    class="flex-1 text-xs px-3 py-2 rounded transition-colors"
+                    :class="checkingProofs[`recover-${session.sessionId}`]
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-purple-100 text-purple-800 hover:bg-purple-200'"
+                  >
+                    <span v-if="checkingProofs[`recover-${session.sessionId}`]">Recovering...</span>
+                    <span v-else>Recover Session</span>
+                  </button>
+                </div>
+                <div class="flex space-x-2">
+                  <button
+                    @click="moveToChangeJar(session)"
+                    class="flex-1 text-xs bg-green-100 text-green-800 px-3 py-2 rounded hover:bg-green-200 transition-colors"
+                  >
+                    Move to Change Jar
+                  </button>
+                  <button
+                    @click="deleteMeltSession(session.sessionId)"
+                    class="text-xs bg-red-100 text-red-800 px-3 py-2 rounded hover:bg-red-200 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div v-if="proofCheckResults[session.sessionId]" class="text-xs p-2 rounded mt-2" :class="{
+                'bg-green-50 text-green-800': proofCheckResults[session.sessionId].success,
+                'bg-red-50 text-red-800': !proofCheckResults[session.sessionId].success
+              }">
+                {{ proofCheckResults[session.sessionId].message }}
               </div>
             </div>
           </div>
@@ -381,6 +479,8 @@ export default {
     const fileInput = ref(null);
     const importStatus = ref(null);
     const checkingProofs = reactive({});
+    const proofCheckResults = reactive({});
+    const expandedRounds = reactive({});
 
     const totalIncompleteSats = computed(() => {
       return incompleteMeltSessions.value.reduce((sum, session) => sum + session.remainingAmount, 0);
@@ -416,7 +516,7 @@ export default {
                  session.remainingAmount > 0;
         });
         
-        incompleteMeltSessions.value = sessionsWithRemainingProofs;
+        incompleteMeltSessions.value = allSessions;
         console.log('Loaded melt sessions with remaining proofs:', sessionsWithRemainingProofs);
       } catch (error) {
         console.error('Error loading melt sessions:', error);
@@ -607,20 +707,179 @@ export default {
     const checkProofsSpent = async (txId, catName, category) => {
       const key = `${txId}-${catName}`;
       checkingProofs[key] = true;
+      delete proofCheckResults[key];
       
       try {
         const isSpent = await cashuService.checkProofsClaimed(category.proofs, category.mintUrl);
         
         if (isSpent) {
+          proofCheckResults[key] = {
+            success: true,
+            message: `✅ All ${category.proofs.length} proofs are SPENT`
+          };
           showToastMessage(`✅ All ${category.proofs.length} proofs are SPENT`);
         } else {
+          proofCheckResults[key] = {
+            success: false,
+            message: `⚠️ Some proofs are still UNSPENT - check console for details`
+          };
           showToastMessage(`⚠️ Some proofs are still UNSPENT - check console for details`);
         }
       } catch (error) {
         console.error('Error checking proofs:', error);
-        showToastMessage('❌ Error checking proofs with mint');
+        proofCheckResults[key] = {
+          success: false,
+          message: `❌ Error: ${error.message || 'Failed to check proofs with mint'}`
+        };
+        showToastMessage(`❌ Error checking proofs: ${error.message || 'Unknown error'}`);
       } finally {
         checkingProofs[key] = false;
+      }
+    };
+
+    const checkMeltSessionTokenStatus = async (session) => {
+      const key = session.sessionId;
+      checkingProofs[key] = true;
+      delete proofCheckResults[key];
+      
+      try {
+        const isSpent = await cashuService.checkProofsClaimed(session.remainingProofs, session.mintUrl);
+        
+        if (isSpent) {
+          proofCheckResults[key] = {
+            success: true,
+            message: `✅ All ${session.remainingProofs.length} remaining proofs are SPENT`
+          };
+          showToastMessage(`✅ All ${session.remainingProofs.length} remaining proofs are SPENT`);
+        } else {
+          proofCheckResults[key] = {
+            success: false,
+            message: `⚠️ Some proofs are still UNSPENT (${session.remainingAmount} sats)`
+          };
+          showToastMessage(`⚠️ Some proofs are still UNSPENT (${session.remainingAmount} sats)`);
+        }
+      } catch (error) {
+        console.error('Error checking melt session token:', error);
+        proofCheckResults[key] = {
+          success: false,
+          message: `❌ Error: ${error.message || 'Failed to check token status'}`
+        };
+        showToastMessage(`❌ Error checking token: ${error.message || 'Unknown error'}`);
+      } finally {
+        checkingProofs[key] = false;
+      }
+    };
+    const recoverMeltSession = async (session) => {
+      const key = `recover-${session.sessionId}`;
+      checkingProofs[key] = true;
+      delete proofCheckResults[session.sessionId];
+      
+      try {
+        // Get wallet to check proof states
+        const cashuWallet = await import('../services/flows/shared/cashuWalletManager.js');
+        const walletInstance = await cashuWallet.default.getWallet(session.mintUrl);
+        
+        // Check which proofs are actually unspent
+        const stateCheckResult = await walletInstance.checkProofsStates(session.remainingProofs);
+        
+        const unspentResults = stateCheckResult.filter(result => result.state !== 'SPENT');
+        const spentResults = stateCheckResult.filter(result => result.state === 'SPENT');
+        
+        // Get the actual unspent proofs
+        const unspentProofs = unspentResults
+          .map(result => session.remainingProofs.find(p => p.secret === result.secret))
+          .filter(Boolean);
+        
+        const unspentAmount = unspentProofs.reduce((sum, p) => sum + p.amount, 0);
+        const spentAmount = session.remainingAmount - unspentAmount;
+        
+        console.log(`Recovery check: ${spentResults.length} spent (${spentAmount} sats), ${unspentResults.length} unspent (${unspentAmount} sats)`);
+        
+        if (unspentProofs.length === 0) {
+          // All proofs are spent, mark session as completed
+          const meltSessionManager = await import('../services/new/storage/meltSessionStorageManager.js');
+          meltSessionManager.default.completeSession(session.sessionId, {
+            success: true,
+            totalMelted: session.initialAmount,
+            remainingProofs: [],
+            remainingAmount: 0
+          });
+          
+          proofCheckResults[session.sessionId] = {
+            success: true,
+            message: `✅ Recovered: All proofs were spent. Session marked as completed.`
+          };
+          showToastMessage('✅ Session recovered and marked as completed');
+          loadMeltSessions();
+        } else if (unspentProofs.length < session.remainingProofs.length) {
+          // Some proofs are spent, update session with only unspent proofs
+          const meltSessionManager = await import('../services/new/storage/meltSessionStorageManager.js');
+          meltSessionManager.default.updateSession(
+            session.sessionId,
+            'active',
+            unspentProofs,
+            session.totalMelted + spentAmount
+          );
+          
+          proofCheckResults[session.sessionId] = {
+            success: true,
+            message: `✅ Recovered: Updated session with ${unspentProofs.length} unspent proofs (${unspentAmount} sats). ${spentResults.length} spent proofs (${spentAmount} sats) removed.`
+          };
+          showToastMessage(`✅ Session recovered: ${unspentAmount} sats remaining`);
+          loadMeltSessions();
+        } else {
+          // All proofs are still unspent
+          proofCheckResults[session.sessionId] = {
+            success: false,
+            message: `⚠️ All ${unspentProofs.length} proofs are still UNSPENT (${unspentAmount} sats). No recovery needed.`
+          };
+          showToastMessage('⚠️ All proofs still unspent, no recovery needed');
+        }
+      } catch (error) {
+        console.error('Error recovering melt session:', error);
+        proofCheckResults[session.sessionId] = {
+          success: false,
+          message: `❌ Recovery failed: ${error.message || 'Unknown error'}`
+        };
+        showToastMessage(`❌ Recovery failed: ${error.message || 'Unknown error'}`);
+      } finally {
+        checkingProofs[key] = false;
+      }
+    };
+
+    const toggleRounds = (sessionId) => {
+      expandedRounds[sessionId] = !expandedRounds[sessionId];
+    };
+
+    const copyRoundInputProofs = async (session, round, index) => {
+      try {
+        if (!round.inputProofs || round.inputProofs.length === 0) {
+          showToastMessage('No input proofs to copy');
+          return;
+        }
+
+        const tokenData = {
+          mint: session.mintUrl,
+          proofs: round.inputProofs
+        };
+        const token = getEncodedToken(tokenData);
+        
+        await navigator.clipboard.writeText(token);
+        const amount = calculateProofAmount(round.inputProofs);
+        showToastMessage(`Copied round ${index + 1} input token (${amount} sats)`);
+      } catch (error) {
+        console.error('Error copying round input proofs:', error);
+        showToastMessage('Error copying round input token');
+      }
+    };
+
+    const copyRoundInputProofsRaw = async (inputProofs) => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(inputProofs, null, 2));
+        showToastMessage('Copied round input proofs JSON');
+      } catch (error) {
+        console.error('Error copying round input proofs raw:', error);
+        showToastMessage('Error copying round input proofs');
       }
     };
 
@@ -773,7 +1032,14 @@ export default {
       moveToChangeJar,
       deleteMeltSession,
       checkProofsSpent,
+      checkMeltSessionTokenStatus,
+      recoverMeltSession,
       checkingProofs,
+      proofCheckResults,
+      expandedRounds,
+      toggleRounds,
+      copyRoundInputProofs,
+      copyRoundInputProofsRaw,
       exportAllProofs,
       exportLocalStorage,
       handleFileSelect,

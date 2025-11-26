@@ -59,17 +59,17 @@ class PayerPayoutManager {
   /**
    * Process all existing payer payments on startup
    */
-  _processExistingPayerPayments() {
+  async _processExistingPayerPayments() {
     const existingPayerPayments = moneyStorageManager.payer.getAllItems();
     if (existingPayerPayments.length > 0) {
       console.log(`📦 Processing ${existingPayerPayments.length} existing payer payments...`);
       
-      existingPayerPayments.forEach(async (payment) => {
+      for (const payment of existingPayerPayments) {
         if(payment.isSpent === true){
-            return;
+            continue;
         }
         await this._processPayerPayment(payment);
-      });
+      }
     } else {
       console.log('📭 No existing payer payments to process');
     }

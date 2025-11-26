@@ -70,17 +70,17 @@ class DevPayoutManager {
   /**
    * Process all existing dev payments on startup
    */
-  _processExistingDevPayments() {
+  async _processExistingDevPayments() {
     const existingDevPayments = moneyStorageManager.dev.getAllItems();
     if (existingDevPayments.length > 0) {
       console.log(`📦 Processing ${existingDevPayments.length} existing developer payments...`);
       
-      existingDevPayments.forEach(async (payment) => {
+      for (const payment of existingDevPayments) {
         if(payment.isSpent === true){
-            return;
+            continue;
         }
         await this._processDevPayment(payment);
-      });
+      }
     } else {
       console.log('📭 No existing developer payments to process');
     }
@@ -122,7 +122,7 @@ class DevPayoutManager {
         }
 
         // Immediately forward payment to developer (1-to-1)
-        cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mintUrl)
+        await cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, devPayment.proofs, devPayment.mintUrl)
 
         try {
           const ownerSigner = await this._createSignerFromSessionId(devPayment.receiptEventId);

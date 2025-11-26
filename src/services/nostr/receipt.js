@@ -204,7 +204,7 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                                     seenIds.add(payout.id);
                                     uniquePayouts.push(payout);
                                 } else {
-                                    console.log(`   ⚠️ Duplicate payout detected: ${payout.id.substring(0, 8)}`);
+                                    // console.log(`   ⚠️ Duplicate payout detected: ${payout.id.substring(0, 8)}`);
                                 }
                             });
                             

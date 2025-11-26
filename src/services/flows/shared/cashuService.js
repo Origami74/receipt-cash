@@ -2,6 +2,7 @@ import { PaymentRequest } from '@cashu/cashu-ts';
 import { LightningAddress } from '@getalby/lightning-tools';
 import nostrService from './nostr';
 import cashuWalletManager from './cashuWalletManager';
+import { sumProofs } from '../../../utils/cashuUtils';
 
 
  /**
@@ -20,6 +21,26 @@ import cashuWalletManager from './cashuWalletManager';
       // Check if proofs are still spendable (not claimed)
       const stateCheckResult = await wallet.checkProofsStates(proofs);
       
+      // Create a map for faster lookup
+      const stateMap = new Map(stateCheckResult.map(result => [result.secret, result.state]));
+      
+      // Calculate spent vs unspent with amounts
+      let spentCount = 0;
+      let unspentCount = 0;
+      let spentAmount = 0;
+      let unspentAmount = 0;
+      
+      proofs.forEach(proof => {
+        const state = stateMap.get(proof.secret);
+        if (state === 'SPENT') {
+          spentCount++;
+          spentAmount += proof.amount;
+        } else {
+          unspentCount++;
+          unspentAmount += proof.amount;
+        }
+      });
+      
       // If all proofs are spent, they were successfully claimed
       const allSpent = stateCheckResult.every(result => result.state === 'SPENT');
       
@@ -27,9 +48,7 @@ import cashuWalletManager from './cashuWalletManager';
         console.log(`All ${proofs.length} proofs have been claimed (SPENT), safe to delete`);
         return true;
       } else {
-        const unspentCount = stateCheckResult.filter(result => result.state !== 'SPENT').length;
-        const spentCount = stateCheckResult.filter(result => result.state === 'SPENT').length;
-        console.log(`${spentCount} of ${proofs.length} proofs SPENT, ${unspentCount} still UNSPENT - keeping in storage`);
+        console.log(`${spentCount} of ${proofs.length} proofs SPENT (${spentAmount} sats), ${unspentCount} still UNSPENT (${unspentAmount} sats) - keeping in storage`);
         return false;
       }
   }
