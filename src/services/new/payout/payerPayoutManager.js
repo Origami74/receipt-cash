@@ -1,9 +1,10 @@
 import { validateReceiveAddress } from '../../../utils/receiveAddressValidationUtils.js';
-import cashuService from '../../flows/shared/cashuService.js';
 import { getReceiveAddress } from '../../storageService.js';
-import { moneyStorageManager } from '../storage/moneyStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
 import lightningMelter from './lightningMelter.js';
+import { cocoService } from '../../cocoService';
+import { accountingService } from '../../accountingService';
+import { proofSafetyService } from '../../proofSafetyService';
 
 /**
  * payer Payout Manager Service
@@ -26,18 +27,20 @@ class PayerPayoutManager {
     this.isActive = true;
     console.log('🚀 Starting PayerPayoutManager...');
 
-    // Process existing payer payments on startup
-    this._processExistingPayerPayments();
+    // Process existing payer splits on startup
+    this._processExistingPayerSplits();
 
-    // Subscribe to new payer payments
-    const payerPaymentSubscription = moneyStorageManager.payer.itemAdded$.subscribe(
-      ({ item: payerPayment }) => {
-        console.log(`💼 New Payer payment: ${payerPayment.receiptEventId.slice(0, 8)}... (${payerPayment.splitAmount} sats)`);
-        this._processPayerPayment(payerPayment);
+    // Subscribe to new payer split records
+    const payerSplitSubscription = accountingService.records.itemAdded$.subscribe(
+      ({ item: record }) => {
+        if (record.type === 'payer_split') {
+          console.log(`💼 New payer split: ${record.receiptEventId.slice(0, 8)}... (${record.amount} sats)`);
+          this._processPayerSplit(record);
+        }
       }
     );
 
-    this.subscriptions.push(payerPaymentSubscription);
+    this.subscriptions.push(payerSplitSubscription);
   }
 
   stop() {
@@ -57,99 +60,201 @@ class PayerPayoutManager {
   }
 
   /**
-   * Process all existing payer payments on startup
+   * Process all existing payer splits on startup
    */
-  async _processExistingPayerPayments() {
-    const existingPayerPayments = moneyStorageManager.payer.getAllItems();
-    if (existingPayerPayments.length > 0) {
-      console.log(`📦 Processing ${existingPayerPayments.length} existing payer payments...`);
+  async _processExistingPayerSplits() {
+    const allRecords = accountingService.records.getAllItems();
+    const payerSplits = allRecords.filter(r => r.type === 'payer_split');
+    
+    if (payerSplits.length > 0) {
+      console.log(`📦 Processing ${payerSplits.length} existing payer splits...`);
       
-      for (const payment of existingPayerPayments) {
-        if(payment.isSpent === true){
-            continue;
-        }
-        await this._processPayerPayment(payment);
+      for (const split of payerSplits) {
+        await this._processPayerSplit(split);
       }
     } else {
-      console.log('📭 No existing payer payments to process');
+      console.log('📭 No existing payer splits to process');
     }
   }
 
   /**
-   * Process a payer payment and immediately forward it to the payer
-   * @param {Object} payerPayment - The payer payment object
-   * @param {string} payerPayment.receiptEventId - Receipt event ID
-   * @param {string} payerPayment.settlementEventId - Settlement event ID
-   * @param {Array} payerPayment.proofs - Array of Cashu proofs
-   * @param {string} payerPayment.mint - Mint URL
-   * @param {number} payerPayment.splitAmount - Amount in sats
-   * @param {string} payerPayment.splitType - Should be 'payer'
+   * Process a payer split and send payout with reserve checking
+   * @param {Object} payerSplit - The payer split accounting record
+   * @param {string} payerSplit.receiptEventId - Receipt event ID
+   * @param {string} payerSplit.settlementEventId - Settlement event ID
+   * @param {number} payerSplit.amount - Amount in sats
+   * @param {string} payerSplit.mintUrl - Mint URL
    */
-  async _processPayerPayment(payerPayment) {
+  async _processPayerSplit(payerSplit) {
     try {
-        console.log(`🔄 Processing payer payment: ${payerPayment.receiptEventId.slice(0, 8)}... → ${payerPayment.splitAmount} sats`);
-
-        // Log payment details
-        console.log(`📊 Payment details:`);
-        console.log(`   💰 Amount: ${payerPayment.splitAmount} sats (${payerPayment.splitPercentage}% of ${payerPayment.originalAmount} sats)`);
-        console.log(`   🏦 Mint: ${payerPayment.mint}`);
-        console.log(`   🔗 Proofs: ${payerPayment.proofs.length} proof(s)`);
-        console.log(`   📅 Processed: ${new Date(payerPayment.processedAt).toLocaleString()}`);
-        console.log(`   ↗️ IsSpent: ${payerPayment.isSpent}`);
-
-        if (payerPayment.proofs.length == 0) {
-            console.log(`   💰 payerPayment has no proofs, skipping`);
-        }
-
-        const proofsClaimed = await cashuService.checkProofsClaimed(payerPayment.proofs, payerPayment.mint)
-
-        if(proofsClaimed){
-            console.log(`   🔥 Proofs already claimed, skipping...`);
-            payerPayment.isSpent = true;
-            moneyStorageManager.payer.setItem(payerPayment)
-            return;
-        }
-
-        // Immediately forward payment to payer (1-to-1)
-        await this.payoutPayer(payerPayment)
-
-    } catch (error) {
-      console.error(`❌ Error processing payer payment ${payerPayment.receiptEventId}:`, error);
-    }
-  }
-  
-  async payoutPayer(payerPayment) {
-    try {
-        const receiveAddress = getReceiveAddress();
+        // Check if already paid out
+        const records = accountingService.getSettlementAccounting(
+          payerSplit.receiptEventId,
+          payerSplit.settlementEventId
+        );
         
+        if (records.some(r => r.type === 'payer_payout')) {
+          console.log(`⏭️ Payer payout already sent for ${payerSplit.receiptEventId.slice(0, 8)}...`);
+          return;
+        }
+
+        console.log(`🔄 Processing payer split: ${payerSplit.receiptEventId.slice(0, 8)}... → ${payerSplit.amount} sats`);
+
+        // Get receive address
+        const receiveAddress = getReceiveAddress();
         if (!receiveAddress) {
-        console.error('Cannot payout payer: no receive address found');
-        return false;
+          console.error('Cannot payout payer: no receive address found');
+          return;
         }
         
         const validation = validateReceiveAddress(receiveAddress);
-        
         if (!validation.isValid) {
-        console.error('Cannot payout payer: invalid receive address -', validation.error);
-        return false;
+          console.error('Cannot payout payer: invalid receive address -', validation.error);
+          return;
+        }
+
+        // Get reserve to check available funds
+        const reserve = accountingService.getReserve(
+          payerSplit.receiptEventId,
+          payerSplit.settlementEventId
+        );
+        
+        if (!reserve) {
+          console.error('Cannot payout payer: reserve not found');
+          return;
+        }
+
+        console.log(`📊 Reserve status: ${reserve.remainingReserve} sats remaining`);
+
+        // Get coco instance
+        const coco = cocoService.getCoco();
+        
+        let amountToSend = payerSplit.amount;
+        let fees = 0;
+        
+        // Handle Lightning with fee protection
+        if (validation.type === 'lightning') {
+          console.log(`⚡ Lightning payout requested`);
+          
+          // Create melt quote to check fee
+          const quote = await coco.quotes.createMeltQuote(payerSplit.mintUrl, receiveAddress);
+          const estimatedFee = quote.fee_reserve;
+          
+          console.log(`💸 Estimated Lightning fee: ${estimatedFee} sats`);
+          
+          // Calculate safe amount to send (protect reserve)
+          const maxAvailable = reserve.remainingReserve;
+          const safeAmount = Math.min(
+            payerSplit.amount,
+            maxAvailable - estimatedFee
+          );
+          
+          if (safeAmount <= 0) {
+            console.error(`❌ Insufficient reserve for Lightning fees (need ${estimatedFee}, have ${maxAvailable})`);
+            return;
+          }
+          
+          if (safeAmount < payerSplit.amount) {
+            console.warn(`⚠️ Reducing payout from ${payerSplit.amount} to ${safeAmount} sats due to fees`);
+          }
+          
+          amountToSend = safeAmount;
+          
+          // Send tokens using coco
+          const token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+          
+          // IMMEDIATELY store proofs in safety buffer
+          const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
+          proofSafetyService.storePendingPayout({
+            id: payoutId,
+            receiptEventId: payerSplit.receiptEventId,
+            settlementEventId: payerSplit.settlementEventId,
+            type: 'payer',
+            proofs: token.proofs,
+            mintUrl: payerSplit.mintUrl,
+            amount: amountToSend,
+            destination: receiveAddress,
+            createdAt: Date.now(),
+            status: 'pending'
+          });
+          
+          // Melt to Lightning
+          const sessionId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}`;
+          const meltResult = await lightningMelter.melt(
+            token.proofs,
+            receiveAddress,
+            payerSplit.mintUrl,
+            { sessionId }
+          );
+          
+          fees = meltResult.fees || 0;
+          console.log(`⚡ Lightning melt complete: ${amountToSend} sats sent, ${fees} sats fees`);
+          
+          // Mark as sent in safety buffer
+          proofSafetyService.markSent(payoutId);
+          
+        } else if (validation.type === 'cashu') {
+          console.log(`🥜 Cashu payout requested`);
+          
+          // Cashu has no fees, send full amount
+          const token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+          
+          // IMMEDIATELY store proofs in safety buffer
+          const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
+          proofSafetyService.storePendingPayout({
+            id: payoutId,
+            receiptEventId: payerSplit.receiptEventId,
+            settlementEventId: payerSplit.settlementEventId,
+            type: 'payer',
+            proofs: token.proofs,
+            mintUrl: payerSplit.mintUrl,
+            amount: amountToSend,
+            destination: receiveAddress,
+            createdAt: Date.now(),
+            status: 'pending'
+          });
+          
+          // Send via Cashu DM
+          await cashuDmSender.payCashuPaymentRequest(
+            receiveAddress,
+            token.proofs,
+            payerSplit.mintUrl
+          );
+          
+          // Mark as sent in safety buffer
+          proofSafetyService.markSent(payoutId);
+          
+          console.log(`🥜 Cashu payout complete: ${amountToSend} sats sent`);
+          
+        } else {
+          console.error('Unknown address type for payer payout:', validation.type);
+          return;
         }
         
-        if (validation.type == 'lightning') {
-          const sessionId = `${payerPayment.receiptEventId}-${payerPayment.settlementEventId}`;
-          await lightningMelter.melt(payerPayment.proofs, receiveAddress, payerPayment.mint, {
-            sessionId
-          })
-        }
-        else if (validation.type == 'cashu') {
-            await cashuDmSender.payCashuPaymentRequest(receiveAddress, payerPayment.proofs, payerPayment.mint)
-        } else{
-            console.error('Unknown address type for payer payout:', validation.type);
-        }
+        // Record payout in accounting
+        accountingService.recordPayerPayout(
+          payerSplit.receiptEventId,
+          payerSplit.settlementEventId,
+          amountToSend,
+          fees,
+          payerSplit.mintUrl,
+          payerSplit.amount // original amount before fee adjustment
+        );
         
+        // Update reserve
+        accountingService.updateReserveAfterPayout(
+          payerSplit.receiptEventId,
+          payerSplit.settlementEventId,
+          'payer',
+          amountToSend,
+          fees
+        );
+        
+        console.log(`✅ Payer payout complete with safety buffer`);
         
     } catch (error) {
-        console.error('Error in payoutPayer:', error);
-        return false;
+      console.error(`❌ Error processing payer split:`, error);
+      // Proofs are safe in buffer, will be retried on next startup
     }
   }
 }

@@ -15,6 +15,7 @@
     "@cashu/cashu-ts": "^2.5.2",
     "@getalby/sdk": "^5.1.1",
     "@scure/base": "^1.1.5",
+    "@scure/bip39": "^1.2.1",
     "@vueuse/core": "^10.9.0",
     "@vueuse/rxjs": "^13.9.0",
     "applesauce-accounts": "^3.1.0",
@@ -27,6 +28,7 @@
     "applesauce-signers": "^3.1.0",
     "canvas-confetti": "^1.9.3",
     "coco-cashu-core": "^1.0.0-rc.25",
+    "coco-cashu-indexeddb": "^1.0.0-rc.25",
     "nostr-idb": "^2.4.0",
     "pinia": "^2.1.7",
     "qr-scanner": "^1.4.2",
@@ -40,6 +42,7 @@
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
     "vite": "^5.1.4",
     "vite-plugin-pwa": "^0.19.2"
   }

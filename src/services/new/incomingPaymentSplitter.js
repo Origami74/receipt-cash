@@ -1,18 +1,16 @@
-import { moneyStorageManager } from './storage/moneyStorageManager.js';
 import { ownedReceiptsStorageManager } from './storage/ownedReceiptsStorageManager.js';
-import { globalEventLoader, globalEventStore, globalPool } from '../nostr/applesauce.js';
-import cashuWalletManager from '../flows/shared/cashuWalletManager.js';
+import { globalEventLoader, globalEventStore } from '../nostr/applesauce.js';
 import { DEFAULT_RELAYS } from '../nostr/constants.js';
-import { SimpleSigner } from 'applesauce-signers';
 import { nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { safeParseReceiptContent } from '../../parsing/receiptparser.js';
+import { accountingService } from '../accountingService';
 
 /**
  * Incoming Payment Splitter Service
- * 
- * Listens to incoming payments and splits proofs between developer and payer shares
- * based on the receipt's split percentage configuration.
+ *
+ * Listens to incoming payments and calculates split amounts (accounting only)
+ * No longer splits proofs - coco manages unified balance per mint
  */
 class IncomingPaymentSplitter {
   constructor() {
@@ -29,14 +27,16 @@ class IncomingPaymentSplitter {
     this.isActive = true;
     console.log('🚀 Starting IncomingPaymentSplitter...');
 
-    // Process existing incoming payments on startup
+    // Process existing accounting records on startup
     this._processExistingPayments();
 
-    // Subscribe to new incoming payments
-    const incomingSubscription = moneyStorageManager.incoming.itemAdded$.subscribe(
-      ({ item: payment }) => {
-        console.log(`💰 New incoming payment: ${payment.receiptEventId.slice(0, 8)}...`);
-        this._processIncomingPayment(payment, null);
+    // Subscribe to new incoming accounting records
+    const incomingSubscription = accountingService.records.itemAdded$.subscribe(
+      ({ item: record }) => {
+        if (record.type === 'incoming') {
+          console.log(`💰 New incoming payment: ${record.receiptEventId.slice(0, 8)}...`);
+          this._processIncomingPayment(record, null);
+        }
       }
     );
 
@@ -60,85 +60,70 @@ class IncomingPaymentSplitter {
   }
 
   /**
-   * Process all existing incoming payments on startup
+   * Process all existing incoming accounting records on startup
    */
   _processExistingPayments() {
-    const existingPayments = moneyStorageManager.incoming.getAllItems();
-    if (existingPayments.length > 0) {
-      console.log(`📦 Processing ${existingPayments.length} existing incoming payments...`);
-      existingPayments.forEach(payment => {
-        this._processIncomingPayment(payment, null);
+    const allRecords = accountingService.records.getAllItems();
+    const incomingRecords = allRecords.filter(r => r.type === 'incoming');
+    
+    if (incomingRecords.length > 0) {
+      console.log(`📦 Processing ${incomingRecords.length} existing incoming records...`);
+      incomingRecords.forEach(record => {
+        this._processIncomingPayment(record, null);
       });
     } else {
-      console.log('📭 No existing incoming payments to process');
+      console.log('📭 No existing incoming records to process');
     }
   }
 
   /**
-   * Process an incoming payment by splitting it according to receipt configuration
-   * @param {Object} payment - The incoming payment object
-   * @param {string} payment.receiptEventId - Receipt event ID
-   * @param {string} payment.settlementEventId - Settlement event ID
-   * @param {Array} payment.proofs - Array of Cashu proofs
-   * @param {string} payment.mintUrl - Mint URL
-   * @param {boolean} [payment.isSpent] - Whether the payment has been spent
+   * Process an incoming payment by calculating split amounts (accounting only)
+   * @param {Object} record - The incoming accounting record
+   * @param {string} record.receiptEventId - Receipt event ID
+   * @param {string} record.settlementEventId - Settlement event ID
+   * @param {number} record.amount - Amount in sats
+   * @param {string} record.mintUrl - Mint URL
    */
-  async _processIncomingPayment(payment, receiptEvent = null) {
+  async _processIncomingPayment(record, receiptEvent = null) {
     try {
-      console.log(`🔄 Processing payment: ${payment.receiptEventId.slice(0, 8)}... → ${payment.settlementEventId.slice(0, 8)}...`);
+      console.log(`🔄 Processing payment: ${record.receiptEventId.slice(0, 8)}... → ${record.settlementEventId.slice(0, 8)}...`);
+
+      // Check if already split
+      const existingRecords = accountingService.getSettlementAccounting(
+        record.receiptEventId,
+        record.settlementEventId
+      );
+      
+      if (existingRecords.some(r => r.type === 'dev_split' || r.type === 'payer_split')) {
+        console.log(`⏭️ Already split: ${record.receiptEventId.slice(0, 8)}...`);
+        return;
+      }
 
       // try get receipt event from store
       if(receiptEvent === null){
-        receiptEvent = await globalEventStore.getEvent(payment.receiptEventId);
+        receiptEvent = await globalEventStore.getEvent(record.receiptEventId);
       }
 
       // if still not there, subscribe to it and let it be handled later.
       if(receiptEvent === null || receiptEvent === undefined){
-        const sub = await globalEventLoader({ id: payment.receiptEventId, relays: DEFAULT_RELAYS,  })
+        const sub = await globalEventLoader({ id: record.receiptEventId, relays: DEFAULT_RELAYS,  })
           .subscribe((event) => {
-              this._processIncomingPayment(payment, event)
+              this._processIncomingPayment(record, event)
           });
           
         this.subscriptions.push(sub)
         return;
       }
-
-      // Split the payment if unspent, hasItem works here because of overlapping storage keys for all 'money' data.
-      if(moneyStorageManager.dev.hasItem(payment) || moneyStorageManager.payer.hasItem(payment)){
-        console.log(`⏭️ Skipping spent payment: already split...`);
-        return;
-      }
-
-      if(payment.isSpent == true){
-        return;
-      }
-
-      // Check if proofs are already spent
-      const spentStatus = await this._checkProofSpentStatus(payment.proofs, payment.mintUrl);
-      
-      // Update payment with spent status if changed
-      if (spentStatus.hasSpentProofs && !payment.isSpent) {
-        console.log(`💸 Marking payment as spent (${spentStatus.spentCount}/${spentStatus.totalCount} proofs spent)`);
-        const updatedPayment = { ...payment, isSpent: true };
-        moneyStorageManager.incoming.setItem(updatedPayment);
-        return; // Don't split spent payments
-      }
-
-      // Skip processing if already spent
-      if (payment.isSpent) {
-        console.log(`⏭️ Skipping spent payment: ${payment.receiptEventId.slice(0, 8)}...`);
-        return;
-      }
-
       
       // Get split percentage from receipt
       const splitPercentage = await this._getSplitPercentage(receiptEvent);
       console.log(`📊 Split percentage: ${splitPercentage}% developer, ${100 - splitPercentage}% payer`);
 
-      await this._splitPayment(payment, splitPercentage);
+      // Calculate split amounts (accounting only, no proof manipulation)
+      await this._calculateSplits(record, splitPercentage);
       
     } catch (error) {
-      console.error(`❌ Error processing payment ${payment.receiptEventId}:`, error);
+      console.error(`❌ Error processing payment ${record.receiptEventId}:`, error);
     }
   }
 
@@ -169,71 +154,16 @@ class IncomingPaymentSplitter {
   }
 
   /**
-   * Check if proofs are spent by querying the mint
-   * @param {Array} proofs - Array of Cashu proofs
-   * @param {string} mintUrl - Mint URL
-   * @returns {Object} - Object with spent status information
-   */
-  async _checkProofSpentStatus(proofs, mintUrl) {
-    try {
-      console.log(`🔍 Checking spent status for ${proofs.length} proofs at mint: ${mintUrl}`);
-      
-      const wallet = await cashuWalletManager.getWallet(mintUrl);
-      const proofStates = await wallet.checkProofsStates(proofs);
-
-      const spentProofs = [];
-      const validProofs = proofs.filter((proof, index) => {
-        const isSpent = proofStates[index].state === 'SPENT';
-        if (isSpent) {
-          spentProofs.push(proof);
-        } else {
-          return proof
-        }
-      });
-      
-      const spentCount = spentProofs.length;
-      const hasSpentProofs = spentCount > 0;
-      
-      console.log(`📊 Proof status: ${validProofs.length} valid, ${spentCount} spent of ${proofs.length} total`);
-      
-      if (validProofs.length === 0) {
-        console.warn('❌ All received proofs are already spent');
-      } else if (spentCount > 0) {
-        console.warn('⚠️ Some proofs are spent - token partially spent');
-      }
-
-      return {
-        hasSpentProofs,
-        spentCount,
-        totalCount: proofs.length,
-        spentProofs,
-        validProofs
-      };
-    } catch (error) {
-      console.error('❌ Error checking proof spent status:', error);
-      // Assume unspent on error to allow processing
-      return {
-        hasSpentProofs: false,
-        spentCount: 0,
-        totalCount: proofs.length,
-        spentProofs: [],
-        validProofs: proofs
-      };
-    }
-  }
-
-  /**
-   * Split payment into developer and payer shares using Cashu wallet
-   * @param {Object} payment - The payment to split
+   * Calculate split amounts (accounting only, no proof manipulation)
+   * @param {Object} record - The incoming accounting record
    * @param {number} devSplitPercentage - Developer split percentage (0-100)
    */
-  async _splitPayment(payment, devSplitPercentage) {
+  async _calculateSplits(record, devSplitPercentage) {
     try {
-      console.log(`✂️ Splitting payment: ${devSplitPercentage}% dev, ${100 - devSplitPercentage}% payer`);
+      console.log(`📊 Calculating splits: ${devSplitPercentage}% dev, ${100 - devSplitPercentage}% payer`);
 
-      // Calculate total amount from proofs
-      const totalAmount = payment.proofs.reduce((sum, proof) => sum + proof.amount, 0);
-      console.log(`💰 Total amount to split: ${totalAmount} sats`);
+      const totalAmount = record.amount;
+      console.log(`💰 Total amount: ${totalAmount} sats`);
 
       // Calculate split amounts
       const devAmount = Math.floor((totalAmount * devSplitPercentage) / 100);
@@ -241,64 +171,39 @@ class IncomingPaymentSplitter {
 
       console.log(`📊 Split amounts: ${devAmount} sats dev, ${payerAmount} sats payer`);
 
-      // Create wallet instance to handle token operations
-      const wallet = await cashuWalletManager.getWallet(payment.mintUrl);
-      
-      // Split tokens between developer and payer using Cashu wallet
-      const {keep: devProofs, send: payerProofs} = await wallet.send(payerAmount, payment.proofs);
+      // Create settlement reserve
+      accountingService.createReserve(
+        record.receiptEventId,
+        record.settlementEventId,
+        totalAmount,
+        devSplitPercentage,
+        record.mintUrl
+      );
 
-      console.log(`📋 Wallet split result: ${devProofs.length} dev proofs, ${payerProofs.length} payer proofs`);
+      // Record splits in accounting (no proofs, just amounts)
+      accountingService.recordDevSplit(
+        record.receiptEventId,
+        record.settlementEventId,
+        devAmount,
+        devSplitPercentage,
+        record.mintUrl
+      );
 
-      // Create developer share payment
-      if (devProofs.length > 0) {
-        const actualDevAmount = devProofs.reduce((sum, proof) => sum + proof.amount, 0);
-        const devPayment = {
-          receiptEventId: payment.receiptEventId,
-          settlementEventId: payment.settlementEventId,
-          proofs: devProofs,
-          mintUrl: payment.mintUrl,
-          splitType: 'developer',
-          originalAmount: totalAmount,
-          splitAmount: actualDevAmount,
-          splitPercentage: devSplitPercentage,
-          processedAt: Date.now()
-        };
+      accountingService.recordPayerSplit(
+        record.receiptEventId,
+        record.settlementEventId,
+        payerAmount,
+        100 - devSplitPercentage,
+        record.mintUrl
+      );
 
-        const devResult = moneyStorageManager.dev.setItem(devPayment);
-        console.log(`💼 Developer share ${devResult.wasAdded ? 'added' : 'updated'}: ${actualDevAmount} sats`);
-      }
-
-      // Create payer share payment
-      if (payerProofs.length > 0) {
-        const actualPayerAmount = payerProofs.reduce((sum, proof) => sum + proof.amount, 0);
-        const payerPayment = {
-          receiptEventId: payment.receiptEventId,
-          settlementEventId: payment.settlementEventId,
-          proofs: payerProofs,
-          mint: payment.mintUrl,
-          splitType: 'payer',
-          originalAmount: totalAmount,
-          splitAmount: actualPayerAmount,
-          splitPercentage: 100 - devSplitPercentage,
-          processedAt: Date.now()
-        };
-
-        const payerResult = moneyStorageManager.payer.setItem(payerPayment);
-        console.log(`👤 Payer share ${payerResult.wasAdded ? 'added' : 'updated'}: ${actualPayerAmount} sats`);
-      }
-
-      // Mark the original incoming payment as spent after successful split
-      const spentPayment = { ...payment, isSpent: true };
-      moneyStorageManager.incoming.setItem(spentPayment);
-      console.log(`✅ Payment split completed and marked as spent: ${payment.receiptEventId.slice(0, 8)}...`);
+      console.log(`✅ Split calculated and recorded: ${record.receiptEventId.slice(0, 8)}...`);
 
     } catch (error) {
-      console.error('❌ Error splitting payment:', error);
-      throw error; // Re-throw to allow caller to handle
+      console.error('❌ Error calculating splits:', error);
+      throw error;
     }
   }
-
-
 }
 
 // Export singleton instance

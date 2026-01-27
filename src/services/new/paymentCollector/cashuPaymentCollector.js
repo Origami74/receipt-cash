@@ -7,8 +7,8 @@ import { mapEventsToStore } from "applesauce-core";
 import { unlockGiftWrap } from "applesauce-core/helpers";
 import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
-import { moneyStorageManager } from "../storage/moneyStorageManager";
-import cashuWalletManager from "../../flows/shared/cashuWalletManager";
+import { cocoService } from "../../cocoService";
+import { accountingService } from "../../accountingService";
 import { getEncodedToken } from "@cashu/cashu-ts";
 import { sumProofs } from "../../../utils/cashuUtils";
 
@@ -87,45 +87,57 @@ class CashuPaymentCollector {
         return;
       }
 
-      const incomingPayment = {
-        receiptEventId: this.receipt.eventId,
-        settlementEventId: cashuDM.settlementId,
-        proofs: cashuDM.proofs,
-        mintUrl: cashuDM.mintUrl
+      // Check if already processed in accounting
+      const existingRecords = accountingService.getSettlementAccounting(
+        this.receipt.eventId,
+        cashuDM.settlementId
+      );
+      
+      if (existingRecords.some(r => r.type === 'incoming')) {
+        console.info('✅ Settlement already processed in accounting, ignoring...');
+        return;
+      }
+
+      // Get coco instance
+      const coco = cocoService.getCoco();
+      
+      // Add mint if not already added (auto-trust)
+      const mints = await coco.mint.getAllMints();
+      const mintExists = mints.some(m => m.url === cashuDM.mintUrl);
+      
+      if (!mintExists) {
+        await coco.mint.addMint(cashuDM.mintUrl, { trusted: true });
+        console.log(`✅ Auto-trusted mint: ${cashuDM.mintUrl}`);
       }
       
-
-      if(moneyStorageManager.incoming.hasItem(incomingPayment)){
-        console.info('Incoming proofs already stored, ignoring... (⚠️ TODO: check confirmation event)')
-        return
-      }
-
-      // TODO: check if accepted mint
-      const wallet = await cashuWalletManager.getWallet(incomingPayment.mintUrl)
-
-      // Construct token for wallet.receive()
+      // Construct token for coco
       const tokenData = {
-        mint: incomingPayment.mintUrl,
-        proofs: incomingPayment.proofs
+        mint: cashuDM.mintUrl,
+        proofs: cashuDM.proofs
       };
       const token = getEncodedToken(tokenData);
       
-      // Receive tokens - this swaps them to fresh proofs that can't be double-spent
-      // NOTE: there is a small window between receive() and setItem() where there is a chance of proofs getting lost if processing stops right in between.
-      const receivedProofs = await wallet.receive(token);
-      console.log(`💰 Received ${receivedProofs.length} proofs (${sumProofs(receivedProofs)} sats) from ${incomingPayment.mintUrl}`);
-      incomingPayment.proofs = receivedProofs;
-    
-      // Store the proofs in browser storage
-      await moneyStorageManager.incoming.setItem(incomingPayment)
-
-      // Confirm for the settler that we've received their payment
-      await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId)
+      // Receive into coco (handles swapping to fresh proofs)
+      await coco.wallet.receive(token);
       
-      console.debug("💾 Successfully saved incoming payment from cashu DM:", cashuDM);
+      const amount = sumProofs(cashuDM.proofs);
+      console.log(`💰 Received ${amount} sats into Coco from ${cashuDM.mintUrl}`);
       
-    } catch (decryptError) {
-      console.warn(`⚠️ Failed to decrypt cashu dm for receipt ${decryptError}`)
+      // Record in accounting
+      accountingService.recordIncoming(
+        this.receipt.eventId,
+        cashuDM.settlementId,
+        amount,
+        cashuDM.mintUrl
+      );
+      
+      // Confirm settlement
+      await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId);
+      
+      console.debug("💾 Successfully processed payment via Coco");
+      
+    } catch (error) {
+      console.error(`❌ Failed to process cashu dm:`, error);
     }
   }
 }
