@@ -189,6 +189,10 @@ export default {
           return '🥜'; // Default to Cashu
         case 'change':
           return '💰';
+        case 'pending':
+          return '⏳';
+        case 'fees':
+          return '💸';
         case 'shortfall':
           return '⚠️';
         default:
@@ -216,6 +220,10 @@ export default {
           return 'Payer payout';
         case 'change':
           return 'Change';
+        case 'pending':
+          return 'Pending payout';
+        case 'fees':
+          return 'Fees';
         case 'shortfall':
           return `Shortfall (${props.record.metadata?.payoutType || 'unknown'})`;
         default:

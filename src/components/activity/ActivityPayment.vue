@@ -22,7 +22,7 @@
 
         <!-- Payment Status Icon -->
         <div class="mr-3">
-          <div v-if="settlement.fullyPaidOut" class="w-3 h-3 bg-green-500 rounded-full"></div>
+          <div v-if="isPayoutComplete" class="w-3 h-3 bg-green-500 rounded-full"></div>
           <div v-else class="w-3 h-3 bg-orange-500 rounded-full"></div>
         </div>
 
@@ -61,15 +61,29 @@
             :status="getRecordStatus(devPayout)"
           />
           
-          <!-- Payer Payout -->
+          <!-- Payer Payout (or active melt session) -->
           <ActivityAccountingRecord
-            v-if="payerPayout"
-            :record="payerPayout"
-            :status="getRecordStatus(payerPayout)"
+            v-if="payerPayout || (meltRounds.length > 0 && !payerPayout)"
+            :record="payerPayout || activeMeltRecord"
+            :status="payerPayout ? getRecordStatus(payerPayout) : 'pending'"
             :melt-rounds="meltRounds"
           />
           
-          <!-- Change/Dust -->
+          <!-- Fees -->
+          <ActivityAccountingRecord
+            v-if="totalFees > 0"
+            :record="feesRecord"
+            status="success"
+          />
+          
+          <!-- Pending (unallocated during processing) -->
+          <ActivityAccountingRecord
+            v-if="pendingAmount > 0"
+            :record="pendingRecord"
+            status="pending"
+          />
+          
+          <!-- Change/Dust (after completion) -->
           <ActivityAccountingRecord
             v-if="changeAmount > 0"
             :record="changeRecord"
@@ -125,7 +139,6 @@ export default {
       );
       
       accountingRecords.value = records;
-      console.log(`📊 Loaded ${accountingRecords.value.length} accounting records for settlement ${props.settlement.event.id}`);
     };
     
     // Load melt session data
@@ -133,10 +146,6 @@ export default {
       const sessionId = `${props.receiptId}-${props.settlement.event.id}`;
       const session = meltSessionStorageManager.getByKey(sessionId);
       meltSessionData.value = session;
-      
-      if (session && session.rounds) {
-        console.log(`⚡ Loaded ${session.rounds.length} melt rounds for session ${sessionId}`);
-      }
     };
     
     // Extract specific payout records
@@ -152,6 +161,45 @@ export default {
       return accountingRecords.value.filter(r => r.type === 'shortfall');
     });
     
+    // Check if payout is actually complete by looking at melt session and accounting
+    const isPayoutComplete = computed(() => {
+      // Must have both dev and payer payouts
+      if (!devPayout.value || !payerPayout.value) {
+        return false;
+      }
+      
+      // If there are any shortfalls, not complete
+      if (shortfalls.value.length > 0) {
+        return false;
+      }
+      
+      // Check melt session status for Lightning payouts
+      if (meltSessionData.value) {
+        // If session exists and all rounds are successful, it's complete
+        const allRoundsSuccessful = meltSessionData.value.rounds?.every(r => r.success === true);
+        const sessionComplete = meltSessionData.value.status === 'complete' || allRoundsSuccessful;
+        
+        if (!sessionComplete) {
+          return false;
+        }
+      }
+      
+      // Check if any payouts are still pending in safety buffer
+      const devPayoutId = `${props.receiptId}-${props.settlement.event.id}-dev_payout`;
+      const payerPayoutId = `${props.receiptId}-${props.settlement.event.id}-payer_payout`;
+      
+      const devPending = proofSafetyService.getPendingPayout(devPayoutId);
+      const payerPending = proofSafetyService.getPendingPayout(payerPayoutId);
+      
+      if ((devPending && devPending.status === 'pending') ||
+          (payerPending && payerPending.status === 'pending')) {
+        return false;
+      }
+      
+      // All checks passed - payout is complete
+      return true;
+    });
+    
     // Calculate change/dust from reserve
     const changeAmount = computed(() => {
       const reserve = accountingService.getReserve(
@@ -161,11 +209,55 @@ export default {
       
       if (!reserve) return 0;
       
-      // Change is the remaining reserve after all payouts
-      // Only show if > 0 and status is complete or partial
+      // Show change if payout is complete (either by reserve status or melt session)
       if (reserve.remainingReserve > 0 &&
-          (reserve.status === 'complete' || reserve.status === 'partial')) {
+          (reserve.status === 'complete' || isPayoutComplete.value)) {
         return reserve.remainingReserve;
+      }
+      
+      return 0;
+    });
+    
+    // Calculate pending amount (unallocated money during processing)
+    const pendingAmount = computed(() => {
+      const reserve = accountingService.getReserve(
+        props.receiptId,
+        props.settlement.event.id
+      );
+      
+      if (!reserve) return 0;
+      
+      // Show pending if payout is still in progress
+      if (reserve.remainingReserve > 0 &&
+          !isPayoutComplete.value &&
+          (reserve.status === 'pending' || reserve.status === 'partial')) {
+        return reserve.remainingReserve;
+      }
+      
+      return 0;
+    });
+    
+    // Get total fees from reserve or calculate from melt rounds
+    const totalFees = computed(() => {
+      // First try to get from reserve
+      const reserve = accountingService.getReserve(
+        props.receiptId,
+        props.settlement.event.id
+      );
+      
+      if (reserve && reserve.totalFees > 0) {
+        return reserve.totalFees;
+      }
+      
+      // If not in reserve yet, calculate from melt rounds
+      if (meltRounds.value.length > 0) {
+        const feesFromRounds = meltRounds.value.reduce((sum, round) => {
+          return sum + (round.meltQuote?.fee_reserve || 0);
+        }, 0);
+        
+        if (feesFromRounds > 0) {
+          return feesFromRounds;
+        }
       }
       
       return 0;
@@ -188,24 +280,79 @@ export default {
       };
     });
     
+    // Create a virtual record for pending display
+    const pendingRecord = computed(() => {
+      if (pendingAmount.value === 0) return null;
+      
+      return {
+        receiptEventId: props.receiptId,
+        settlementEventId: props.settlement.event.id,
+        timestamp: Date.now(),
+        type: 'pending',
+        amount: pendingAmount.value,
+        mintUrl: props.settlement.mint || '',
+        metadata: {
+          description: 'Unallocated funds'
+        }
+      };
+    });
+    
+    // Create a virtual record for fees display
+    const feesRecord = computed(() => {
+      if (totalFees.value === 0) return null;
+      
+      return {
+        receiptEventId: props.receiptId,
+        settlementEventId: props.settlement.event.id,
+        timestamp: Date.now(),
+        type: 'fees',
+        amount: totalFees.value,
+        mintUrl: props.settlement.mint || '',
+        metadata: {
+          description: 'Lightning network fees'
+        }
+      };
+    });
+    
     const hasPayoutOperations = computed(() => {
-      return devPayout.value || payerPayout.value || changeAmount.value > 0 || shortfalls.value.length > 0;
+      return devPayout.value || payerPayout.value || meltRounds.value.length > 0 ||
+             changeAmount.value > 0 || pendingAmount.value > 0 ||
+             totalFees.value > 0 || shortfalls.value.length > 0;
     });
     
     // Get melt rounds for Lightning payouts
     const meltRounds = computed(() => {
-      if (!payerPayout.value) {
-        return [];
-      }
-      
-      // Check if this is a Lightning payout by looking for melt session
-      // (works even if payoutType metadata isn't set on old records)
+      // Show rounds if there's a melt session, even without payout record yet
       if (meltSessionData.value && meltSessionData.value.rounds) {
-        console.log(`⚡ Found ${meltSessionData.value.rounds.length} melt rounds for payer payout`);
         return meltSessionData.value.rounds;
       }
       
       return [];
+    });
+    
+    // Create a virtual record for active melt sessions (before payout record exists)
+    const activeMeltRecord = computed(() => {
+      if (!meltSessionData.value || payerPayout.value) {
+        return null;
+      }
+      
+      // Calculate total amount being melted
+      const totalAmount = meltSessionData.value.rounds?.reduce((sum, round) => {
+        return sum + (round.targetAmount || round.meltQuote?.amount || 0);
+      }, 0) || 0;
+      
+      return {
+        receiptEventId: props.receiptId,
+        settlementEventId: props.settlement.event.id,
+        timestamp: Date.now(),
+        type: 'payer_payout',
+        amount: totalAmount,
+        mintUrl: props.settlement.mint || '',
+        metadata: {
+          payoutType: 'lightning',
+          description: 'Lightning melt in progress'
+        }
+      };
     });
     
     // Determine status for a record
@@ -265,8 +412,7 @@ export default {
     });
     
     // Processing payments start expanded, completed payments start collapsed
-    // If settlement is fully paid out, start collapsed
-    const isExpanded = ref(!props.settlement.fullyPaidOut);
+    const isExpanded = ref(!isPayoutComplete.value);
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
@@ -291,12 +437,18 @@ export default {
     return {
       devPayout,
       payerPayout,
+      activeMeltRecord,
       changeAmount,
       changeRecord,
+      pendingAmount,
+      pendingRecord,
+      totalFees,
+      feesRecord,
       shortfalls,
       hasPayoutOperations,
       meltRounds,
       getRecordStatus,
+      isPayoutComplete,
       settlement,
       isExpanded,
       toggleExpanded,
