@@ -77,6 +77,7 @@ import CameraPermissionOverlay from '../components/cameraView/CameraPermissionOv
 import CameraQuickNav from '../components/cameraView/CameraQuickNav.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/aiService';
+import { getCameraPermission, saveCameraPermission } from '../services/storageService';
 
 export default {
   name: 'HomeView',
@@ -113,7 +114,10 @@ export default {
         stream.getTracks().forEach(track => track.stop()); // Stop the stream after getting permission
         hasPermission.value = true;
         
-        console.log('Camera permission granted, initializing camera...');
+        // Save the permission preference
+        saveCameraPermission(true);
+        console.log('Camera permission granted and saved');
+        
         // Use nextTick to ensure DOM is updated before initializing camera
         await new Promise(resolve => setTimeout(resolve, 100));
         await initializeCamera();
@@ -125,11 +129,15 @@ export default {
                                    error.name === 'PermissionDeniedError' ||
                                    error.message.includes('Permission denied');
         
+        // Save denial preference
+        if (isPermissionDenied) {
+          saveCameraPermission(false);
+          console.log('Camera permission explicitly denied by user and saved');
+        }
+        
         // Only show notification if it's not an explicit denial
         if (!isPermissionDenied) {
           showNotification('Camera access failed. Please check your browser settings and try again.');
-        } else {
-          console.log('Camera permission explicitly denied by user');
         }
         
         hasPermission.value = false;
@@ -296,6 +304,16 @@ export default {
       }
     });
 
+    // Auto-enable camera on mount if permission was previously granted
+    onMounted(async () => {
+      const savedPermission = getCameraPermission();
+      console.log('Saved camera permission:', savedPermission);
+      
+      if (savedPermission === true && !receiptId.value) {
+        console.log('Auto-enabling camera based on saved preference');
+        await requestCameraPermission();
+      }
+    });
 
     onUnmounted(() => {
       if (qrScanner.value) {

@@ -52,7 +52,6 @@ import SettingsMenu from './components/SettingsMenu.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
 import { checkForVersionUpdate } from './services/updaterService';
-import { v1DevProofsMigration } from './services/migrations/v1DevProofsMigration';
 
 export default {
   name: 'App',
@@ -92,29 +91,6 @@ export default {
       if (!debugLogger.isCapturingLogsEnabled()) {
         debugLogger.startCapturingLogs();
         console.log('Debug logging enabled by default');
-      }
-      
-      // Run v1 developer proofs migration
-      try {
-        console.log('🔄 Running v1 developer proofs migration...');
-        const migrationResult = await v1DevProofsMigration.migrate();
-        
-        if (migrationResult.success) {
-          if (migrationResult.alreadyMigrated) {
-            console.log('✅ V1 dev proofs migration already completed');
-          } else if (migrationResult.processed > 0) {
-            console.log(`✅ V1 dev proofs migration complete: ${migrationResult.sent} sent, ${migrationResult.failed} failed`);
-            if (migrationResult.sent > 0) {
-              showNotification(`Sent ${migrationResult.sent} stranded developer payment(s) to developer`, 'success');
-            }
-          } else {
-            console.log('✅ No v1 developer proofs to migrate');
-          }
-        } else {
-          console.error('❌ V1 dev proofs migration failed:', migrationResult.error);
-        }
-      } catch (migrationError) {
-        console.error('❌ Error during v1 dev proofs migration:', migrationError);
       }
       
       // Listen for report-logs events from the SettingsMenu

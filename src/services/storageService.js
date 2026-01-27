@@ -2,6 +2,7 @@ const RECEIVE_ADDRESS_KEY = 'receipt-cash-receive-address';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
 const PROOFS_KEY = 'receipt-cash-proofs';
 const MINT_QUOTE_RECOVERY_KEY = 'receipt-cash-mint-quote-recovery';
+const CAMERA_PERMISSION_KEY = 'receipt-cash-camera-permission';
 
 // Default AI settings
 const DEFAULT_AI_SETTINGS = {
@@ -84,6 +85,44 @@ export function clearAiSettings() {
     localStorage.removeItem(AI_SETTINGS_KEY);
   } catch (error) {
     console.error('Error clearing AI settings:', error);
+  }
+}
+
+/**
+ * Save camera permission preference
+ * @param {boolean} granted - Whether camera permission was granted
+ */
+export function saveCameraPermission(granted) {
+  try {
+    localStorage.setItem(CAMERA_PERMISSION_KEY, granted ? 'true' : 'false');
+  } catch (error) {
+    console.error('Error saving camera permission:', error);
+  }
+}
+
+/**
+ * Get camera permission preference
+ * @returns {boolean|null} True if previously granted, false if denied, null if never asked
+ */
+export function getCameraPermission() {
+  try {
+    const stored = localStorage.getItem(CAMERA_PERMISSION_KEY);
+    if (stored === null) return null;
+    return stored === 'true';
+  } catch (error) {
+    console.error('Error getting camera permission:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear camera permission preference
+ */
+export function clearCameraPermission() {
+  try {
+    localStorage.removeItem(CAMERA_PERMISSION_KEY);
+  } catch (error) {
+    console.error('Error clearing camera permission:', error);
   }
 }
 

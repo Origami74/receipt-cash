@@ -26,6 +26,11 @@ This document contains prioritized user feedback and feature requests for the Re
 **Impact**: Reduces onboarding friction significantly
 **Reason**: Current flow requires payers to have Cashu tokens already. Allowing immediate funding improves first-time user experience and removes major adoption barrier
 
+### Priority 82 - Show navigation bar on receipt creation
+**Status**: Open
+**Impact**: Navigation consistency issue during receipt creation flow
+**Reason**: Users need access to navigation during receipt creation process. Missing navigation bar creates inconsistent UX and may trap users in the creation flow
+
 ### Priority 80 - Receipt preview missing bottom navigation bar
 **Status**: Open
 **Impact**: Navigation issue affecting user experience in receipt preview
@@ -57,11 +62,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Status**: Open  
 **Impact**: Important for payment tracking and dispute resolution  
 **Reason**: Provides transparency and allows payers to verify payments in their records, building trust in the system
-
-### Priority 58 - Remember camera preference and auto-enable on home screen
-**Status**: Partially Implemented
-**Impact**: UX improvement for frequent users
-**Reason**: If user has approved camera access, automatically enable camera on home screen to reduce friction. Saves one tap for repeat users while respecting privacy preferences
 
 ### Priority 55 - It opens in Telegram Windows which are private windows
 **Status**: Open
