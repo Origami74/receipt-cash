@@ -52,12 +52,6 @@
           @toggle-settings="$emit('toggle-settings')"
         />
       </div>
-      
-      <receipt-preview
-        v-if="capturedReceipt"
-        :receipt-data="capturedReceipt"
-        @back="resetCapture"
-      />
     </template>
     
     <Spinner v-if="isProcessing" message="Processing receipt..." />
@@ -69,7 +63,6 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import QrScanner from 'qr-scanner';
-import ReceiptPreview from '../components/ReceiptPreview.vue';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
 import CameraControls from '../components/cameraView/CameraControls.vue';
@@ -83,7 +76,6 @@ export default {
   name: 'HomeView',
   emits: ['toggle-settings'],
   components: {
-    ReceiptPreview,
     Notification,
     Spinner,
     CameraControls,
@@ -95,7 +87,6 @@ export default {
     const router = useRouter();
     const videoElement = ref(null);
     const qrScanner = ref(null);
-    const capturedReceipt = ref(null);
     const hasPermission = ref(false);
     const receiptId = computed(() => route.query.receipt);
     const decryptionKey = computed(() => route.query.key);
@@ -258,11 +249,17 @@ export default {
         try {
           const processedReceipt = await receiptService.processReceiptImage(base64Image);
           
-          // Clear the image and show the processed receipt
+          // Clear the image
           capturedImage.value = null;
-          capturedReceipt.value = processedReceipt;
           
           showNotification('Receipt processed successfully!', 'success');
+          
+          // Navigate to receipt creation view with data in URL
+          const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
+          router.push({
+            path: '/receipt/create',
+            query: { data: receiptDataEncoded }
+          });
         } catch (processingError) {
           console.error('Error processing receipt:', processingError);
           showNotification(processingError.message);
@@ -281,15 +278,6 @@ export default {
       }
     };
 
-    const resetCapture = () => {
-      capturedReceipt.value = null;
-      capturedImage.value = null;
-      // Restart the camera if we have permission
-      if (hasPermission.value && qrScanner.value) {
-        qrScanner.value.start();
-      }
-    };
-    
     const handleToggleActivity = () => {
       console.log('Activity toggle requested from camera quick nav');
       router.push('/activity');
@@ -362,8 +350,12 @@ export default {
     };
 
     const handleImageUpload = (processedReceipt) => {
-      // Store the processed receipt data
-      capturedReceipt.value = processedReceipt;
+      // Navigate to receipt creation view with data in URL
+      const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
+      router.push({
+        path: '/receipt/create',
+        query: { data: receiptDataEncoded }
+      });
       
       // Stop the camera since we don't need it anymore
       if (qrScanner.value) {
@@ -374,7 +366,6 @@ export default {
 
     return {
       videoElement,
-      capturedReceipt,
       capturedImage,
       hasPermission,
       notification,
@@ -385,7 +376,6 @@ export default {
       cameraInitializing,
       toggleFlash,
       captureReceipt,
-      resetCapture,
       handleToggleActivity,
       handleQrCodeResult,
       handleImageUpload,

@@ -26,16 +26,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Impact**: Reduces onboarding friction significantly
 **Reason**: Current flow requires payers to have Cashu tokens already. Allowing immediate funding improves first-time user experience and removes major adoption barrier
 
-### Priority 82 - Show navigation bar on receipt creation
-**Status**: Open
-**Impact**: Navigation consistency issue during receipt creation flow
-**Reason**: Users need access to navigation during receipt creation process. Missing navigation bar creates inconsistent UX and may trap users in the creation flow
-
-### Priority 80 - Receipt preview missing bottom navigation bar
-**Status**: Open
-**Impact**: Navigation issue affecting user experience in receipt preview
-**Reason**: Users cannot navigate away from receipt preview without using browser back button, breaking expected app navigation patterns
-
 ### Priority 78 - Receipt 'create' button should block & show spinner while publishing
 **Status**: Open
 **Impact**: User feedback during critical operation
