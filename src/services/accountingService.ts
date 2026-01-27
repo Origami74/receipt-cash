@@ -225,7 +225,8 @@ export class AccountingService {
     settlementEventId: string,
     amount: number,
     fees: number,
-    mintUrl: string
+    mintUrl: string,
+    payoutType: 'cashu' | 'lightning' = 'cashu'
   ): AccountingRecord {
     const record: AccountingRecord = {
       receiptEventId,
@@ -234,11 +235,12 @@ export class AccountingService {
       type: 'dev_payout',
       amount,
       mintUrl,
-      fees
+      fees,
+      metadata: { payoutType }
     };
 
     this.records.setItem(record);
-    console.log(`📤 Recorded dev payout: ${amount} sats (fees: ${fees})`);
+    console.log(`📤 Recorded dev payout: ${amount} sats (fees: ${fees}, type: ${payoutType})`);
     return record;
   }
 
@@ -251,6 +253,7 @@ export class AccountingService {
     amount: number,
     fees: number,
     mintUrl: string,
+    payoutType: 'cashu' | 'lightning' | 'changejar',
     originalAmount?: number
   ): AccountingRecord {
     const record: AccountingRecord = {
@@ -261,14 +264,15 @@ export class AccountingService {
       amount,
       mintUrl,
       fees,
-      originalAmount
+      originalAmount,
+      metadata: { payoutType }
     };
 
     this.records.setItem(record);
     if (originalAmount && originalAmount !== amount) {
-      console.log(`📤 Recorded payer payout: ${amount} sats (reduced from ${originalAmount} due to fees: ${fees})`);
+      console.log(`📤 Recorded payer payout: ${amount} sats (reduced from ${originalAmount} due to fees: ${fees}, type: ${payoutType})`);
     } else {
-      console.log(`📤 Recorded payer payout: ${amount} sats (fees: ${fees})`);
+      console.log(`📤 Recorded payer payout: ${amount} sats (fees: ${fees}, type: ${payoutType})`);
     }
     return record;
   }

@@ -58,7 +58,7 @@ export class ProofSafetyService {
    * Mark as failed after max retries
    */
   markFailed(payoutId: string): void {
-    const payout = this.pending.getItem(payoutId);
+    const payout = this.pending.getByKey(payoutId);
     if (payout) {
       payout.status = 'failed';
       this.pending.setItem(payout);
@@ -70,7 +70,7 @@ export class ProofSafetyService {
    * Get a pending payout by ID
    */
   getPendingPayout(payoutId: string): PendingPayout | null {
-    return this.pending.getItem(payoutId);
+    return this.pending.getByKey(payoutId);
   }
 
   /**

@@ -135,6 +135,7 @@ class PayerPayoutManager {
         
         let amountToSend = payerSplit.amount;
         let fees = 0;
+        let payoutType = 'cashu'; // Default to cashu
         
         // Handle Lightning with fee protection
         if (validation.type === 'lightning') {
@@ -236,6 +237,7 @@ class PayerPayoutManager {
           );
           
           fees = meltResult.fees || 0;
+          payoutType = 'lightning';
           console.log(`⚡ Lightning melt complete: ${amountToSend} sats sent, ${fees} sats fees`);
           
           // Mark as sent in safety buffer
@@ -272,6 +274,7 @@ class PayerPayoutManager {
           // Mark as sent in safety buffer
           proofSafetyService.markSent(payoutId);
           
+          payoutType = 'cashu';
           console.log(`🥜 Cashu payout complete: ${amountToSend} sats sent`);
           
         } else {
@@ -286,6 +289,7 @@ class PayerPayoutManager {
           amountToSend,
           fees,
           payerSplit.mintUrl,
+          payoutType, // 'lightning' or 'cashu'
           payerSplit.amount // original amount before fee adjustment
         );
         

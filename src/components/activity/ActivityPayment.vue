@@ -50,39 +50,38 @@
         </p>
       </div>
 
-      <!-- Payout Operations (Full Width) -->
-      <div v-if="(payouts && payouts.length > 0) || (activeMeltRounds && activeMeltRounds.length > 0) || (unsentPayerTokens && unsentPayerTokens.length > 0) || (unsentDevTokens && unsentDevTokens.length > 0)" class="ml-8">
+      <!-- Payout Operations -->
+      <div v-if="hasPayoutOperations" class="ml-8">
         <p class="text-xs text-gray-600 mb-2">Payout operations:</p>
         <div class="space-y-1">
-          <!-- Active Lightning Melt Rounds -->
-          <ActivityMeltRound
-            v-for="meltRound in activeMeltRounds"
-            :key="`${meltRound.sessionId}-${meltRound.roundNumber}`"
-            :melt-round="meltRound"
+          <!-- Dev Payout -->
+          <ActivityAccountingRecord
+            v-if="devPayout"
+            :record="devPayout"
+            :status="getRecordStatus(devPayout)"
           />
           
-          <!-- Unsent Payer Tokens -->
-          <ActivityUnsentToken
-            v-for="unsentToken in unsentPayerTokens"
-            :key="`unsent-payer-${unsentToken.receiptEventId}-${unsentToken.settlementEventId}`"
-            :text="`Unsent Payer payout`"
-            :unsent-token="unsentToken"
+          <!-- Payer Payout -->
+          <ActivityAccountingRecord
+            v-if="payerPayout"
+            :record="payerPayout"
+            :status="getRecordStatus(payerPayout)"
+            :melt-rounds="meltRounds"
           />
           
-          <!-- Unsent Dev Tokens -->
-          <ActivityUnsentToken
-            v-for="unsentToken in unsentDevTokens"
-            :key="`unsent-dev-${unsentToken.receiptEventId}-${unsentToken.settlementEventId}`"
-            :text="`Unsent Dev payout`"
-            :unsent-token="unsentToken"
+          <!-- Change/Dust -->
+          <ActivityAccountingRecord
+            v-if="changeAmount > 0"
+            :record="changeRecord"
+            status="success"
           />
           
-          <!-- Completed Payouts -->
-          <ActivityPayout
-            v-for="payout in payouts"
-            :key="payout.id"
-            :payout="payout"
-            @retry="$emit('retry-payout', payout)"
+          <!-- Shortfalls -->
+          <ActivityAccountingRecord
+            v-for="shortfall in shortfalls"
+            :key="`${shortfall.receiptEventId}-${shortfall.settlementEventId}-${shortfall.timestamp}`"
+            :record="shortfall"
+            status="failed"
           />
         </div>
       </div>
@@ -91,24 +90,17 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
-import ActivityPayout from './ActivityPayout.vue';
-import ActivityMeltRound from './ActivityMeltRound.vue';
-import ActivityUnsentToken from './ActivityUnsentToken.vue';
-import { receiptModel } from '../../services/nostr/receipt.js';
-import { globalEventStore } from '../../services/nostr/applesauce.js';
-import { KIND_SETTLEMENT, KIND_SETTLEMENT_PAYOUT } from '../../services/nostr/constants.js';
+import ActivityAccountingRecord from './ActivityAccountingRecord.vue';
+import { accountingService } from '../../services/accountingService';
+import { proofSafetyService } from '../../services/proofSafetyService';
 import meltSessionStorageManager from '../../services/new/storage/meltSessionStorageManager.js';
-import { moneyStorageManager } from '../../services/new/storage/moneyStorageManager.js';
-import { watchEventsUpdates } from 'applesauce-core';
 
 export default {
   name: 'ActivityPayment',
   components: {
-    ActivityPayout,
-    ActivityMeltRound,
-    ActivityUnsentToken
+    ActivityAccountingRecord
   },
   props: {
     settlement: {
@@ -122,93 +114,156 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
-    const payouts = ref([])
-    const activeMeltRounds = ref([])
-    const unsentPayerTokens = ref([])
-    const unsentDevTokens = ref([])
+    const accountingRecords = ref([])
+    const meltSessionData = ref(null)
     
-    globalEventStore.timeline({
-      kinds: [KIND_SETTLEMENT_PAYOUT],
-      "#e": [props.settlement.event.id]
-    })
-    .subscribe( p => {
-      payouts.value = p
-    })
-
-    // Get unsent payer tokens for this settlement
-    const updateUnsentPayerTokens = () => {
-      const key = `${props.receiptId}-${props.settlement.event.id}`;
-      const payerToken = moneyStorageManager.payer.getByKey(key);
+    // Load accounting records for this settlement
+    const updateAccountingRecords = () => {
+      const records = accountingService.getSettlementAccounting(
+        props.receiptId,
+        props.settlement.event.id
+      );
       
-      if (payerToken && !payerToken.isSpent && payerToken.proofs && payerToken.proofs.length > 0) {
-        console.log(`📦 Found unsent payer token for settlement ${key}: ${payerToken.splitAmount} sats`);
-        unsentPayerTokens.value = [payerToken];
-      } else {
-        unsentPayerTokens.value = [];
-      }
+      accountingRecords.value = records;
+      console.log(`📊 Loaded ${accountingRecords.value.length} accounting records for settlement ${props.settlement.event.id}`);
     };
-
-    // Get unsent dev tokens for this settlement
-    const updateUnsentDevTokens = () => {
-      const key = `${props.receiptId}-${props.settlement.event.id}`;
-      const devToken = moneyStorageManager.dev.getByKey(key);
-      
-      if (devToken && !devToken.isSpent && devToken.proofs && devToken.proofs.length > 0) {
-        console.log(`📦 Found unsent dev token for settlement ${key}: ${devToken.splitAmount} sats`);
-        unsentDevTokens.value = [devToken];
-      } else {
-        unsentDevTokens.value = [];
-      }
-    };
-
-    // Initial load of unsent tokens
-    updateUnsentPayerTokens();
-    updateUnsentDevTokens();
-
-    // Subscribe to money storage changes
-    const payerMoneySubscription = moneyStorageManager.payer.items$.subscribe(() => {
-      updateUnsentPayerTokens();
-    });
-
-    const devMoneySubscription = moneyStorageManager.dev.items$.subscribe(() => {
-      updateUnsentDevTokens();
-    });
-
-    // Get active melt rounds for this settlement
-    const updateActiveMeltRounds = () => {
+    
+    // Load melt session data
+    const updateMeltSession = () => {
       const sessionId = `${props.receiptId}-${props.settlement.event.id}`;
       const session = meltSessionStorageManager.getByKey(sessionId);
+      meltSessionData.value = session;
       
-      if (session && session.status === 'active' && session.rounds) {
-        // Only show rounds that are NOT successfully completed
-        // Successful rounds have corresponding payout events shown separately
-        const incompleteRounds = session.rounds.filter(round => round.success !== true);
-        console.log(`✅ Showing ${incompleteRounds.length} incomplete rounds (filtered ${session.rounds.length - incompleteRounds.length} completed) for session ${sessionId}`);
-        activeMeltRounds.value = incompleteRounds;
-      } else {
-        activeMeltRounds.value = [];
+      if (session && session.rounds) {
+        console.log(`⚡ Loaded ${session.rounds.length} melt rounds for session ${sessionId}`);
+      }
+    };
+    
+    // Extract specific payout records
+    const devPayout = computed(() => {
+      return accountingRecords.value.find(r => r.type === 'dev_payout') || null;
+    });
+    
+    const payerPayout = computed(() => {
+      return accountingRecords.value.find(r => r.type === 'payer_payout') || null;
+    });
+    
+    const shortfalls = computed(() => {
+      return accountingRecords.value.filter(r => r.type === 'shortfall');
+    });
+    
+    // Calculate change/dust from reserve
+    const changeAmount = computed(() => {
+      const reserve = accountingService.getReserve(
+        props.receiptId,
+        props.settlement.event.id
+      );
+      
+      if (!reserve) return 0;
+      
+      // Change is the remaining reserve after all payouts
+      // Only show if > 0 and status is complete or partial
+      if (reserve.remainingReserve > 0 &&
+          (reserve.status === 'complete' || reserve.status === 'partial')) {
+        return reserve.remainingReserve;
       }
       
+      return 0;
+    });
+    
+    // Create a virtual record for change display
+    const changeRecord = computed(() => {
+      if (changeAmount.value === 0) return null;
+      
+      return {
+        receiptEventId: props.receiptId,
+        settlementEventId: props.settlement.event.id,
+        timestamp: Date.now(),
+        type: 'change',
+        amount: changeAmount.value,
+        mintUrl: props.settlement.mint || '',
+        metadata: {
+          description: 'Saved to wallet for AI payments'
+        }
+      };
+    });
+    
+    const hasPayoutOperations = computed(() => {
+      return devPayout.value || payerPayout.value || changeAmount.value > 0 || shortfalls.value.length > 0;
+    });
+    
+    // Get melt rounds for Lightning payouts
+    const meltRounds = computed(() => {
+      if (!payerPayout.value) {
+        return [];
+      }
+      
+      // Check if this is a Lightning payout by looking for melt session
+      // (works even if payoutType metadata isn't set on old records)
+      if (meltSessionData.value && meltSessionData.value.rounds) {
+        console.log(`⚡ Found ${meltSessionData.value.rounds.length} melt rounds for payer payout`);
+        return meltSessionData.value.rounds;
+      }
+      
+      return [];
+    });
+    
+    // Determine status for a record
+    const getRecordStatus = (record) => {
+      // Only payouts can have pending/failed status
+      if (record.type !== 'dev_payout' && record.type !== 'payer_payout') {
+        return 'success'; // Splits are always "success" (they're just calculations)
+      }
+      
+      const payoutId = `${record.receiptEventId}-${record.settlementEventId}-${record.type}`;
+      
+      // Check if pending in safety buffer
+      const pending = proofSafetyService.getPendingPayout(payoutId);
+      if (pending && pending.status === 'pending') {
+        return 'pending';
+      }
+      
+      if (pending && pending.status === 'failed') {
+        return 'failed';
+      }
+      
+      // Check if in active melt session (for Lightning payouts)
+      if (record.metadata?.payoutType === 'lightning') {
+        const sessionId = `${record.receiptEventId}-${record.settlementEventId}`;
+        const session = meltSessionStorageManager.getByKey(sessionId);
+        if (session && session.status === 'active') {
+          return 'pending';
+        }
+      }
+      
+      // Otherwise completed
+      return 'success';
     };
+    
+    // Initial load
+    updateAccountingRecords();
+    updateMeltSession();
 
-    // Initial load of active melt rounds
-    updateActiveMeltRounds();
-
-    // Subscribe to melt session changes using RxJS observables
-    const subscription = meltSessionStorageManager.items$.subscribe(() => {
-      updateActiveMeltRounds();
+    // Subscribe to accounting record changes
+    const accountingSubscription = accountingService.records.items$.subscribe(() => {
+      updateAccountingRecords();
+    });
+    
+    // Subscribe to melt session changes
+    const meltSubscription = meltSessionStorageManager.items$.subscribe(() => {
+      updateMeltSession();
     });
 
     // Cleanup subscriptions on unmount
     onUnmounted(() => {
-      subscription.unsubscribe();
-      payerMoneySubscription.unsubscribe();
-      devMoneySubscription.unsubscribe();
+      accountingSubscription.unsubscribe();
+      meltSubscription.unsubscribe();
     });
 
     const settlement = computed(() => {
       return props.settlement
     });
+    
     // Processing payments start expanded, completed payments start collapsed
     // If settlement is fully paid out, start collapsed
     const isExpanded = ref(!props.settlement.fullyPaidOut);
@@ -216,6 +271,7 @@ export default {
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
     };
+    
     const formatTime = (timestamp) => {
       const now = new Date();
       const date = new Date(timestamp);
@@ -232,12 +288,15 @@ export default {
       return `${days}d ago`;
     };
 
-
     return {
-      payouts,
-      activeMeltRounds,
-      unsentPayerTokens,
-      unsentDevTokens,
+      devPayout,
+      payerPayout,
+      changeAmount,
+      changeRecord,
+      shortfalls,
+      hasPayoutOperations,
+      meltRounds,
+      getRecordStatus,
       settlement,
       isExpanded,
       toggleExpanded,

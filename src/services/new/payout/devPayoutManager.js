@@ -150,7 +150,8 @@ class DevPayoutManager {
           devSplit.settlementEventId,
           devSplit.amount,
           0, // fees
-          devSplit.mintUrl
+          devSplit.mintUrl,
+          'cashu' // Dev payouts are always Cashu
         );
         
         // Update reserve
