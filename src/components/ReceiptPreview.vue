@@ -266,15 +266,36 @@
           
           <button
             @click="createRequest"
-            :disabled="!addressValid || !receiveAddress"
+            :disabled="!addressValid || !receiveAddress || isPublishing"
             :class="[
-              'w-full',
-              (!addressValid || !receiveAddress)
+              'w-full flex items-center justify-center gap-2',
+              (!addressValid || !receiveAddress || isPublishing)
                 ? 'btn-secondary opacity-50 cursor-not-allowed'
                 : 'btn-primary'
             ]"
           >
-            Create Request
+            <svg
+              v-if="isPublishing"
+              class="animate-spin h-5 w-5"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <span>{{ isPublishing ? 'Publishing...' : 'Create Request' }}</span>
           </button>
         </div>
       </div>
@@ -368,6 +389,9 @@ export default {
     
     // Item selection state
     const showItemSelection = ref(false);
+    
+    // Publishing state
+    const isPublishing = ref(false);
     
     // Split dialog state
     const splitDialog = ref({
@@ -616,7 +640,13 @@ export default {
         return;
       }
       
+      if (isPublishing.value) {
+        return; // Prevent multiple clicks
+      }
+      
       try {
+        isPublishing.value = true;
+        
         // Always save the receive address
         saveReceiveAddress(receiveAddress.value);
         
@@ -624,11 +654,14 @@ export default {
       } catch (error) {
         console.error('Error creating payment request:', error);
         showNotification(`Failed to create payment request`, 'error');
+      } finally {
+        isPublishing.value = false;
       }
     };
     
 
     const proceedWithRequest = async () => {
+      // Note: isPublishing state is managed in createRequest
       try {
         // Clean up items data for publishing (remove editing props)
         // Reduce quantities by what the creator selected
@@ -737,6 +770,7 @@ export default {
       convertToSats,
       createRequest,
       pasteFromClipboard,
+      isPublishing,
       developerSplit,
       currentBtcPrice,
       selectedCurrency,

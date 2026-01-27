@@ -26,11 +26,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Impact**: Reduces onboarding friction significantly
 **Reason**: Current flow requires payers to have Cashu tokens already. Allowing immediate funding improves first-time user experience and removes major adoption barrier
 
-### Priority 78 - Receipt 'create' button should block & show spinner while publishing
-**Status**: Open
-**Impact**: User feedback during critical operation
-**Reason**: Users may click multiple times or navigate away during receipt publishing, causing confusion or duplicate attempts. Loading state provides clear feedback during async operation
-
 ### Priority 77 - Validate lightning address is actually valid
 **Status**: Open
 **Impact**: Input validation for payment addresses

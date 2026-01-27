@@ -99,7 +99,7 @@ class MigrationService {
     console.log('🔄 Starting proof migration to coco...');
 
     if (this.hasMigrated()) {
-      console.log('ℹ️ Migration already completed, skipping');
+      console.log('ℹ️ Migration v2->v3 already completed, skipping');
       return {
         success: true,
         migratedMints: 0,
