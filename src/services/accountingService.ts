@@ -1,11 +1,12 @@
 import { ReactiveMapStorageManager } from './new/storage/reactiveMapStorageManager';
 
-export type AccountingRecordType = 
-  | 'incoming' 
-  | 'dev_split' 
-  | 'payer_split' 
-  | 'dev_payout' 
-  | 'payer_payout';
+export type AccountingRecordType =
+  | 'incoming'
+  | 'dev_split'
+  | 'payer_split'
+  | 'dev_payout'
+  | 'payer_payout'
+  | 'shortfall';
 
 export interface AccountingRecord {
   receiptEventId: string;
@@ -99,7 +100,7 @@ export class AccountingService {
    */
   getReserve(receiptEventId: string, settlementEventId: string): SettlementReserve | null {
     const key = `${receiptEventId}-${settlementEventId}`;
-    return this.reserves.getItem(key);
+    return this.reserves.getByKey(key) || null;
   }
 
   /**
@@ -269,6 +270,35 @@ export class AccountingService {
     } else {
       console.log(`📤 Recorded payer payout: ${amount} sats (fees: ${fees})`);
     }
+    return record;
+  }
+
+  /**
+   * Record a shortfall when insufficient balance prevents full payout
+   */
+  recordShortfall(
+    receiptEventId: string,
+    settlementEventId: string,
+    amount: number,
+    mintUrl: string,
+    payoutType: 'dev' | 'payer',
+    reason: string
+  ): AccountingRecord {
+    const record: AccountingRecord = {
+      receiptEventId,
+      settlementEventId,
+      timestamp: Date.now(),
+      type: 'shortfall',
+      amount,
+      mintUrl,
+      metadata: {
+        payoutType,
+        reason
+      }
+    };
+
+    this.records.setItem(record);
+    console.warn(`⚠️ Recorded shortfall: ${amount} sats for ${payoutType} payout - ${reason}`);
     return record;
   }
 

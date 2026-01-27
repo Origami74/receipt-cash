@@ -46,7 +46,7 @@ export class ProofSafetyService {
    * Mark as sent after successful delivery
    */
   markSent(payoutId: string): void {
-    const payout = this.pending.getItem(payoutId);
+    const payout = this.pending.getByKey(payoutId);
     if (payout) {
       payout.status = 'sent';
       this.pending.setItem(payout);
@@ -110,7 +110,7 @@ export class ProofSafetyService {
         
         // Get wallet for this mint
         const mints = await coco.mint.getAllMints();
-        const mintExists = mints.some(m => m.url === payout.mintUrl);
+        const mintExists = mints.some(m => m.mintUrl === payout.mintUrl);
         
         if (!mintExists) {
           console.warn(`⚠️ Mint not found for payout ${payout.id}, skipping`);

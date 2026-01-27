@@ -290,15 +290,15 @@ export default {
       try {
         // Send all balance from this mint
         const token = await cocoService.getCoco().wallet.send(
-          this.drainTarget.balance,
-          this.drainTarget.url
+          this.drainTarget.mintUrl,
+          this.drainTarget.balance
         );
         
         // Save to drained tokens history
         const drainedToken = {
           timestamp: Date.now(),
           amount: this.drainTarget.balance,
-          mintUrl: this.drainTarget.url,
+          mintUrl: this.drainTarget.mintUrl,
           token: token,
           copied: false
         };

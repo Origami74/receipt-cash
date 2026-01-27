@@ -11,6 +11,11 @@ This document contains prioritized user feedback and feature requests for the Re
 
 ## Priority 70-89 (High - Core Experience Improvements)
 
+### Priority 95 - Block multiple tabs of application (similar to WhatsApp Web)
+**Status**: Open
+**Impact**: VERY IMPORTANT - Prevents data corruption and state conflicts
+**Reason**: Multiple tabs can cause race conditions with wallet operations, payment processing, and storage updates. Critical for data integrity and preventing double-spending or lost funds. Should detect and block secondary tabs with clear messaging
+
 ### Priority 88 - Onboarding flow for new users
 **Status**: Open
 **Impact**: Critical for user adoption and reducing confusion

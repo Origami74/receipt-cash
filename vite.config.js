@@ -59,6 +59,12 @@ export default defineConfig({
       }
     })
   ],
+  resolve: {
+    extensions: ['.js', '.ts', '.vue', '.json']
+  },
+  optimizeDeps: {
+    include: ['@scure/bip39', 'coco-cashu-core', 'coco-cashu-indexeddb']
+  },
   server: {
     host: true,
     port: 3000,
@@ -67,4 +73,4 @@ export default defineConfig({
       cert: fs.readFileSync('certs/cert.pem'),
     } : false
   }
-}); 
+});

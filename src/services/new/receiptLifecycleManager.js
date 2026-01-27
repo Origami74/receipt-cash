@@ -106,5 +106,4 @@ class ReceiptLifecycleManager {
 // Export a singleton instance
 export const receiptLifecycleManager = new ReceiptLifecycleManager();
 
-// Auto-start the manager
-receiptLifecycleManager.start();
+// Note: Manager is started manually in main.js after coco initialization

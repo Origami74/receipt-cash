@@ -107,11 +107,15 @@ class PayerPayoutManager {
           return;
         }
         
+        console.log(`📍 Receive address: ${receiveAddress.substring(0, 20)}...`);
+        
         const validation = validateReceiveAddress(receiveAddress);
         if (!validation.isValid) {
           console.error('Cannot payout payer: invalid receive address -', validation.error);
           return;
         }
+        
+        console.log(`✅ Address validated as type: ${validation.type}`);
 
         // Get reserve to check available funds
         const reserve = accountingService.getReserve(
@@ -136,8 +140,17 @@ class PayerPayoutManager {
         if (validation.type === 'lightning') {
           console.log(`⚡ Lightning payout requested`);
           
+          // For Lightning addresses, we need to resolve to invoice to check fees
+          // But we'll pass the original address to melt() which will resolve it again
+          let invoiceForQuote = receiveAddress;
+          if (receiveAddress.includes('@')) {
+            console.log(`🔍 Resolving Lightning Address for fee check: ${receiveAddress}`);
+            invoiceForQuote = await lightningMelter.requestInvoice(receiveAddress, payerSplit.amount);
+            console.log(`✅ Resolved to invoice: ${invoiceForQuote.substring(0, 50)}...`);
+          }
+          
           // Create melt quote to check fee
-          const quote = await coco.quotes.createMeltQuote(payerSplit.mintUrl, receiveAddress);
+          const quote = await coco.quotes.createMeltQuote(payerSplit.mintUrl, invoiceForQuote);
           const estimatedFee = quote.fee_reserve;
           
           console.log(`💸 Estimated Lightning fee: ${estimatedFee} sats`);
@@ -161,7 +174,41 @@ class PayerPayoutManager {
           amountToSend = safeAmount;
           
           // Send tokens using coco
-          const token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+          let token;
+          try {
+            token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+          } catch (error) {
+            // Handle insufficient balance - send what we can
+            if (error.message?.includes('Insufficient balance')) {
+              const currentBalance = await cocoService.getBalance(payerSplit.mintUrl);
+              console.warn(`⚠️ Insufficient balance: need ${amountToSend}, have ${currentBalance}`);
+              
+              if (currentBalance > 0) {
+                console.log(`💰 Sending available balance: ${currentBalance} sats`);
+                amountToSend = currentBalance;
+                token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+                
+                // Record the shortfall
+                const shortfall = payerSplit.amount - amountToSend;
+                console.warn(`⚠️ Missing funds: ${shortfall} sats could not be paid`);
+                
+                // Record shortfall in accounting
+                accountingService.recordShortfall(
+                  payerSplit.receiptEventId,
+                  payerSplit.settlementEventId,
+                  shortfall,
+                  payerSplit.mintUrl,
+                  'payer',
+                  `Insufficient balance: needed ${payerSplit.amount}, had ${currentBalance}`
+                );
+              } else {
+                console.error(`❌ No balance available for payout`);
+                throw error;
+              }
+            } else {
+              throw error;
+            }
+          }
           
           // IMMEDIATELY store proofs in safety buffer
           const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
@@ -173,16 +220,17 @@ class PayerPayoutManager {
             proofs: token.proofs,
             mintUrl: payerSplit.mintUrl,
             amount: amountToSend,
-            destination: receiveAddress,
+            destination: receiveAddress, // Store original address/invoice
             createdAt: Date.now(),
             status: 'pending'
           });
           
-          // Melt to Lightning
+          // Melt to Lightning - pass original receiveAddress (address or invoice)
+          // The melt function will handle Lightning address resolution internally
           const sessionId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}`;
           const meltResult = await lightningMelter.melt(
             token.proofs,
-            receiveAddress,
+            receiveAddress, // Pass original address/invoice, not the resolved one
             payerSplit.mintUrl,
             { sessionId }
           );
