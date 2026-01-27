@@ -59,8 +59,8 @@
           </div>
         </div>
         
-        <!-- Scrollable items container -->
-        <div class="max-h-96 overflow-y-auto">
+        <!-- Items container -->
+        <div>
           <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
           <!-- Item Selection Controls -->
           <div v-if="showItemSelection" class="flex items-center space-x-2 mr-3">

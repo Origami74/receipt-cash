@@ -67,11 +67,6 @@ This document contains prioritized user feedback and feature requests for the Re
 
 ## Priority 20-29 (Low - Nice-to-Have)
 
-### Priority 40 - Scrolling inside receipt preview line items
-**Status**: Open
-**Impact**: UI/UX issue with receipt preview display
-**Reason**: Line items are in their own scroll box instead of making the page longer, creating nested scrolling which is poor UX. Should use natural page flow
-
 ### Priority 30 - Add silent background audio player for websocket persistence
 **Status**: Open
 **Impact**: Technical enhancement for mobile browser websocket reliability
