@@ -1,6 +1,6 @@
 <template>
   <div class="h-full">
-    <settlement-view
+    <PaymentView
       v-if="receiptId"
       :event-id="receiptId"
       :decryption-key="decryptionKey"
@@ -81,6 +81,7 @@ import CameraControls from '../components/cameraView/CameraControls.vue';
 import CameraPermissionOverlay from '../components/cameraView/CameraPermissionOverlay.vue';
 import CameraQuickNav from '../components/cameraView/CameraQuickNav.vue';
 import ContextualTip from '../components/onboarding/ContextualTip.vue';
+import PaymentView from './PaymentView.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/aiService';
 import { getCameraPermission, saveCameraPermission } from '../services/storageService';
@@ -95,7 +96,8 @@ export default {
     CameraControls,
     CameraPermissionOverlay,
     CameraQuickNav,
-    ContextualTip
+    ContextualTip,
+    PaymentView
   },
   setup() {
     const route = useRoute();
