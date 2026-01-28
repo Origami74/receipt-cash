@@ -196,6 +196,7 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '.
 import { saveMintQuote } from '../services/storageService';
 import { createPaymentRequest } from '../utils/cashuUtils';
 import { fullReceiptModel } from '../services/nostr/receipt';
+import { saveGuestPayment } from '../services/guestPaymentStorageService';
 import { settlementConfirmation$ } from '../services/paymentStatusService';
 
 export default {
@@ -542,6 +543,21 @@ export default {
         // Get the Lightning invoice and show payment modal
         const mintQuoteChecked = await wallet.checkMintQuote(mintQuote.quote);
         lightningInvoice.value = mintQuoteChecked.request;
+        
+        // Save guest payment data to localStorage
+        saveGuestPayment({
+          receiptId: props.eventId,
+          receiptDecryptionKey: props.decryptionKey,
+          settlementId: settlementEventId.value,
+          payment: {
+            type: 'lightning',
+            invoice: mintQuoteChecked.request,
+            mintQuoteId: mintQuote.quote,
+            mintUrl: selectedMintUrl
+          },
+          timestamp: Date.now()
+        });
+        
         showLightningModal.value = true;
         
         // Start monitoring mint quote payment status
@@ -602,6 +618,19 @@ export default {
         );
         
         cashuPaymentRequest.value = newPaymentRequest;
+        
+        // Save guest payment data to localStorage
+        saveGuestPayment({
+          receiptId: props.eventId,
+          receiptDecryptionKey: props.decryptionKey,
+          settlementId: settlementId,
+          payment: {
+            type: 'cashu',
+            cashuRequest: newPaymentRequest
+          },
+          timestamp: Date.now()
+        });
+        
         showCashuModal.value = true;
         
         showNotification('Settlement request sent! Please pay the Cashu request.', 'success');

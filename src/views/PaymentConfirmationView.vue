@@ -1,5 +1,13 @@
 <template>
   <div class="h-full flex flex-col bg-gray-50">
+    <!-- Cashu Payment Request Modal (if user wants to see it again) -->
+    <CashuPaymentModal
+      :show="showCashuModal"
+      :payment-request="cashuPaymentRequest"
+      :amount="paymentAmount"
+      @close="showCashuModal = false"
+      @paid="handleCashuPaid"
+    />
     <!-- Loading State -->
     <div v-if="loading" class="h-full flex items-center justify-center">
       <div class="text-center">
@@ -130,7 +138,7 @@
       <div class="bg-white border-t p-4">
       <!-- Cashu: Show payment request button if pending -->
       <button
-        v-if="paymentMethod === 'cashu' && status === 'pending'"
+        v-if="paymentMethod === 'cashu' && status === 'pending' && cashuPaymentRequest"
         @click="showPaymentRequest"
         class="w-full bg-blue-100 text-blue-700 py-3 rounded-lg font-semibold mb-3 hover:bg-blue-200 transition-colors"
       >
@@ -161,14 +169,6 @@
       </div>
       </div>
     </div>
-
-    <!-- Cashu Payment Modal (for re-showing payment request) -->
-    <CashuPaymentModal
-      v-if="showCashuModal"
-      :paymentRequest="cashuPaymentRequest"
-      @close="showCashuModal = false"
-      @paid="handleCashuPaid"
-    />
   </div>
 </template>
 
@@ -178,6 +178,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { formatSats } from '../utils/pricingUtils';
 import { settlementConfirmation$ } from '../services/paymentStatusService';
 import { settlementModel } from '../services/nostr/receipt';
+import { getGuestPayment } from '../services/guestPaymentStorageService';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 
 export default {
@@ -203,6 +204,7 @@ export default {
     const showCashuModal = ref(false);
     const loading = ref(true);
     const error = ref(null);
+    const guestPaymentData = ref(null);
     let confirmationSubscription = null;
     let settlementSubscription = null;
     
@@ -281,6 +283,9 @@ export default {
         return;
       }
 
+      // Load guest payment data from localStorage
+      guestPaymentData.value = getGuestPayment(settlementId);
+      
       // Load settlement using settlementModel from receipt.js
       settlementSubscription = settlementModel(settlementId, decryptionKey).subscribe({
         next: (settlement) => {
@@ -300,7 +305,15 @@ export default {
 
             paymentAmount.value = settlement.total;
             paymentMethod.value = settlement.paymentMethod;
-            cashuPaymentRequest.value = settlement.cashuPaymentRequest;
+            
+            // Load payment-specific data from guest payment storage
+            if (guestPaymentData.value) {
+              if (guestPaymentData.value.payment.type === 'cashu' && guestPaymentData.value.payment.cashuRequest) {
+                cashuPaymentRequest.value = guestPaymentData.value.payment.cashuRequest;
+              } else if (guestPaymentData.value.payment.type === 'lightning' && guestPaymentData.value.payment.invoice) {
+                // Store invoice if needed for future use
+              }
+            }
             
             // Only set status if it hasn't been set by the confirmation subscription
             // The confirmation subscription may have already set it to 'confirmed'
@@ -414,7 +427,8 @@ export default {
       tryAgain,
       done,
       showPaymentRequest,
-      handleCashuPaid
+      handleCashuPaid,
+      guestPaymentData
     };
   }
 };
