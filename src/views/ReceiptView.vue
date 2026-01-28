@@ -133,6 +133,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import btcPriceService from '../services/btcPriceService';
 import { fullReceiptModel, receiptModel } from '../services/nostr/receipt';
 import { onboardingService } from '../services/onboardingService';
+import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager';
 
 
 export default {
@@ -185,6 +186,13 @@ export default {
 
     // Loading is based on receiptModel being null
     const loading = computed(() => receiptModel.value === null);
+
+    // Check if this is an owned receipt (user is the host)
+    const isOwnedReceipt = computed(() => {
+      if (!props.eventId) return false;
+      const ownedReceipts = ownedReceiptsStorageManager.receipts$.value || [];
+      return ownedReceipts.some(receipt => receipt.eventId === props.eventId);
+    });
 
     // Computed property for receipt link
     const receiptLink = computed(() => {
@@ -285,10 +293,10 @@ export default {
               currentBtcPrice.value = model?.btcPrice || 0;
             });
           
-          // Check for first payment received (onboarding)
+          // Check for first payment received (onboarding) - ONLY for owned receipts
           const currentConfirmedCount = model?.confirmedSettlements?.length || 0;
-          if (currentConfirmedCount > previousConfirmedCount.value) {
-            // New payment confirmed!
+          if (currentConfirmedCount > previousConfirmedCount.value && isOwnedReceipt.value) {
+            // New payment confirmed on OUR receipt!
             if (!onboardingService.state.hasReceivedFirstPayment &&
                 onboardingService.hasSeenWelcome()) {
               // Show celebration for first payment

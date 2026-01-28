@@ -584,6 +584,24 @@ localStorage.setItem('onboarding', JSON.stringify(onboardingState));
 - [ ] Add Lightning payment explanation
 - [ ] Add replay onboarding option in settings
 
+### Phase 4 (Future Enhancements)
+- [ ] **Seed Phrase Security Education**
+  - Add dedicated screen during welcome flow explaining 12-word seed phrase
+  - Emphasize importance of secure storage
+  - Offer password manager integration for convenience
+  - Show best practices (write down, store offline, never share)
+  - Add "I've stored my seed phrase safely" confirmation checkbox
+  
+- [ ] **Terms of Use & Experimental Acknowledgment**
+  - Replace separate experimental banner with integrated onboarding screen
+  - Add clear on/off sliders for:
+    - "I understand this app is experimental"
+    - "I accept the terms of use"
+    - "I understand the risks of using beta software"
+  - Make acceptance required before proceeding
+  - Link to full terms and privacy policy
+  - Store acceptance timestamp in localStorage
+
 ---
 
 ## Summary

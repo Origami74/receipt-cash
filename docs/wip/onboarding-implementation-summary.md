@@ -1,7 +1,7 @@
 # Onboarding Implementation Summary
 
 **Date**: 2026-01-28
-**Status**: Phase 2 Complete - All 6 Tips Implemented
+**Status**: Phase 3 Complete - Host & Guest Onboarding Implemented
 
 ## What Was Implemented
 
@@ -89,6 +89,54 @@
 
 ---
 
+### Phase 3: Guest Onboarding ✅
+
+**Component**: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+
+**Features**:
+- 4 contextual tips for guest payment flow
+- Sequential tip triggering via watchers
+- Professional images (no emoji icons)
+- State persistence via onboardingService
+- Real-time tip activation based on user actions
+
+---
+
+### Implemented Guest Tips
+
+#### 1. Guest Welcome Tip ✅
+**Location**: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+- **Trigger**: First time opening a shared receipt
+- **Timing**: 1 second after page loads
+- **Image**: `/onboard/onboard-placeholder.png`
+- **State Key**: `GuestWelcomeTip`
+- **Flow**: Automatically shows item selection tip after dismissal
+
+#### 2. Item Selection Tip ✅
+**Location**: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+- **Trigger**: After guest welcome tip dismissed
+- **Timing**: 300ms after welcome tip
+- **Image**: `/onboard/screen-5-review.png` (reused from host flow)
+- **State Key**: `ItemSelectionTip`
+
+#### 3. Payment Method Tip ✅
+**Location**: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+- **Trigger**: When user selects at least one item
+- **Timing**: 500ms after items selected
+- **Image**: `/onboard/onboard-placeholder.png`
+- **State Key**: `PaymentMethodTip`
+- **Special**: Only shows if no other tips are active
+
+#### 4. Payment Success Celebration ✅
+**Location**: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+- **Trigger**: When payment succeeds (first time only)
+- **Timing**: 500ms after payment success
+- **Image**: `/onboard/screen-10-payment-received.png` (reused from host flow)
+- **State Key**: `FirstPaymentCelebration`
+- **Special**: Marks `hasPaidFirstReceipt` in onboarding state
+
+---
+
 ## State Management
 
 **Service**: [`src/services/onboardingService.js`](../../src/services/onboardingService.js)
@@ -100,15 +148,23 @@
   hasSeenWelcome: false,
   welcomeCompletedAt: null,
   
-  // Receipt creation tips
+  // Host: Receipt creation tips
   hasSeenCameraTip: false,
   hasSeenReviewTip: false,
   hasSeenPayoutTip: false,
   hasSeenSharingTip: false,
   
-  // Payment collection tips
+  // Host: Payment collection tips
   hasReceivedFirstPayment: false,
   hasSeenProcessingReminder: false,
+  
+  // Guest: Payment flow tips
+  hasPaidFirstReceipt: false,
+  hasSeenGuestWelcomeTip: false,
+  hasSeenItemSelectionTip: false,
+  hasSeenPaymentMethodTip: false,
+  hasSeenLightningExplanation: false,
+  hasSeenCashuExplanation: false,
   
   // Metadata
   version: 1,
@@ -135,17 +191,25 @@
 1. [`src/services/onboardingService.js`](../../src/services/onboardingService.js) - State management
 2. [`src/components/onboarding/WelcomeOnboarding.vue`](../../src/components/onboarding/WelcomeOnboarding.vue) - Welcome screens
 3. [`src/components/onboarding/ContextualTip.vue`](../../src/components/onboarding/ContextualTip.vue) - Reusable tip component
-4. [`docs/wip/onboarding-status.md`](../onboarding-status.md) - Implementation status
+4. [`docs/wip/onboarding-status.md`](onboarding-status.md) - Implementation status
 5. [`docs/wip/onboarding-testing-guide.md`](onboarding-testing-guide.md) - Testing guide
 6. [`docs/wip/onboarding-implementation-summary.md`](onboarding-implementation-summary.md) - This file
+7. [`docs/wip/guest-payment-confirmation-plan.md`](guest-payment-confirmation-plan.md) - Payment confirmation page plan
 
-### Files Modified
+### Files Modified (Host Flow)
 1. [`src/App.vue`](../../src/App.vue) - Welcome onboarding integration
 2. [`src/views/HomeView.vue`](../../src/views/HomeView.vue) - Camera tip
 3. [`src/components/receipt/ReceiptReviewForm.vue`](../../src/components/receipt/ReceiptReviewForm.vue) - Review tip
 4. [`src/components/receipt/PaymentSetupForm.vue`](../../src/components/receipt/PaymentSetupForm.vue) - Payout tip
-5. [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue) - Sharing, celebration, and processing tips
+5. [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue) - Sharing, celebration, processing tips, ownership check
 6. [`src/components/SettingsMenu.vue`](../../src/components/SettingsMenu.vue) - Reset onboarding button
+
+### Files Modified (Guest Flow)
+1. [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue) - Guest onboarding tips
+   - Guest welcome tip
+   - Item selection tip
+   - Payment method tip
+   - Payment success celebration
 
 ---
 

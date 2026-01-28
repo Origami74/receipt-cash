@@ -29,7 +29,11 @@ const DEFAULT_STATE = {
   
   // Guest flow
   hasPaidFirstReceipt: false,
+  hasSeenGuestWelcomeTip: false,
+  hasSeenItemSelectionTip: false,
+  hasSeenPaymentMethodTip: false,
   hasSeenLightningExplanation: false,
+  hasSeenCashuExplanation: false,
   
   // Metadata
   version: 1,

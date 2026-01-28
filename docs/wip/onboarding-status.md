@@ -164,34 +164,85 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ✅ Responsive design
 - ✅ Icon and bullet point support
 
-### 🔄 Phase 3: Payer Onboarding (PLANNED)
+### ✅ Phase 3: Guest Onboarding (COMPLETE)
 
-**Goal**: Guide payers through the payment process when they open a receipt link.
+**Goal**: Guide guests through the payment process when they open a receipt link.
 
-**Status**: Not started
+**Status**: Fully implemented - 4 of 4 tips complete
 
-**Planned Flow**:
-1. **Receipt Opened**
-   - Show: "Select items you ordered"
-   - Visual: Highlight item selection UI
+**Components Modified**:
+- [`src/services/onboardingService.js`](../../src/services/onboardingService.js) - Added guest state flags
+  - `hasSeenGuestWelcomeTip`
+  - `hasSeenItemSelectionTip`
+  - `hasSeenPaymentMethodTip`
+  - `hasSeenLightningExplanation`
+  - `hasSeenCashuExplanation`
+  - `hasPaidFirstReceipt`
 
-2. **Items Selected**
-   - Show: "Review your total and pay"
-   - Visual: Highlight payment button
+- [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue) - Guest onboarding integration
+  - Uses `ContextualTip` component for all tips
+  - Sequential tip flow with proper timing
+  - Real-time status updates via watchers
 
-3. **Payment Method**
-   - Show: "Choose Cashu (instant) or Lightning"
-   - Visual: Explain payment options
+**Implemented Tips**:
 
-4. **Payment Complete**
-   - Show: "✅ Paid! Host will be notified"
-   - Visual: Celebration screen
+1. ✅ **Guest Welcome Tip** (Receipt opened)
+   - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+   - Trigger: First time opening a shared receipt
+   - Timing: 1 second after page loads
+   - Image: `/onboard/onboard-placeholder.png`
+   - Title: "You're Invited!"
+   - Description: "Someone shared a receipt with you. Select the items you had and pay your share."
+   - State key: `GuestWelcomeTip`
 
-**Implementation Plan**:
-- Create `PayerOnboarding.vue` component
-- Integrate into `PaymentView.vue`
-- Add step-by-step overlays
-- Track completion in `onboardingService`
+2. ✅ **Item Selection Tip** (After welcome dismissed)
+   - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+   - Trigger: After welcome tip dismissed
+   - Timing: 300ms after welcome tip
+   - Image: `/onboard/screen-5-review.png`
+   - Title: "Select Your Items"
+   - Description: "Tap the + button next to each item you had. You can adjust quantities as needed."
+   - State key: `ItemSelectionTip`
+
+3. ✅ **Payment Method Tip** (Items selected)
+   - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+   - Trigger: When user selects at least one item
+   - Timing: 500ms after items selected
+   - Image: `/onboard/onboard-placeholder.png`
+   - Title: "Choose Payment Method"
+   - Description: "Select how you want to pay. Both methods go directly to the host."
+   - State key: `PaymentMethodTip`
+
+4. ✅ **Payment Success Celebration** (Payment sent)
+   - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
+   - Trigger: When payment succeeds (first time only)
+   - Timing: 500ms after payment success
+   - Image: `/onboard/screen-10-payment-received.png`
+   - Title: "Payment Sent!"
+   - Description: "Great! Your payment has been sent. The host will process it and you'll be all set."
+   - State key: `FirstPaymentCelebration`
+   - Special: Marks `hasPaidFirstReceipt` in onboarding state
+
+**Bug Fixes**:
+- ✅ Fixed host payment celebration to only show for owned receipts
+  - Added `isOwnedReceipt` computed property in [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
+  - Imported `ownedReceiptsStorageManager` to verify ownership
+  - Guests no longer see host's payment celebration
+
+**Features Implemented**:
+- ✅ Professional images instead of emoji icons
+- ✅ Sequential tip flow (welcome → item selection → payment method → success)
+- ✅ Proper timing delays between tips
+- ✅ State persistence via onboardingService
+- ✅ Watchers for real-time tip triggering
+- ✅ One tip at a time (no conflicts)
+
+**Future Enhancement**:
+- 📋 Payment Confirmation Page - See [`docs/wip/guest-payment-confirmation-plan.md`](guest-payment-confirmation-plan.md)
+  - Route: `/receipt/:receiptEventId/:decryptionKey/confirmation/:settlementEventId`
+  - Clear "you're done" page like Tikkie/Venmo
+  - Real-time status updates (pending → confirmed)
+  - Payment details summary
 
 ### 🔄 Phase 4: Advanced Features (PLANNED)
 
@@ -266,10 +317,13 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - ⏳ Gather user feedback
 
 2. **Short-term** (Phase 3 - Guest Onboarding):
-   - Design guest onboarding flow
-   - Add payment method explanation
-   - Add Lightning payment flow education
-   - Test with real users
+   - ✅ Design guest onboarding flow
+   - ✅ Add payment method explanation
+   - ✅ Add guest welcome tip
+   - ✅ Add item selection tip
+   - ✅ Add payment success celebration
+   - ⏳ Test with real users
+   - 📋 Implement payment confirmation page (see plan)
 
 3. **Medium-term** (Phase 4 - Advanced Features):
    - Advanced feature tutorials
@@ -338,7 +392,13 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ✅ First payment celebration
 - ✅ Processing reminder (critical)
 
-**Phase 3 (Guest Onboarding)**: ⏳ Not started
+**Phase 3 (Guest Onboarding)**: ✅ Complete (4 of 4 tips)
+- ✅ Guest welcome tip
+- ✅ Item selection tip
+- ✅ Payment method tip
+- ✅ Payment success celebration
+- 📋 Payment confirmation page (planned - see [`guest-payment-confirmation-plan.md`](guest-payment-confirmation-plan.md))
+
 **Phase 4 (Advanced Features)**: ⏳ Not started
 
 ---

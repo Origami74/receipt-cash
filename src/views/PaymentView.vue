@@ -7,6 +7,71 @@
     retryButtonText="Try Again"
     @retry="fetchReceipt"
   >
+    <!-- Guest Onboarding Tips -->
+    <ContextualTip
+      :show="showGuestWelcomeTip"
+      image="/onboard/onboard-placeholder.png"
+      title="You're Invited!"
+      description="Someone shared a receipt with you. Select the items you had and pay your share."
+      :bullets="[
+        'Select items you ordered',
+        'Choose payment method',
+        'Pay your share',
+        'Done! Host gets reimbursed'
+      ]"
+      primary-button-text="Got it!"
+      @primary-action="dismissGuestWelcomeTip"
+      @dismiss="dismissGuestWelcomeTip"
+    />
+
+    <ContextualTip
+      :show="showItemSelectionTip"
+      image="/onboard/screen-5-review.png"
+      title="Select Your Items"
+      description="Tap the + button next to each item you had. You can adjust quantities as needed."
+      :bullets="[
+        'Tap + to add items',
+        'Tap - to remove items',
+        'Select All button for convenience',
+        'Only pay for what you had'
+      ]"
+      primary-button-text="Got it!"
+      @primary-action="dismissItemSelectionTip"
+      @dismiss="dismissItemSelectionTip"
+    />
+
+    <ContextualTip
+      :show="showPaymentMethodTip"
+      image="/onboard/onboard-placeholder.png"
+      title="Choose Payment Method"
+      description="Select how you want to pay. Both methods go directly to the host."
+      :bullets="[
+        '🥜 Cashu: Privacy-focused ecash',
+        '⚡️ Lightning: Fast Bitcoin payment',
+        'Both are instant and secure',
+        'You can leave after paying'
+      ]"
+      primary-button-text="Got it!"
+      @primary-action="dismissPaymentMethodTip"
+      @dismiss="dismissPaymentMethodTip"
+    />
+
+    <ContextualTip
+      :show="showPaymentSuccessCelebration"
+      image="/onboard/screen-10-payment-received.png"
+      title="Payment Sent!"
+      description="Great! Your payment has been sent. The host will process it and you'll be all set."
+      :bullets="[
+        'Payment submitted successfully',
+        'Host will confirm receipt',
+        'You can close the app now',
+        'Check back later for confirmation'
+      ]"
+      primary-button-text="Awesome!"
+      @primary-action="dismissPaymentSuccessCelebration"
+      @dismiss="dismissPaymentSuccessCelebration"
+    />
+
     <ReceiptHeader
       :show-back-button="true"
       back-button-text="Back"
@@ -101,7 +166,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
@@ -111,7 +176,9 @@ import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
+import ContextualTip from '../components/onboarding/ContextualTip.vue';
 import { showNotification, useNotification } from '../services/notificationService';
+import { onboardingService } from '../services/onboardingService';
 import { convertFromSats } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
 import settlementService from '../services/flows/outgoing/settlement';
@@ -137,7 +204,8 @@ export default {
     CashuPaymentModal,
     LightningPaymentModal,
     LoadingErrorWrapper,
-    SettingsMenu
+    SettingsMenu,
+    ContextualTip
   },
   props: {
     eventId: {
@@ -182,11 +250,45 @@ export default {
     // Track processed confirmations
     const processedConfirmations = ref(new Set());
 
+    // Guest onboarding state
+    const showGuestWelcomeTip = ref(false);
+    const showItemSelectionTip = ref(false);
+    const showPaymentMethodTip = ref(false);
+    const showPaymentSuccessCelebration = ref(false);
+
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
 
     // Loading is based on receiptModel being null
     const loading = computed(() => receiptModel.value === null);
+
+    // Guest onboarding methods
+    const dismissGuestWelcomeTip = () => {
+      showGuestWelcomeTip.value = false;
+      onboardingService.markTipSeen('GuestWelcomeTip');
+      
+      // Show item selection tip after welcome tip is dismissed
+      if (!onboardingService.hasSeen('ItemSelectionTip')) {
+        setTimeout(() => {
+          showItemSelectionTip.value = true;
+        }, 300);
+      }
+    };
+
+    const dismissItemSelectionTip = () => {
+      showItemSelectionTip.value = false;
+      onboardingService.markTipSeen('ItemSelectionTip');
+    };
+
+    const dismissPaymentMethodTip = () => {
+      showPaymentMethodTip.value = false;
+      onboardingService.markTipSeen('PaymentMethodTip');
+    };
+
+    const dismissPaymentSuccessCelebration = () => {
+      showPaymentSuccessCelebration.value = false;
+      onboardingService.markFirstReceiptPaid();
+    };
 
     // Computed properties from receiptModel
     const receiptAuthorPubkey = computed(() => receiptModel.value?.receiptModel?.event?.pubkey || '');
@@ -587,6 +689,37 @@ export default {
     // Component lifecycle
     onMounted(() => {
       fetchReceipt();
+      
+      // Show guest welcome tip on first visit
+      if (!onboardingService.hasSeen('GuestWelcomeTip')) {
+        setTimeout(() => {
+          showGuestWelcomeTip.value = true;
+        }, 1000);
+      }
+    });
+
+    // Watch for selected items to show payment method tip
+    watch(selectedItems, (newItems) => {
+      if (newItems.length > 0 &&
+          !onboardingService.hasSeen('PaymentMethodTip') &&
+          !showPaymentMethodTip.value &&
+          !showItemSelectionTip.value &&
+          !showGuestWelcomeTip.value) {
+        setTimeout(() => {
+          showPaymentMethodTip.value = true;
+        }, 500);
+      }
+    });
+
+    // Watch for payment success to show celebration
+    watch(paymentSuccess, (isSuccess) => {
+      if (isSuccess &&
+          !onboardingService.state.hasPaidFirstReceipt &&
+          !showPaymentSuccessCelebration.value) {
+        setTimeout(() => {
+          showPaymentSuccessCelebration.value = true;
+        }, 500);
+      }
     });
 
     onUnmounted(() => {
@@ -632,7 +765,16 @@ export default {
       openInLightningWallet,
       openInCashuWallet,
       cancelPayment,
-      fetchReceipt
+      fetchReceipt,
+      // Guest onboarding
+      showGuestWelcomeTip,
+      showItemSelectionTip,
+      showPaymentMethodTip,
+      showPaymentSuccessCelebration,
+      dismissGuestWelcomeTip,
+      dismissItemSelectionTip,
+      dismissPaymentMethodTip,
+      dismissPaymentSuccessCelebration
     };
   }
 };
