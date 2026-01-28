@@ -230,7 +230,7 @@
 <script>
 import { ref, onMounted, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
-         getReceiveAddress, saveReceiveAddress } from '../services/storageService';
+         getReceiveAddress } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
 import { showNotification } from '../services/notificationService';
 import debugLogger from '../services/debugService';
@@ -274,22 +274,9 @@ export default {
     const receiveAddressValidation = ref({ isValid: true, type: '', error: '' });
     
     // Handle validation changes from ReceiveAddressInput component
+    // Note: The component now handles auto-saving internally
     const handleReceiveAddressValidation = (validation) => {
       receiveAddressValidation.value = validation;
-      
-      // Only save when validation completes successfully (not while verifying)
-      if (!validation.isVerifying) {
-        if (validation.isValid && settings.value.receiveAddress && settings.value.receiveAddress.trim() !== '') {
-          // Save the validated address
-          saveReceiveAddress(settings.value.receiveAddress);
-          console.log('✅ Receive address auto-saved:', settings.value.receiveAddress);
-        } else if (!settings.value.receiveAddress || settings.value.receiveAddress.trim() === '') {
-          // Clear if empty
-          saveReceiveAddress('');
-          console.log('🗑️ Receive address cleared');
-        }
-        // If invalid, don't save - keep the old value in storage
-      }
     };
     
     // Debug console state
@@ -316,7 +303,7 @@ export default {
     });
 
 
-    // Save settings to storage (only AI settings, receive address is auto-saved)
+    // Save settings to storage (only AI settings, receive address is auto-saved by component)
     const saveSettings = () => {
       // Save AI settings
       saveAiSettings({
@@ -325,8 +312,7 @@ export default {
         model: settings.value.model
       });
       
-      // Note: Receive address is auto-saved in handleReceiveAddressValidation
-      // when validation completes successfully
+      // Note: Receive address is auto-saved by ReceiveAddressInput component
     };
 
     // Reset onboarding state

@@ -47,6 +47,7 @@
 <script>
 import { computed, ref, watch } from 'vue';
 import addressValidation, { AddressType, verifyLightningAddress } from '../utils/receiveAddressValidationUtils';
+import { saveReceiveAddress } from '../services/storageService';
 
 export default {
   name: 'ReceiveAddressInput',
@@ -70,6 +71,10 @@ export default {
     skipInitialVerification: {
       type: Boolean,
       default: true
+    },
+    autoSave: {
+      type: Boolean,
+      default: true
     }
   },
   emits: ['update:modelValue', 'validation-change'],
@@ -89,6 +94,13 @@ export default {
       if (!address || address.trim() === '') {
         validationResult.value = { isValid: true, type: '', error: '', isVerifying: false };
         isVerifying.value = false;
+        
+        // Clear saved address if empty and auto-save is enabled
+        if (props.autoSave) {
+          saveReceiveAddress('');
+          console.log('🗑️ Receive address cleared');
+        }
+        
         emit('validation-change', validationResult.value);
         return;
       }
@@ -124,6 +136,12 @@ export default {
               };
             }
             
+            // Auto-save if enabled and validation successful
+            if (props.autoSave && validationResult.value.isValid && address && address.trim() !== '') {
+              saveReceiveAddress(address);
+              console.log('✅ Receive address auto-saved:', address);
+            }
+            
             // Emit final validation result after network verification
             emit('validation-change', validationResult.value);
           } catch (error) {
@@ -141,7 +159,13 @@ export default {
           }
         }, 1000); // Wait 1 second after user stops typing
       } else {
-        // For non-Lightning addresses, emit immediately after format validation
+        // For non-Lightning addresses, auto-save if enabled and valid
+        if (props.autoSave && validationResult.value.isValid && address && address.trim() !== '') {
+          saveReceiveAddress(address);
+          console.log('✅ Receive address auto-saved:', address);
+        }
+        
+        // Emit immediately after format validation
         emit('validation-change', validationResult.value);
       }
     };

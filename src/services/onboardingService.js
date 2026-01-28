@@ -16,6 +16,7 @@ const DEFAULT_STATE = {
   hasSeenCameraTip: false,
   hasSeenReviewTip: false,
   hasSeenPayoutTip: false,
+  hasSeenDeveloperSplitTip: false,
   hasSeenSharingTip: false,
   hasSeenProcessingTip: false,
   

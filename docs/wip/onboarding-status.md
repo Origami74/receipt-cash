@@ -73,11 +73,11 @@ This document tracks the progress of implementing the onboarding flow for Receip
 2. ✅ Images too small - Increased to 60vh max height
 3. ✅ "Get Started" button not clickable - Fixed z-index layering
 
-### ✅ Phase 2: Contextual Tips (COMPLETE - 4 of 6)
+### ✅ Phase 2: Contextual Tips (COMPLETE - 7 of 7)
 
 **Goal**: Show helpful tips at key moments during first-time usage.
 
-**Status**: Core tips implemented and ready for testing - 4 of 6 tips complete
+**Status**: All tips implemented and ready for testing - 7 of 7 tips complete
 
 **Components Created**:
 - ✅ [`src/components/onboarding/ContextualTip.vue`](../../src/components/onboarding/ContextualTip.vue) - Reusable tip component
@@ -113,16 +113,26 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - State key: `ReviewTip`
 
 3. ✅ **Payout Address Tip** (Payment request setup)
-   - Location: [`src/components/ReceiptPreview.vue`](../../src/components/ReceiptPreview.vue)
-   - Trigger: After review tip is dismissed OR when user focuses on address input
-   - Icon: 💰
+   - Location: [`src/components/receipt/PaymentSetupForm.vue`](../../src/components/receipt/PaymentSetupForm.vue)
+   - Trigger: First time on payment setup screen OR when user focuses on address input
+   - Image: `/onboard/screen-6-payment-address.png`
    - Title: "Where to Send Money"
-   - Description: "Enter your Lightning address or leave blank to keep funds in your wallet."
-   - Bullets: Lightning address format, skip to keep in wallet, can change later
-   - Timing: Shows 300ms after review tip dismissed
+   - Description: "Enter your Lightning address or Cashu payment request to receive payments when friends pay their share."
+   - Bullets: Lightning address format, or Cashu payment request, funds sent automatically, can change later
+   - Timing: Shows 500ms after component mounts
    - State key: `PayoutTip`
 
-4. ✅ **Sharing Explanation Tip** (QR code shown)
+4. ✅ **Developer Split Tip** (After payout tip)
+   - Location: [`src/components/receipt/PaymentSetupForm.vue`](../../src/components/receipt/PaymentSetupForm.vue)
+   - Trigger: After payout tip is dismissed
+   - Image: `/onboard/onboard-placeholder.png`
+   - Title: "Keep This Tool Alive"
+   - Description: "Set your contribution to help maintain Receipt.Cash. Default is 2.1%, adjust to any amount."
+   - Bullets: Helps keep the app running, adjustable from 0-100%, change anytime
+   - Timing: Shows 300ms after payout tip dismissed
+   - State key: `DeveloperSplitTip`
+
+5. ✅ **Sharing Explanation Tip** (QR code shown)
    - Location: [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
    - Trigger: First time QR code is displayed (after receipt creation)
    - Icon: 📤
@@ -132,7 +142,7 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - Timing: Shows 500ms after QR code appears
    - State key: `SharingTip`
 
-5. ✅ **First Payment Received** (Celebration)
+6. ✅ **First Payment Received** (Celebration)
    - Location: [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
    - Trigger: First settlement confirmation received (when confirmedSettlements count increases)
    - Icon: 🎉
@@ -143,7 +153,7 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - State key: `FirstPaymentCelebration`
    - Special: Marks `hasReceivedFirstPayment` in onboarding state
 
-6. ✅ **Processing Reminder** (Critical - Host education)
+7. ✅ **Processing Reminder** (Critical - Host education)
    - Location: [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
    - Trigger: When receipt has pending (unconfirmed) payments
    - Icon: 💡
@@ -383,11 +393,12 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - State persistence
 - Reset functionality
 
-**Phase 2 (Contextual Tips)**: ✅ 100% Complete (6 of 6 tips)
+**Phase 2 (Contextual Tips)**: ✅ 100% Complete (7 of 7 tips)
 - ✅ Reusable ContextualTip component
 - ✅ Camera tip
 - ✅ Review & edit tip
 - ✅ Payout address tip
+- ✅ Developer split tip (NEW)
 - ✅ Sharing explanation tip
 - ✅ First payment celebration
 - ✅ Processing reminder (critical)

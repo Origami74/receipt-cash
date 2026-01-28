@@ -9,7 +9,19 @@
       description="Enter your Lightning address or Cashu payment request to receive payments when friends pay their share."
       :bullets="['Lightning address (user@domain.com)', 'Or Cashu payment request', 'Funds sent automatically', 'You can change this later']"
       primary-button-text="Got it!"
-      @dismiss="showPayoutTip = false"
+      @dismiss="handlePayoutTipDismiss"
+    />
+    
+    <!-- Developer Split Tip (after payout tip) -->
+    <ContextualTip
+      :show="showDeveloperSplitTip"
+      tip-name="DeveloperSplitTip"
+      image="/onboard/onboard-placeholder.png"
+      title="Keep This Tool Alive"
+      description="Set your contribution to help maintain Receipt.Cash. Default is 2.1%, adjust to any amount."
+      :bullets="['Helps keep the app running', 'Adjustable from 0-100%', 'Change anytime']"
+      primary-button-text="Got it!"
+      @dismiss="showDeveloperSplitTip = false"
     />
     
     <!-- Header with Back Button -->
@@ -157,6 +169,7 @@ export default {
     const isCreating = ref(false);
     const currentBtcPrice = ref(0);
     const showPayoutTip = ref(false);
+    const showDeveloperSplitTip = ref(false);
     
     const selectedCurrency = computed(() => props.receiptData.currency || 'EUR');
     
@@ -236,6 +249,17 @@ export default {
       }
     };
     
+    const handlePayoutTipDismiss = () => {
+      showPayoutTip.value = false;
+      
+      // Show developer split tip after payout tip is dismissed
+      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('DeveloperSplitTip')) {
+        setTimeout(() => {
+          showDeveloperSplitTip.value = true;
+        }, 300);
+      }
+    };
+    
     const handleCreate = async () => {
       if (!receiveAddress.value) {
         showNotification('Please enter a receive address', 'error');
@@ -259,8 +283,10 @@ export default {
       try {
         isCreating.value = true;
         
-        // Save the receive address for future use
-        saveReceiveAddress(receiveAddress.value);
+        // Save the receive address for future use (only if valid)
+        if (addressValid.value && receiveAddress.value) {
+          saveReceiveAddress(receiveAddress.value);
+        }
         
         // Emit create event with payment setup data
         emit('create', {
@@ -284,6 +310,7 @@ export default {
       developerSplit,
       isCreating,
       showPayoutTip,
+      showDeveloperSplitTip,
       itemCount,
       selectedItemsTotal,
       totalForOthers,
@@ -295,6 +322,7 @@ export default {
       convertToSats,
       handleAddressValidation,
       handleAddressFocus,
+      handlePayoutTipDismiss,
       handleCreate
     };
   }
