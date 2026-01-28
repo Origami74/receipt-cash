@@ -28,7 +28,7 @@
           
           <!-- Metadata line -->
           <p class="text-sm" :class="statusTextColor">
-            {{ payment.itemCount }} item{{ payment.itemCount !== 1 ? 's' : '' }} • {{ statusLabel }}
+            {{ statusLabel }}
           </p>
         </div>
       </div>
