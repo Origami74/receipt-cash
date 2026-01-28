@@ -1,5 +1,12 @@
 <template>
   <div class="h-full flex flex-col">
+    <!-- Welcome Onboarding (shows first, blocks everything) -->
+    <WelcomeOnboarding
+      v-if="showWelcomeOnboarding"
+      @complete="handleWelcomeComplete"
+      @skip="handleWelcomeComplete"
+    />
+    
     <!-- Tab blocked overlay -->
     <TabBlockedOverlay v-if="isTabBlocked" />
     
@@ -34,9 +41,9 @@
       @close="isSettingsOpen = false"
     />
     
-    <!-- Bottom Tab Bar - hidden on home/camera view -->
+    <!-- Bottom Tab Bar - hidden on home/camera view and during onboarding -->
     <BottomTabBar
-      v-if="shouldShowTabBar"
+      v-if="shouldShowTabBar && !showWelcomeOnboarding"
       @toggle-monitor="handleToggleMonitor"
       @toggle-settings="handleToggleSettings"
     />
@@ -47,12 +54,14 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { showNotification, useNotification } from './services/notificationService';
+import { onboardingService } from './services/onboardingService';
 import Notification from './components/Notification.vue';
 import ExperimentalModal from './components/ExperimentalModal.vue';
 import ReportModal from './components/ReportModal.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
 import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
+import WelcomeOnboarding from './components/onboarding/WelcomeOnboarding.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
 import { checkForVersionUpdate } from './services/updaterService';
@@ -66,7 +75,8 @@ export default {
     ReportModal,
     BottomTabBar,
     SettingsMenu,
-    TabBlockedOverlay
+    TabBlockedOverlay,
+    WelcomeOnboarding
   },
   setup() {
     const route = useRoute();
@@ -75,6 +85,7 @@ export default {
     const currentErrorMessage = ref('');
     const isSettingsOpen = ref(false);
     const isTabBlocked = ref(false);
+    const showWelcomeOnboarding = ref(false);
     
     // Hide tab bar on home/camera view
     const shouldShowTabBar = computed(() => {
@@ -86,12 +97,23 @@ export default {
       isTabBlocked.value = true;
     });
     
+    // Handle welcome onboarding completion
+    const handleWelcomeComplete = () => {
+      showWelcomeOnboarding.value = false;
+      showNotification('Welcome to Receipt.Cash! 🎉', 'success');
+    };
+    
     // Initialize on mount
     onMounted(async () => {
       // Check if we have the lock (should already be acquired in main.js)
       if (!tabLockService.hasLock()) {
         isTabBlocked.value = true;
         return;
+      }
+      
+      // Check if user needs to see welcome screens
+      if (!onboardingService.hasSeenWelcome()) {
+        showWelcomeOnboarding.value = true;
       }
       
       // Check for version updates
@@ -150,7 +172,9 @@ export default {
       shouldShowTabBar,
       handleToggleMonitor,
       handleToggleSettings,
-      isSettingsOpen
+      isSettingsOpen,
+      showWelcomeOnboarding,
+      handleWelcomeComplete
     };
   }
 }

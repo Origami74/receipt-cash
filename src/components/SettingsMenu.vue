@@ -447,6 +447,13 @@
             </button>
             
             <button
+              @click="resetOnboarding"
+              class="w-full py-2 px-4 mb-2 bg-purple-100 text-purple-800 rounded-md text-sm font-medium hover:bg-purple-200 transition-colors"
+            >
+              Reset Onboarding
+            </button>
+            
+            <button
               @click="clearSettings"
               class="w-full py-2 px-4 bg-red-100 text-red-800 rounded-md text-sm font-medium hover:bg-red-200 transition-colors"
             >
@@ -464,6 +471,7 @@ import { ref, onMounted, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
          getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote,
          getReceiveAddress, saveReceiveAddress } from '../services/storageService';
+import { onboardingService } from '../services/onboardingService';
 import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecovery';
 import { showNotification } from '../services/notificationService';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
@@ -681,10 +689,17 @@ export default {
       }
     };
 
+    // Reset onboarding state
+    const resetOnboarding = () => {
+      onboardingService.reset();
+      showNotification('Onboarding reset! Reload the page to see welcome screens again.', 'success');
+    };
+    
     // Clear all settings
     const clearSettings = () => {
       clearAiSettings();
       saveReceiveAddress(''); // Clear receive address
+      onboardingService.reset(); // Also reset onboarding
       settings.value = {
         completionsUrl: 'https://api.ppq.ai/chat/completions',
         apiKey: '',
@@ -939,6 +954,9 @@ export default {
       
       // Update management
       checkForUpdates,
+      
+      // Onboarding management
+      resetOnboarding,
       
       // Utility methods
       formatMintUrl
