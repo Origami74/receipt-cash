@@ -196,6 +196,7 @@ import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_CONFIRMATION } from '.
 import { saveMintQuote } from '../services/storageService';
 import { createPaymentRequest } from '../utils/cashuUtils';
 import { fullReceiptModel } from '../services/nostr/receipt';
+import { settlementConfirmation$ } from '../services/paymentStatusService';
 
 export default {
   name: 'PaymentView',
@@ -252,6 +253,9 @@ export default {
     
     // Track processed confirmations
     const processedConfirmations = ref(new Set());
+    
+    // Confirmation subscription for auto-redirect
+    let confirmationSubscription = null;
 
     // Guest onboarding state
     const showGuestWelcomeTip = ref(false);
@@ -543,7 +547,7 @@ export default {
         // Start monitoring mint quote payment status
         monitorMintQuotePayment();
         
-        showNotification('Settlement request sent! Please pay the invoice.', 'info');
+        showNotification('Settlement request sent! Please pay the invoice.', 'success');
         
         // Mark selected items as pending
         selectedItems.value.forEach(selectedItem => {
@@ -600,7 +604,10 @@ export default {
         cashuPaymentRequest.value = newPaymentRequest;
         showCashuModal.value = true;
         
-        showNotification('Settlement request sent! Please pay the Cashu request.', 'info');
+        showNotification('Settlement request sent! Please pay the Cashu request.', 'success');
+        
+        // Subscribe to confirmations for auto-redirect when host confirms
+        subscribeToSettlementConfirmation();
         
         // Mark selected items as pending
         selectedItems.value.forEach(selectedItem => {
@@ -712,6 +719,31 @@ export default {
       });
     };
 
+    // Subscribe to settlement confirmations for auto-redirect
+    const subscribeToSettlementConfirmation = () => {
+      if (!settlementEventId.value) return;
+      
+      // Clean up any existing subscription
+      if (confirmationSubscription) {
+        confirmationSubscription.unsubscribe();
+        confirmationSubscription = null;
+      }
+      
+      // Subscribe to confirmations for this settlement
+      confirmationSubscription = settlementConfirmation$(settlementEventId.value).subscribe({
+        next: (confirmation) => {
+          // When host confirms, navigate to confirmation page
+          // This handles the case where guest is still on PaymentView when host confirms
+          if (currentPaymentType.value === 'cashu') {
+            navigateToConfirmation();
+          }
+        },
+        error: (error) => {
+          console.error('Error subscribing to settlement confirmation:', error);
+        }
+      });
+    };
+
     // Component lifecycle
     onMounted(() => {
       fetchReceipt();
@@ -750,6 +782,10 @@ export default {
 
     onUnmounted(() => {
       // Clean up subscriptions
+      if (confirmationSubscription) {
+        confirmationSubscription.unsubscribe();
+        confirmationSubscription = null;
+      }
     });
 
     return {
@@ -791,6 +827,7 @@ export default {
       openInLightningWallet,
       openInCashuWallet,
       cancelPayment,
+      navigateToConfirmation,
       fetchReceipt,
       // Guest onboarding
       showGuestWelcomeTip,

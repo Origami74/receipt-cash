@@ -247,8 +247,8 @@ export const settlementModel = (settlementEventId, sharedEncryptionKey) => {
                 0
             );
 
-            // Get payment method from tags
-            const paymentMethod = getTagValue(settlementEvent, 'method') || 'lightning';
+            // Get payment method from tags (tag name is 'payment', not 'method')
+            const paymentMethod = getTagValue(settlementEvent, 'payment') || 'lightning';
             
             // Get cashu payment request if it exists
             const cashuPaymentRequest = getTagValue(settlementEvent, 'cashu') || '';
