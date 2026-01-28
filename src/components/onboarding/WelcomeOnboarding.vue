@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 z-50 bg-white">
+  <div class="fixed inset-0 z-[100] bg-white">
     <!-- Swipeable screens container -->
     <div 
       class="h-full flex transition-transform duration-300 ease-out"
