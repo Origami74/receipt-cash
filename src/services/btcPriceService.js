@@ -4,6 +4,9 @@ import { formatCurrency } from '../utils/currencyUtils';
 const priceCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
+// In-flight request tracking to prevent duplicate simultaneous requests
+const inflightRequests = new Map();
+
 /**
  * Fetches the current Bitcoin price in the specified currency with caching
  * @param {String} currency - Currency code (default: 'usd')
@@ -25,9 +28,16 @@ export const fetchBtcPrice = async (currency = 'usd') => {
     }
   }
   
-  try {
-    let price = null;
-    let lastError = null;
+  // Check if there's already a request in flight for this currency
+  if (inflightRequests.has(cacheKey)) {
+    return inflightRequests.get(cacheKey);
+  }
+  
+  // Create the fetch promise
+  const fetchPromise = (async () => {
+    try {
+      let price = null;
+      let lastError = null;
     
     // Try Coinbase API first
     try {
@@ -75,37 +85,46 @@ export const fetchBtcPrice = async (currency = 'usd') => {
         console.error('CoinGecko API also failed:', geckoError.message);
         throw lastError; // Throw the original Coinbase error
       }
+      }
+      
+      // Cache the new price
+      priceCache.set(cacheKey, {
+        price: price,
+        timestamp: now
+      });
+      
+      console.log(`Cached new BTC price for ${currency}: ${price}`);
+      return price;
+    } catch (err) {
+      // Better error logging for debugging
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorDetails = {
+        message: errorMessage,
+        name: err?.name,
+        stack: err?.stack,
+        currency: currency
+      };
+      console.error('Error fetching BTC price:', errorDetails);
+      
+      // If we have an expired cached price, use it as fallback
+      if (priceCache.has(cacheKey)) {
+        const fallback = priceCache.get(cacheKey);
+        console.warn(`Using expired cached price as fallback for ${currency}: ${fallback.price}`);
+        return fallback.price;
+      }
+      
+      // Throw a more descriptive error
+      throw new Error(`Failed to fetch Bitcoin price for ${currency}: ${errorMessage}`);
+    } finally {
+      // Remove from in-flight requests when done
+      inflightRequests.delete(cacheKey);
     }
-    
-    // Cache the new price
-    priceCache.set(cacheKey, {
-      price: price,
-      timestamp: now
-    });
-    
-    console.log(`Cached new BTC price for ${currency}: ${price}`);
-    return price;
-  } catch (err) {
-    // Better error logging for debugging
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorDetails = {
-      message: errorMessage,
-      name: err?.name,
-      stack: err?.stack,
-      currency: currency
-    };
-    console.error('Error fetching BTC price:', errorDetails);
-    
-    // If we have an expired cached price, use it as fallback
-    if (priceCache.has(cacheKey)) {
-      const fallback = priceCache.get(cacheKey);
-      console.warn(`Using expired cached price as fallback for ${currency}: ${fallback.price}`);
-      return fallback.price;
-    }
-    
-    // Throw a more descriptive error
-    throw new Error(`Failed to fetch Bitcoin price for ${currency}: ${errorMessage}`);
-  }
+  })();
+  
+  // Store the promise in in-flight requests
+  inflightRequests.set(cacheKey, fetchPromise);
+  
+  return fetchPromise;
 };
 
 export default {

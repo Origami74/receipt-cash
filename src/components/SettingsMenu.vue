@@ -26,6 +26,17 @@
         </div>
         
         <div class="overflow-y-auto p-4 space-y-6 flex-grow" style="overscroll-behavior: contain;">
+          <!-- Version and Update Check -->
+          <div class="flex items-center justify-between gap-2 pb-4 border-b border-gray-200">
+            <span class="text-xs text-gray-500">Version {{ appVersion }}</span>
+            <button
+              @click="checkForUpdates"
+              class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
+            >
+              Check for Updates
+            </button>
+          </div>
+          
           <!-- General Settings -->
           <div>
             <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Payment</h4>
@@ -88,132 +99,6 @@
                   <option value="gpt-5-codex">gpt-5-codex</option>
                   <option value="gpt-5">gpt-5</option>
                 </select>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Proof Recovery Section -->
-          <div v-if="Object.keys(pendingProofs).length > 0" class="pt-4 border-t border-gray-200">
-            <div class="flex justify-between items-center mb-3">
-              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Cashu Recovery</h4>
-              <button
-                @click="loadPendingProofs"
-                class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                title="Refresh proof list"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </button>
-            </div>
-            <p class="text-sm text-gray-600 mb-3">
-              If a payment failed to complete, you can recover your funds by copying out the cashu tokens below.
-            </p>
-            
-            <div v-for="(transaction, txId) in pendingProofs" :key="txId" class="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div class="flex justify-between mb-2">
-                <span class="text-sm font-medium">Transaction: {{ formatTransactionId(txId) }}</span>
-                <span class="text-xs text-gray-500">{{ formatDate(transaction.timestamp) }}</span>
-              </div>
-              
-              <div v-for="(category, catName) in transaction.categories" :key="catName" class="mb-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm font-medium capitalize">{{ catName }} Proofs</span>
-                  <div class="flex space-x-2">
-                    <button
-                      @click="copyProofs(txId, catName, category)"
-                      class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
-                    >
-                      Copy
-                    </button>
-                    <button
-                      v-if="isProofCopied(txId, catName)"
-                      @click="showRecoveryConfirmation(txId, catName)"
-                      class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
-                    >
-                      Mark recovered
-                    </button>
-                  </div>
-                </div>
-                <div class="text-xs text-gray-500 mt-1">
-                  Mint: {{ category.mintUrl }}
-                </div>
-              </div>
-            </div>
-            
-            <!-- Confirmation Modal for Proof Recovery -->
-            <div v-if="showConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to mark these proofs as recovered? They will be permanently deleted and can't be recovered again.
-                </p>
-                <div class="flex space-x-3 justify-end">
-                  <button
-                    @click="cancelRecovery"
-                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    @click="confirmRecovery"
-                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    Delete Permanently
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Confirmation Modal for Mint Quote Deletion -->
-            <div v-if="showMintQuoteConfirmation" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h3 class="text-lg font-medium mb-2">Confirm Deletion</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to delete this Lightning mint quote? This action cannot be undone.
-                </p>
-                <div class="flex space-x-3 justify-end">
-                  <button
-                    @click="cancelMintQuoteDeletion"
-                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    @click="deletePendingMintQuote"
-                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    Delete Permanently
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Confirmation Modal for Payment Recovery -->
-            <div v-if="showRecoveryConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to recover this Lightning payment? The ecash will be claimed and stored in your proof recovery section for manual recovery.
-                  <br>
-                  <br>
-                  The payer (receipt creator) will no longer be able to confirm your payment.
-                </p>
-                <div class="flex space-x-3 justify-end">
-                  <button
-                    @click="cancelLightningRecovery"
-                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    @click="confirmRecoveryPayment"
-                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-                  >
-                    Recover Payment
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -320,6 +205,57 @@
             <!-- When collapsed, show count if there are any quotes -->
             <div v-else-if="Object.keys(mintQuotes).length > 0" class="text-sm text-amber-600">
               {{ Object.keys(mintQuotes).length }} Lightning payment(s) available for recovery
+            </div>
+            
+            <!-- Confirmation Modal for Mint Quote Deletion -->
+            <div v-if="showMintQuoteConfirmation" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Confirm Deletion</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete this Lightning mint quote? This action cannot be undone.
+                </p>
+                <div class="flex space-x-3 justify-end">
+                  <button
+                    @click="cancelMintQuoteDeletion"
+                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    @click="deletePendingMintQuote"
+                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete Permanently
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Confirmation Modal for Payment Recovery -->
+            <div v-if="showRecoveryConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Are you sure you want to recover this Lightning payment? The ecash will be claimed and stored in your wallet.
+                  <br>
+                  <br>
+                  The payer (receipt creator) will no longer be able to confirm your payment.
+                </p>
+                <div class="flex space-x-3 justify-end">
+                  <button
+                    @click="cancelLightningRecovery"
+                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    @click="confirmRecoveryPayment"
+                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                  >
+                    Recover Payment
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -428,24 +364,6 @@
           
           <!-- Action Buttons -->
           <div class="pt-4 border-t border-gray-200">
-            <div class="text-center mb-3">
-              <span class="text-xs text-gray-500">Version {{ appVersion }}</span>
-            </div>
-            
-            <button
-              @click="checkForUpdates"
-              class="w-full py-2 px-4 mb-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-colors"
-            >
-              Check for Updates
-            </button>
-            
-            <button
-              @click="clearAllProofs"
-              class="w-full py-2 px-4 mb-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium hover:bg-yellow-200 transition-colors"
-            >
-              Clear All Pending Proofs
-            </button>
-            
             <button
               @click="resetOnboarding"
               class="w-full py-2 px-4 mb-2 bg-purple-100 text-purple-800 rounded-md text-sm font-medium hover:bg-purple-200 transition-colors"
@@ -469,7 +387,7 @@
 <script>
 import { ref, onMounted, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
-         getPendingProofs, clearProofs, getUnclaimedMintQuotes, deleteMintQuote,
+         getUnclaimedMintQuotes, deleteMintQuote,
          getReceiveAddress, saveReceiveAddress } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
 import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecovery';
@@ -501,8 +419,6 @@ export default {
     // Watch for changes to isOpen prop
     watch(() => props.isOpen, (newVal) => {
       if (newVal) {
-        // Refresh pending proofs when the menu is opened
-        loadPendingProofs();
         if (debugEnabled.value) {
           refreshDebugLogs();
         }
@@ -523,12 +439,8 @@ export default {
       receiveAddressValidation.value = validation;
     };
     
-    const pendingProofs = ref({});
     const mintQuotes = ref({});
     const recoveryStatuses = ref({});
-    const copiedProofs = ref({}); // Track which proofs have been copied
-    const showConfirmationModal = ref(false); // Control confirmation modal visibility
-    const pendingRecoveryItem = ref({ txId: '', category: '' }); // Store item pending recovery
     const showLightningSection = ref(false); // Track if Lightning section is expanded
     const pendingMintQuoteDeletion = ref(''); // Store mint quote ID pending deletion
     const showMintQuoteConfirmation = ref(false); // Control mint quote deletion confirmation
@@ -556,15 +468,9 @@ export default {
         settings.value.receiveAddress = storedReceiveAddress;
       }
       
-      // Load pending proofs and mint quotes
-      loadPendingProofs();
+      // Load mint quotes
       loadMintQuotes();
     });
-    
-    // Load pending proofs from storage
-    const loadPendingProofs = () => {
-      pendingProofs.value = getPendingProofs();
-    };
 
     // Load mint quotes from storage
     const loadMintQuotes = async () => {
@@ -641,9 +547,8 @@ export default {
         
         // Refresh data
         loadMintQuotes();
-        loadPendingProofs();
         
-        showNotification('Payment recovered successfully! Check proof recovery section.', 'success');
+        showNotification('Payment recovered successfully!', 'success');
       } catch (error) {
         console.error('Error recovering payment:', error);
         showNotification(`Recovery failed: ${error.message}`, 'error');
@@ -728,83 +633,6 @@ export default {
       if (!timestamp) return '';
       const date = new Date(timestamp);
       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-    };
-    
-    // Copy proofs to clipboard as a Cashu token
-    const copyProofs = (txId, category, categoryData) => {
-      try {
-        // Create a properly encoded Cashu token using the official library function
-        const tokenData = {
-          mint: categoryData.mintUrl,
-          proofs: categoryData.proofs
-        };
-        
-        // Get encoded token string with the cashu: prefix
-        const tokenString = getEncodedTokenV4(tokenData);
-        
-        navigator.clipboard.writeText(tokenString);
-        showNotification(`Copied ${category} Cashu token to clipboard`, 'success');
-      } catch (error) {
-        console.error('Error copying Cashu token:', error);
-        showNotification('Failed to copy Cashu token', 'error');
-      }
-      
-      // Mark as copied to show the recovery button
-      if (!copiedProofs.value[txId]) {
-        copiedProofs.value[txId] = {};
-      }
-      copiedProofs.value[txId][category] = true;
-    };
-    
-    // Check if specific proof has been copied
-    const isProofCopied = (txId, category) => {
-      return copiedProofs.value[txId] && copiedProofs.value[txId][category];
-    };
-    
-    // Show confirmation modal for recovery
-    const showRecoveryConfirmation = (txId, category) => {
-      pendingRecoveryItem.value = { txId, category };
-      showConfirmationModal.value = true;
-    };
-    
-    // Cancel recovery operation
-    const cancelRecovery = () => {
-      showConfirmationModal.value = false;
-      pendingRecoveryItem.value = { txId: '', category: '' };
-    };
-    
-    // Confirm recovery and delete the proofs
-    const confirmRecovery = () => {
-      const { txId, category } = pendingRecoveryItem.value;
-      
-      // Clear the specific proof category
-      clearProofs(txId, category);
-      
-      // Remove from copied proofs tracking
-      if (copiedProofs.value[txId]) {
-        delete copiedProofs.value[txId][category];
-        
-        // Clean up empty objects
-        if (Object.keys(copiedProofs.value[txId]).length === 0) {
-          delete copiedProofs.value[txId];
-        }
-      }
-      
-      // Refresh the proofs list
-      loadPendingProofs();
-      
-      // Close the modal
-      showConfirmationModal.value = false;
-      
-      showNotification(`${category} proofs marked as recovered and removed`, 'success');
-    };
-    
-    // Clear all pending proofs
-    const clearAllProofs = () => {
-      clearProofs();
-      pendingProofs.value = {};
-      copiedProofs.value = {}; // Clear copied state too
-      showNotification('All pending proofs cleared', 'success');
     };
     
     // Format satoshi amount for display
