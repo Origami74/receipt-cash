@@ -8,6 +8,9 @@ import { Buffer } from 'buffer';
 import { sumProofs } from '../../../utils/cashuUtils.js';
 import { SimpleSigner } from 'applesauce-signers';
 import { confirmSettlement } from '../settlementConfirmer.js';
+import { accountingService } from '../../accountingService';
+import { cocoService } from '../../cocoService';
+import { getEncodedToken } from '@cashu/cashu-ts';
 
 /**
  * Collects lightning payments for a specific settlement
@@ -229,20 +232,40 @@ class LightningPaymentCollector {
       
       console.log(`🎫 Claimed ${proofs.length} proofs from Lightning payment`);
       
-      // Store tokens to incoming money storage
-      const moneyEntry = {
-        receiptEventId: this.receipt.eventId,
-        settlementEventId: this.settlementEvent.id,
-        proofs: proofs,
-        mintUrl: this.mintQuoteMonitor.mintUrl,
-        mintQuoteId: mintQuoteId
+      // Get coco instance
+      const coco = cocoService.getCoco();
+      
+      // Add mint if not already added (auto-trust)
+      const mints = await coco.mint.getAllMints();
+      const mintExists = mints.some(m => m.url === this.mintQuoteMonitor.mintUrl);
+      
+      if (!mintExists) {
+        await coco.mint.addMint(this.mintQuoteMonitor.mintUrl, { trusted: true });
+        console.log(`✅ Auto-trusted mint: ${this.mintQuoteMonitor.mintUrl}`);
+      }
+      
+      // Construct token for coco
+      const tokenData = {
+        mint: this.mintQuoteMonitor.mintUrl,
+        proofs: proofs
       };
+      const token = getEncodedToken(tokenData);
       
-      moneyStorageManager.incoming.setItem(moneyEntry);
+      // Receive into coco (handles swapping to fresh proofs)
+      await coco.wallet.receive(token);
       
-      const totalAmount = sumProofs(proofs)
-      console.log(`💰 Stored ${totalAmount} sats to incoming money storage for settlement: ${this.settlementEvent.id}`);
+      const totalAmount = sumProofs(proofs);
+      console.log(`💰 Received ${totalAmount} sats into Coco from ${this.mintQuoteMonitor.mintUrl}`);
     
+      // Record in accounting service (triggers IncomingPaymentSplitter)
+      accountingService.recordIncoming(
+        this.receipt.eventId,
+        this.settlementEvent.id,
+        totalAmount,
+        this.mintQuoteMonitor.mintUrl
+      );
+      console.log(`📊 Recorded ${totalAmount} sats in accounting for settlement: ${this.settlementEvent.id}`);
+
       await confirmSettlement(this.signer, this.receipt.eventId, this.settlementEvent.id)
 
       // Stop monitoring first

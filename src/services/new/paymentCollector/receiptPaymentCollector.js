@@ -91,10 +91,17 @@ class ReceiptPaymentCollector {
       })
 
     lightningChanges$.subscribe(lnSettlement => {
-      console.debug(`⚡️ LN settlement`, lnSettlement)
+      console.log(`⚡️ Lightning settlement change detected:`, {
+        type: lnSettlement.type,
+        settlementId: lnSettlement.settlement?.event?.id,
+        paymentType: lnSettlement.settlement?.paymentType
+      });
+      
       if(lnSettlement.type === 'added'){
+        console.log(`⚡ Starting lightning collector for settlement: ${lnSettlement.settlement.event.id}`);
         this._startLightningPaymentCollector(lnSettlement.settlement.event);
       } else{
+        console.log(`⚡ Stopping lightning collector for settlement: ${lnSettlement.settlement.event.id}`);
         this._stopLightningCollectorForSettlement(lnSettlement.settlement.event.id)
       }
     })

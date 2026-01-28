@@ -33,6 +33,26 @@ This document contains prioritized user feedback and feature requests for the Re
 
 ## Priority 50-69 (Medium - User Experience Enhancements)
 
+### Priority 65 - Receipt preview scrolling issue
+**Status**: Open
+**Impact**: UX issue affecting receipt preview readability
+**Reason**: Line items are in their own scroll box instead of making the page longer, creating nested scrolling which is confusing
+
+### Priority 64 - Receipt preview missing bottom navigation bar
+**Status**: Open
+**Impact**: Navigation consistency issue
+**Reason**: Bottom navigation bar is not visible in receipt preview, breaking expected navigation pattern
+
+### Priority 63 - Receipt 'create' button needs loading state
+**Status**: Open
+**Impact**: User feedback during async operation
+**Reason**: Button should block and show spinner while publishing receipt to prevent double-clicks and provide visual feedback
+
+### Priority 62 - Add silent background audio player
+**Status**: Open
+**Impact**: WebSocket connection stability on mobile
+**Reason**: Prevents websockets from being terminated when user navigates away from app, especially important on mobile browsers
+
 ### Priority 65 - Add comments / name
 **Status**: Open  
 **Impact**: Improves social payment experience  
