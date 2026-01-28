@@ -229,8 +229,7 @@
 
 <script>
 import { ref, onMounted, watch } from 'vue';
-import { getAiSettings, saveAiSettings, clearAiSettings,
-         getReceiveAddress } from '../services/storageService';
+import { getAiSettings, saveAiSettings, clearAiSettings } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
 import { showNotification } from '../services/notificationService';
 import debugLogger from '../services/debugService';
@@ -283,7 +282,7 @@ export default {
     const debugEnabled = ref(debugLogger.isCapturingLogsEnabled());
     const debugLogs = ref([]);
 
-    // Load settings and proofs from storage when component mounts
+    // Load settings when component mounts
     onMounted(() => {
       // Load AI settings
       const storedSettings = getAiSettings();
@@ -291,15 +290,8 @@ export default {
         completionsUrl: storedSettings.completionsUrl || 'https://api.ppq.ai/chat/completions',
         apiKey: storedSettings.apiKey || '',
         model: storedSettings.model || 'gpt-4.1-mini',
-        receiveAddress: ''
+        receiveAddress: '' // Will be loaded by ReceiveAddressInput component
       };
-      
-      // Load the receive address
-      const storedReceiveAddress = getReceiveAddress();
-      if (storedReceiveAddress) {
-        settings.value.receiveAddress = storedReceiveAddress;
-      }
-      
     });
 
 

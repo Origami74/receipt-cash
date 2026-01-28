@@ -45,9 +45,9 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import addressValidation, { AddressType, verifyLightningAddress } from '../utils/receiveAddressValidationUtils';
-import { saveReceiveAddress } from '../services/storageService';
+import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
 
 export default {
   name: 'ReceiveAddressInput',
@@ -84,6 +84,17 @@ export default {
     const isInitialLoad = ref(true);
     let verificationTimeout = null;
     
+    // Load saved address on mount - always from storage
+    onMounted(() => {
+      const savedAddress = getReceiveAddress();
+      if (savedAddress && savedAddress !== props.modelValue) {
+        emit('update:modelValue', savedAddress);
+        console.log('📥 Loaded saved receive address:', savedAddress);
+        // Trigger validation for the loaded address
+        validateAddress(savedAddress);
+      }
+    });
+    
     const validateAddress = async (address) => {
       // Clear any pending verification
       if (verificationTimeout) {
@@ -95,11 +106,8 @@ export default {
         validationResult.value = { isValid: true, type: '', error: '', isVerifying: false };
         isVerifying.value = false;
         
-        // Clear saved address if empty and auto-save is enabled
-        if (props.autoSave) {
-          saveReceiveAddress('');
-          console.log('🗑️ Receive address cleared');
-        }
+        // Don't clear saved address when input is empty - user might be temporarily clearing it
+        // They can explicitly clear it by entering and saving an empty value if needed
         
         emit('validation-change', validationResult.value);
         return;

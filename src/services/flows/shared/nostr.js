@@ -23,19 +23,16 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     // Create a signer for this receipt
     const receiptSigner = new SimpleSigner(receiptPrivateKey);
     const factory = new EventFactory({ signer: receiptSigner });
-
-    console.log('Converting to sats - BTC Price:', btcPrice);
-    console.log('Original receipt data:', receiptData);
+    
+    console.log('Receipt data:', receiptData);
     
     // Convert all prices to sats and store only sats prices
     const itemsInSats = receiptData.items.map(item => ({
       name: item.name,
       quantity: item.quantity || 0,
-      price: item.price ? Math.round((item.price * 100000000) / btcPrice) : 0, // Store only sats price
-      total: item.total ? Math.round((item.total * 100000000) / btcPrice) : 0  // Store only sats total
+      price: item.price ? Math.round((item.price * 100000000) / btcPrice) : 0,
+      total: item.total ? Math.round((item.total * 100000000) / btcPrice) : 0
     }));
-    
-    console.log('Items in sats:', itemsInSats);
 
     // Default mints if none provided
     const defaultMints = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io'];
@@ -47,17 +44,16 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       title: receiptData.title,
       date: receiptData.date,
       items: itemsInSats,
-      currency: receiptData.currency, // Keep currency for reference
-      total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0, // Store only sats total
-      preferredMints: finalPreferredMints, // Array of preferred mints (first is default)
+      currency: receiptData.currency,
+      total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0,
+      preferredMints: finalPreferredMints,
       splitPercentage: devFeePercent,
-      btcPrice: btcPrice // Store the BTC price used for conversion
+      btcPrice: btcPrice
     };
 
     // Create event content
     const content = JSON.stringify(fullReceiptData);
     
-    console.log(content);
     // Encrypt the content using NIP-44
     const encryptedContent = await nip44.encrypt(content, encryptionPrivateKey);
     
@@ -70,23 +66,54 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     // Sign the event
     const signed = await factory.sign(draft);
     
-    // Publish using the global relay pool
-    const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
+    // Publish using the global relay pool with early success
+    // Return immediately once 3 relays accept it, let others continue in background
+    const MIN_SUCCESSFUL_RELAYS = 3;
+    let successCount = 0;
+    const totalRelays = DEFAULT_RELAYS.length;
     
-    const successResponses = [];
-    responses.forEach((response) => {
-      if (response.ok) {
-        successResponses.push(response);
-        console.log(`Receipt event published successfully to ${response.from}`);
-      } else {
-        console.error(`Failed to publish receipt event to ${response.from}: ${response.message}`);
-      }
-    });
-
-    if (successResponses.length <= 1) {
-      console.error(`Failed to publish receipt event ${signed.id} to enough relays!`);
-      throw new Error("Could not publish receipt event");
-    }
+    // Start publishing to all relays (returns immediately, doesn't wait)
+    const publishPromises = DEFAULT_RELAYS.map(relay =>
+      globalPool.publish([relay], signed)
+        .then(responses => {
+          const response = responses[0];
+          if (response && response.ok) {
+            successCount++;
+            console.log(`✅ Published to ${response.from} (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
+            return { success: true, relay: response.from };
+          } else {
+            console.warn(`⚠️ Failed to publish to ${relay}: ${response?.message || 'unknown error'}`);
+            return { success: false, relay };
+          }
+        })
+        .catch(error => {
+          console.warn(`⚠️ Error publishing to ${relay}:`, error.message);
+          return { success: false, relay };
+        })
+    );
+    
+    // Race: return as soon as we have 3 successes OR all relays have responded
+    await Promise.race([
+      // Option 1: Wait for 3 successes
+      (async () => {
+        for (const promise of publishPromises) {
+          await promise;
+          if (successCount >= MIN_SUCCESSFUL_RELAYS) {
+            console.log(`✅ Receipt published successfully to ${successCount}+ relays`);
+            return; // Return immediately, let other publishes continue in background
+          }
+        }
+        // If we get here, not enough successes
+        throw new Error(`Could not publish receipt to enough relays (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
+      })(),
+      
+      // Option 2: Wait for all to complete (fallback)
+      Promise.all(publishPromises).then(() => {
+        if (successCount < MIN_SUCCESSFUL_RELAYS) {
+          throw new Error(`Could not publish receipt to enough relays (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
+        }
+      })
+    ]);
 
     // Add to local event store for caching
     globalEventStore.add(signed);

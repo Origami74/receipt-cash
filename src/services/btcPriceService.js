@@ -20,7 +20,6 @@ export const fetchBtcPrice = async (currency = 'usd') => {
   if (priceCache.has(cacheKey)) {
     const cached = priceCache.get(cacheKey);
     if (now - cached.timestamp < CACHE_DURATION) {
-      console.log(`Using cached BTC price for ${currency}: ${cached.price}`);
       return cached.price;
     } else {
       // Remove expired cache entry

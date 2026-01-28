@@ -141,7 +141,6 @@ import ContextualTip from '../onboarding/ContextualTip.vue';
 import btcPriceService from '../../services/btcPriceService';
 import { formatCurrency } from '../../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil } from '../../utils/pricingUtils';
-import { saveReceiveAddress, getReceiveAddress } from '../../services/storageService';
 import { showNotification } from '../../services/notificationService';
 import { onboardingService } from '../../services/onboardingService';
 
@@ -207,11 +206,7 @@ export default {
     });
     
     onMounted(async () => {
-      // Try to load the last used receive address
-      const lastReceiveAddress = getReceiveAddress();
-      if (lastReceiveAddress) {
-        receiveAddress.value = lastReceiveAddress;
-      }
+      // Note: Receive address is now loaded automatically by ReceiveAddressInput component
       
       // Fetch current BTC price
       try {
@@ -283,10 +278,6 @@ export default {
       try {
         isCreating.value = true;
         
-        // Save the receive address for future use (only if valid)
-        if (addressValid.value && receiveAddress.value) {
-          saveReceiveAddress(receiveAddress.value);
-        }
         
         // Emit create event with payment setup data
         emit('create', {
