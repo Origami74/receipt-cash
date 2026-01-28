@@ -96,11 +96,10 @@ export default {
       // First do format validation
       const formatValidation = addressValidation.validateReceiveAddress(address);
       validationResult.value = { ...formatValidation, isVerifying: false };
-      emit('validation-change', validationResult.value);
       
       // If it's a Lightning address and format is valid, verify it actually works
       if (formatValidation.isValid && formatValidation.type === AddressType.LIGHTNING) {
-        // Emit verifying state immediately
+        // Set verifying state but don't emit yet
         isVerifying.value = true;
         validationResult.value = { ...formatValidation, isVerifying: true };
         emit('validation-change', validationResult.value);
@@ -125,6 +124,7 @@ export default {
               };
             }
             
+            // Emit final validation result after network verification
             emit('validation-change', validationResult.value);
           } catch (error) {
             console.error('Lightning address verification error:', error);
@@ -140,6 +140,9 @@ export default {
             isVerifying.value = false;
           }
         }, 1000); // Wait 1 second after user stops typing
+      } else {
+        // For non-Lightning addresses, emit immediately after format validation
+        emit('validation-change', validationResult.value);
       }
     };
     

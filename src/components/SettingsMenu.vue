@@ -437,6 +437,20 @@ export default {
     // Handle validation changes from ReceiveAddressInput component
     const handleReceiveAddressValidation = (validation) => {
       receiveAddressValidation.value = validation;
+      
+      // Only save when validation completes successfully (not while verifying)
+      if (!validation.isVerifying) {
+        if (validation.isValid && settings.value.receiveAddress && settings.value.receiveAddress.trim() !== '') {
+          // Save the validated address
+          saveReceiveAddress(settings.value.receiveAddress);
+          console.log('✅ Receive address auto-saved:', settings.value.receiveAddress);
+        } else if (!settings.value.receiveAddress || settings.value.receiveAddress.trim() === '') {
+          // Clear if empty
+          saveReceiveAddress('');
+          console.log('🗑️ Receive address cleared');
+        }
+        // If invalid, don't save - keep the old value in storage
+      }
     };
     
     const mintQuotes = ref({});
@@ -568,7 +582,7 @@ export default {
       }
     };
 
-    // Save settings to storage
+    // Save settings to storage (only AI settings, receive address is auto-saved)
     const saveSettings = () => {
       // Save AI settings
       saveAiSettings({
@@ -577,21 +591,8 @@ export default {
         model: settings.value.model
       });
       
-      // Save receive address only if valid and not currently verifying
-      if (settings.value.receiveAddress) {
-        if (receiveAddressValidation.value.isValid && !receiveAddressValidation.value.isVerifying) {
-          saveReceiveAddress(settings.value.receiveAddress);
-          const typeDescription = addressValidation.getAddressTypeDescription(receiveAddressValidation.value.type);
-          showNotification(`${typeDescription} saved successfully`, 'success');
-        } else if (receiveAddressValidation.value.isVerifying) {
-          showNotification('Please wait for address verification to complete', 'warning');
-        } else {
-          showNotification('Please enter a valid receive address', 'error');
-        }
-      } else {
-        // Clear the receive address if empty
-        saveReceiveAddress('');
-      }
+      // Note: Receive address is auto-saved in handleReceiveAddressValidation
+      // when validation completes successfully
     };
 
     // Reset onboarding state
@@ -747,20 +748,9 @@ export default {
       showLightningSection,
       toggleLightningSection,
       settings,
-      pendingProofs,
       saveSettings,
       clearSettings,
-      formatTransactionId,
       formatDate,
-      copyProofs,
-      clearAllProofs,
-      loadPendingProofs,
-      isProofCopied,
-      showRecoveryConfirmation,
-      cancelRecovery,
-      confirmRecovery,
-      showConfirmationModal,
-      pendingRecoveryItem,
       
       // Lightning payment recovery functionality
       showLightningRecoveryConfirmation,
