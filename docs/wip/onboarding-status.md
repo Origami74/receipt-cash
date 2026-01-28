@@ -1,7 +1,7 @@
 # Onboarding Implementation Status
 
 **Last Updated**: 2026-01-28
-**Status**: Phase 2 Complete (4 of 6 tips) - Ready for Testing
+**Status**: Phase 2 Complete (6 of 6 tips) - Ready for Testing
 
 ## Overview
 
@@ -132,19 +132,27 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - Timing: Shows 500ms after QR code appears
    - State key: `SharingTip`
 
-**Pending Tips**:
+5. ✅ **First Payment Received** (Celebration)
+   - Location: [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
+   - Trigger: First settlement confirmation received (when confirmedSettlements count increases)
+   - Icon: 🎉
+   - Title: "Payment Received!"
+   - Description: "Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer."
+   - Bullets: Developer fee deducted, your portion ready, funds in wallet, more payments processed automatically
+   - Timing: Shows 500ms after first confirmation detected
+   - State key: `FirstPaymentCelebration`
+   - Special: Marks `hasReceivedFirstPayment` in onboarding state
 
-5. ⏳ **First Payment Received** (Celebration)
-   - Trigger: First settlement confirmation received
-   - Content: "🎉 Payment received! Funds will be automatically split"
-   - Location: Celebration modal
-   - Status: Not yet implemented
-
-6. ⏳ **Processing Reminder** (Critical - Host education)
-   - Trigger: When receipt has pending payments
-   - Content: "💡 Your phone processes payments - keep app open or return regularly"
-   - Location: Banner/reminder
-   - Status: Not yet implemented
+6. ✅ **Processing Reminder** (Critical - Host education)
+   - Location: [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
+   - Trigger: When receipt has pending (unconfirmed) payments
+   - Icon: 💡
+   - Title: "Your Phone Processes Payments"
+   - Description: "Important: Your phone needs to be online to process incoming payments. Keep the app open or return regularly to process pending payments."
+   - Bullets: Your phone is the payment processor, keep app open when expecting payments, return regularly to process, payments queue until you return
+   - Timing: Shows 2 seconds after pending payments detected
+   - State key: `ProcessingReminder`
+   - Special: Has "Don't show again" option
 
 **Features Implemented**:
 - ✅ Reusable ContextualTip component
@@ -233,23 +241,28 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ⏳ Review tip shows after AI extraction
 - ⏳ Payout tip shows after review tip dismissed
 - ⏳ Sharing tip shows when QR code appears
+- ⏳ First payment celebration shows when payment confirmed
+- ⏳ Processing reminder shows when pending payments exist
 - ⏳ Tips don't show on subsequent visits
 - ⏳ Tips can be dismissed by clicking outside
 - ⏳ Tips have proper z-index (above other elements)
 - ⏳ Sequential flow works correctly
 - ⏳ State persists across page reloads
+- ⏳ "Don't show again" works for processing reminder
 
 ## Next Steps
 
-1. **Immediate** (Complete Phase 2):
+1. **Immediate** (Testing Phase 2):
    - ✅ Implement ContextualTip component
    - ✅ Add camera tip
    - ✅ Add review & edit tip
    - ✅ Add payout address tip
    - ✅ Add sharing explanation tip
-   - ⏳ Add first payment received celebration
-   - ⏳ Add processing reminder (critical for host education)
+   - ✅ Add first payment received celebration
+   - ✅ Add processing reminder (critical for host education)
    - ⏳ Test all tips in sequence
+   - ⏳ Verify tip timing and triggers
+   - ⏳ Check z-index conflicts
    - ⏳ Gather user feedback
 
 2. **Short-term** (Phase 3 - Guest Onboarding):
@@ -292,9 +305,9 @@ This document tracks the progress of implementing the onboarding flow for Receip
 
 **Phase 2**:
 - ⚠️ Need to test tip sequence in real user flow
-- ⚠️ First payment celebration not yet implemented
-- ⚠️ Processing reminder (critical) not yet implemented
 - ⚠️ Need to verify z-index doesn't conflict with other modals
+- ⚠️ Need to test first payment celebration trigger
+- ⚠️ Need to test processing reminder trigger with pending payments
 
 ## Future Enhancements
 
@@ -316,14 +329,14 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - State persistence
 - Reset functionality
 
-**Phase 2 (Contextual Tips)**: 🔄 66% Complete (4 of 6 tips)
+**Phase 2 (Contextual Tips)**: ✅ 100% Complete (6 of 6 tips)
 - ✅ Reusable ContextualTip component
 - ✅ Camera tip
 - ✅ Review & edit tip
 - ✅ Payout address tip
 - ✅ Sharing explanation tip
-- ⏳ First payment celebration (pending)
-- ⏳ Processing reminder (pending, critical)
+- ✅ First payment celebration
+- ✅ Processing reminder (critical)
 
 **Phase 3 (Guest Onboarding)**: ⏳ Not started
 **Phase 4 (Advanced Features)**: ⏳ Not started

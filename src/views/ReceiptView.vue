@@ -19,6 +19,31 @@
         @dismiss="showSharingTip = false"
       />
       
+      <!-- First Payment Received Celebration -->
+      <ContextualTip
+        :show="showFirstPaymentCelebration"
+        tip-name="FirstPaymentCelebration"
+        image="/onboard/screen-10-payment-received.png"
+        title="🎉 Payment Received!"
+        description="Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer."
+        :bullets="['Developer fee deducted', 'Your portion ready', 'Funds in your wallet', 'More payments processed automatically']"
+        primary-button-text="Awesome!"
+        @dismiss="handleFirstPaymentDismiss"
+      />
+      
+      <!-- Processing Reminder (when pending payments exist) -->
+      <ContextualTip
+        :show="showProcessingReminder"
+        tip-name="ProcessingReminder"
+        image="/onboard/screen-8-your-phone-processes.png"
+        title="💡 Your Phone Processes Payments"
+        description="Important: Your phone needs to be online to process incoming payments. Keep the app open or return regularly to process pending payments. You can view what's being processed in the Activity tab."
+        :bullets="['Your phone is the payment processor', 'Keep app open when expecting payments', 'Return regularly to process', 'Payments queue until you return']"
+        primary-button-text="Got it!"
+        secondary-button-text="Don't show again"
+        @dismiss="showProcessingReminder = false"
+      />
+      
       <ReceiptHeader
         :show-back-button="true"
         back-button-text="Back"
@@ -146,6 +171,9 @@ export default {
     const error = ref(null);
     const errorDetails = ref(null);
     const showSharingTip = ref(false);
+    const showFirstPaymentCelebration = ref(false);
+    const showProcessingReminder = ref(false);
+    const previousConfirmedCount = ref(0);
 
     // Function to navigate back
     const goBack = () => {
@@ -218,6 +246,21 @@ export default {
     const handlePay = ({ eventId, decryptionKey }) => {
       router.push(`/pay/${eventId}/${decryptionKey}`);
     };
+    
+    // Handle first payment celebration dismissal
+    const handleFirstPaymentDismiss = () => {
+      showFirstPaymentCelebration.value = false;
+      onboardingService.markFirstPaymentReceived();
+    };
+    
+    // Retry function for error state
+    const fetchReceipt = () => {
+      // Clear error state
+      error.value = null;
+      errorDetails.value = null;
+      // The subscription will automatically retry when component remounts
+      window.location.reload();
+    };
 
     // Component lifecycle
     onMounted(async () => {
@@ -241,6 +284,31 @@ export default {
               console.error('Error fetching current BTC price:', error);
               currentBtcPrice.value = model?.btcPrice || 0;
             });
+          
+          // Check for first payment received (onboarding)
+          const currentConfirmedCount = model?.confirmedSettlements?.length || 0;
+          if (currentConfirmedCount > previousConfirmedCount.value) {
+            // New payment confirmed!
+            if (!onboardingService.state.hasReceivedFirstPayment &&
+                onboardingService.hasSeenWelcome()) {
+              // Show celebration for first payment
+              setTimeout(() => {
+                showFirstPaymentCelebration.value = true;
+              }, 500);
+            }
+            previousConfirmedCount.value = currentConfirmedCount;
+          }
+          
+          // Check for pending payments (show processing reminder)
+          const hasPendingPayments = (model?.unConfirmedSettlements?.length || 0) > 0;
+          if (hasPendingPayments &&
+              !onboardingService.hasSeen('ProcessingReminder') &&
+              onboardingService.hasSeenWelcome()) {
+            // Show processing reminder after a delay
+            setTimeout(() => {
+              showProcessingReminder.value = true;
+            }, 2000);
+          }
         });
         
         // Check if we should automatically show the QR (e.g., when coming from receipt creation)
@@ -282,6 +350,8 @@ export default {
       showShareQR,
       shareQRComponent,
       showSharingTip,
+      showFirstPaymentCelebration,
+      showProcessingReminder,
       
       // Functions
       goBack,
@@ -289,6 +359,8 @@ export default {
       toFiat,
       handleShare,
       handlePay,
+      handleFirstPaymentDismiss,
+      fetchReceipt,
       receiptLink,
       receiptDate,
       

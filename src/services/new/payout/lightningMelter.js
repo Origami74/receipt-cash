@@ -230,57 +230,54 @@ class LightningMelter {
       if (meltResult.remainingProofs.length > 0) {
         console.log(`⚠️  ${meltResult.remainingAmount} sats could not be melted (${meltResult.remainingProofs.length} proofs remaining)`);
         
-        // Attempt second melt for larger amounts
+        // NOTE: The remaining proofs from first melt were already automatically
+        // received into Coco wallet by meltToLightningWithSession() at line 514.
+        // We should NOT attempt a second melt with these stale proofs as they're already spent.
+        
+        // For second melt attempt, we need to get FRESH proofs from Coco
         if (meltResult.remainingAmount > secondMeltThreshold) {
           console.log(`🔄 Attempting second melt for ${meltResult.remainingAmount} sats...`);
+          console.log(`⚠️ Note: First melt's remaining proofs were auto-received into Coco. Getting fresh proofs for second attempt.`);
           
           try {
-            const secondMeltResult = await this.meltToLightningWithSession(
-              finalSessionId,
-              meltResult.remainingProofs,
-              lightningAddress,
-              mintUrl
-            );
+            // Get fresh proofs from Coco wallet for the second melt attempt
+            const coco = cocoService.getCoco();
+            const freshToken = await coco.wallet.send(mintUrl, meltResult.remainingAmount);
             
-            if (secondMeltResult.success && secondMeltResult.totalMelted > 0) {
-              console.log(`✅ Second melt successful! Additional ${secondMeltResult.totalMelted} sats melted`);
-              totalMelted += secondMeltResult.totalMelted;
-              finalRemainingProofs = secondMeltResult.remainingProofs;
-              finalRemainingAmount = secondMeltResult.remainingAmount;
+            if (!freshToken || !freshToken.proofs || freshToken.proofs.length === 0) {
+              console.warn(`⚠️ Could not get fresh proofs from Coco for second melt`);
             } else {
-              console.log('⚠️ Second melt failed or yielded no results');
+              const secondMeltResult = await this.meltToLightningWithSession(
+                finalSessionId,
+                freshToken.proofs, // Use FRESH proofs from Coco, not stale ones
+                lightningAddress,
+                mintUrl
+              );
+              
+              if (secondMeltResult.success && secondMeltResult.totalMelted > 0) {
+                console.log(`✅ Second melt successful! Additional ${secondMeltResult.totalMelted} sats melted`);
+                totalMelted += secondMeltResult.totalMelted;
+                finalRemainingProofs = secondMeltResult.remainingProofs;
+                finalRemainingAmount = secondMeltResult.remainingAmount;
+              } else {
+                console.log('⚠️ Second melt failed or yielded no results');
+                // The fresh proofs were already auto-received back into Coco by meltToLightningWithSession
+                finalRemainingProofs = [];
+                finalRemainingAmount = 0;
+              }
             }
           } catch (secondMeltError) {
             console.error('❌ Error during second melt attempt:', secondMeltError);
-            // Continue with original remaining proofs
+            // If we fail to get fresh proofs or second melt fails, the funds are safe in Coco
+            // No need to store anything - they're already in the wallet
+            finalRemainingProofs = [];
+            finalRemainingAmount = 0;
           }
-        }
-        
-        // Store remaining proofs in Coco wallet
-        if (finalRemainingProofs.length > 0) {
-          try {
-            const coco = cocoService.getCoco();
-            
-            // Add mint if not already added (auto-trust)
-            const mints = await coco.mint.getAllMints();
-            const mintExists = mints.some(m => m.url === mintUrl);
-            
-            if (!mintExists) {
-              await coco.mint.addMint(mintUrl, { trusted: true });
-              console.log(`✅ Auto-trusted mint: ${mintUrl}`);
-            }
-            
-            // Construct token and receive into coco
-            const token = getEncodedToken({
-              mint: mintUrl,
-              proofs: finalRemainingProofs
-            });
-            
-            await coco.wallet.receive(token);
-            console.log(`💰 Received ${finalRemainingAmount} sats remaining change into Coco wallet`);
-          } catch (error) {
-            console.error('Error storing remaining proofs to Coco:', error);
-          }
+        } else {
+          // Amount too small for second melt, but proofs already in Coco from first melt
+          console.log(`💰 ${meltResult.remainingAmount} sats already stored in Coco wallet (below threshold for second melt)`);
+          finalRemainingProofs = [];
+          finalRemainingAmount = 0;
         }
       }
       
@@ -492,6 +489,7 @@ class LightningMelter {
       console.log(`- Attempts made: ${meltAttempts}`);
       
       // Automatically store remaining proofs in Coco wallet if melt was successful
+      // This ensures change is never lost, even if the calling function doesn't handle it
       if (totalMelted > 0 && remainingProofs.length > 0) {
         try {
           const coco = cocoService.getCoco();
@@ -513,17 +511,22 @@ class LightningMelter {
           
           await coco.wallet.receive(token);
           console.log(`💰 Automatically received ${finalRemainingAmount} sats remaining change into Coco wallet`);
+          
+          // IMPORTANT: After receiving into Coco, these proofs are now spent/swapped
+          // Return empty arrays to prevent caller from trying to use stale proofs
+          remainingProofs = [];
         } catch (changeError) {
           console.error('Failed to store remaining proofs to Coco:', changeError);
           // Don't fail the whole operation if change storage fails
+          // But keep the remainingProofs so caller can try to handle them
         }
       }
       
       return {
         success: totalMelted > 0,
         totalMelted,
-        remainingProofs,
-        remainingAmount: finalRemainingAmount,
+        remainingProofs, // Will be empty if auto-received into Coco
+        remainingAmount: remainingProofs.length > 0 ? sumProofs(remainingProofs) : 0,
         attempts: meltAttempts
       };
       
