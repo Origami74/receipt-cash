@@ -79,6 +79,20 @@ class MigrationService {
           }
         }
       }
+
+      // Get change jar proofs
+      const changeJarProofs = changeJarService.getAllProofsForMigration();
+      for (const { mintUrl, proofs } of changeJarProofs) {
+        if (proofs && proofs.length > 0) {
+          // Check if we already have this mint
+          const existing = result.find(r => r.mintUrl === mintUrl);
+          if (existing) {
+            existing.proofs.push(...proofs);
+          } else {
+            result.push({ mintUrl, proofs });
+          }
+        }
+      }
     } catch (error) {
       console.error('Failed to load legacy proofs:', error);
     }
@@ -178,7 +192,7 @@ class MigrationService {
       // Backup old storage before clearing
       this.backupLegacyStorage();
       
-      // Clear change jar (it's accounting-only, no actual proofs)
+      // Clear change jar (proofs already migrated to Coco)
       this.clearChangeJar();
       
       // Clear old storage

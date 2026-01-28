@@ -1,11 +1,12 @@
 import { LightningAddress } from '@getalby/lightning-tools';
 import cashuWalletManager from '../../flows/shared/cashuWalletManager.js';
-import { storeChangeForMint } from '../../storageService.js';
 import { sumProofs } from '../../../utils/cashuUtils.js';
 import meltSessionStorageManager from '../storage/meltSessionStorageManager.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { SimpleSigner } from 'applesauce-signers';
 import { Buffer } from 'buffer';
+import { cocoService } from '../../cocoService';
+import { getEncodedToken } from '@cashu/cashu-ts';
 
 /**
  * Lightning Melter Service
@@ -255,11 +256,31 @@ class LightningMelter {
           }
         }
         
-        // Store remaining proofs in change jar if enabled
-        if (storeChangeInJar && finalRemainingProofs.length > 0) {
-          await storeChangeForMint(mintUrl, finalRemainingProofs);
-          console.log(`💰 Stored ${finalRemainingAmount} sats in change jar for mint: ${mintUrl}`);
-          
+        // Store remaining proofs in Coco wallet
+        if (finalRemainingProofs.length > 0) {
+          try {
+            const coco = cocoService.getCoco();
+            
+            // Add mint if not already added (auto-trust)
+            const mints = await coco.mint.getAllMints();
+            const mintExists = mints.some(m => m.url === mintUrl);
+            
+            if (!mintExists) {
+              await coco.mint.addMint(mintUrl, { trusted: true });
+              console.log(`✅ Auto-trusted mint: ${mintUrl}`);
+            }
+            
+            // Construct token and receive into coco
+            const token = getEncodedToken({
+              mint: mintUrl,
+              proofs: finalRemainingProofs
+            });
+            
+            await coco.wallet.receive(token);
+            console.log(`💰 Received ${finalRemainingAmount} sats remaining change into Coco wallet`);
+          } catch (error) {
+            console.error('Error storing remaining proofs to Coco:', error);
+          }
         }
       }
       
@@ -470,13 +491,30 @@ class LightningMelter {
       console.log(`- Remaining: ${finalRemainingAmount} sats in ${remainingProofs.length} proofs`);
       console.log(`- Attempts made: ${meltAttempts}`);
       
-      // Automatically store remaining proofs in change jar if melt was successful
+      // Automatically store remaining proofs in Coco wallet if melt was successful
       if (totalMelted > 0 && remainingProofs.length > 0) {
         try {
-          await storeChangeForMint(mintUrl, remainingProofs);
-          console.log(`💰 Automatically stored ${finalRemainingAmount} sats in change jar for mint: ${mintUrl}`);
+          const coco = cocoService.getCoco();
+          
+          // Add mint if not already added (auto-trust)
+          const mints = await coco.mint.getAllMints();
+          const mintExists = mints.some(m => m.url === mintUrl);
+          
+          if (!mintExists) {
+            await coco.mint.addMint(mintUrl, { trusted: true });
+            console.log(`✅ Auto-trusted mint: ${mintUrl}`);
+          }
+          
+          // Construct token and receive into coco
+          const token = getEncodedToken({
+            mint: mintUrl,
+            proofs: remainingProofs
+          });
+          
+          await coco.wallet.receive(token);
+          console.log(`💰 Automatically received ${finalRemainingAmount} sats remaining change into Coco wallet`);
         } catch (changeError) {
-          console.error('Failed to store remaining proofs in change jar:', changeError);
+          console.error('Failed to store remaining proofs to Coco:', changeError);
           // Don't fail the whole operation if change storage fails
         }
       }

@@ -235,10 +235,10 @@
                 </div>
                 <div class="flex space-x-2">
                   <button
-                    @click="moveToChangeJar(session)"
+                    @click="moveToWallet(session)"
                     class="flex-1 text-xs bg-green-100 text-green-800 px-3 py-2 rounded hover:bg-green-200 transition-colors"
                   >
-                    Move to Change Jar
+                    Move to Wallet
                   </button>
                   <button
                     @click="deleteMeltSession(session.sessionId)"
@@ -349,8 +349,8 @@ import { ref, onMounted, computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { getEncodedToken } from '@cashu/cashu-ts';
 import meltSessionStorageManager from '../services/new/storage/meltSessionStorageManager';
-import { storeChangeForMint } from '../services/storageService';
 import cashuService from '../services/flows/shared/cashuService';
+import { cocoService } from '../services/cocoService';
 
 export default {
   name: 'DebugRecoveryView',
@@ -446,8 +446,8 @@ export default {
       }
     };
 
-    const moveToChangeJar = async (session) => {
-      confirmMessage.value = `Move ${session.remainingAmount} sats from melt session to change jar? This will store the remaining proofs for later use.`;
+    const moveToWallet = async (session) => {
+      confirmMessage.value = `Move ${session.remainingAmount} sats from melt session to wallet? This will receive the remaining proofs into your main wallet.`;
       confirmAction.value = async () => {
         try {
           if (!session.remainingProofs || session.remainingProofs.length === 0) {
@@ -455,20 +455,36 @@ export default {
             return;
           }
 
-          // Store proofs in change jar
-          const success = await storeChangeForMint(session.mintUrl, session.remainingProofs);
+          // Get coco instance
+          const coco = await import('../services/cocoService').then(m => m.cocoService.getCoco());
           
-          if (success) {
-            // Delete the melt session after successfully storing proofs
-            meltSessionStorageManager.removeByKey(session.sessionId);
-            loadMeltSessions();
-            showToastMessage(`Moved ${session.remainingAmount} sats to change jar`);
-          } else {
-            showToastMessage('Error storing proofs in change jar');
+          // Add mint if not already added (auto-trust)
+          const mints = await coco.mint.getAllMints();
+          const mintExists = mints.some(m => m.url === session.mintUrl);
+          
+          if (!mintExists) {
+            await coco.mint.addMint(session.mintUrl, { trusted: true });
+            console.log(`✅ Auto-trusted mint: ${session.mintUrl}`);
           }
+          
+          // Construct token for coco
+          const tokenData = {
+            mint: session.mintUrl,
+            proofs: session.remainingProofs
+          };
+          const token = getEncodedToken(tokenData);
+          
+          // Receive into coco wallet
+          await coco.wallet.receive(token);
+          console.log(`💰 Received ${session.remainingAmount} sats into wallet`);
+          
+          // Delete the melt session after successfully moving proofs
+          meltSessionStorageManager.removeByKey(session.sessionId);
+          loadMeltSessions();
+          showToastMessage(`Moved ${session.remainingAmount} sats to wallet`);
         } catch (error) {
-          console.error('Error moving to change jar:', error);
-          showToastMessage('Error moving to change jar');
+          console.error('Error moving to wallet:', error);
+          showToastMessage(`Error moving to wallet: ${error.message}`);
         }
       };
       showConfirmModal.value = true;
@@ -778,7 +794,7 @@ export default {
       calculateProofAmount,
       copyMeltSessionProofs,
       copyMeltSessionRaw,
-      moveToChangeJar,
+      moveToWallet,
       deleteMeltSession,
       checkMeltSessionTokenStatus,
       recoverMeltSession,
