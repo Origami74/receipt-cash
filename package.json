@@ -1,6 +1,6 @@
 {
   "name": "receipt-cash",
-  "version": "2.0.10",
+  "version": "0.3.0",
   "private": true,
   "description": "A mobile-first receipt settlement PWA using Nostr and Cashu",
   "type": "module",
