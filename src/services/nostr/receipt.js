@@ -6,9 +6,8 @@ import { mapEventsToStore, mapEventsToTimeline, withImmediateValueOrDefault } fr
 import {ownedReceiptsStorageManager} from '../new/storage/ownedReceiptsStorageManager';
 import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
-import { getTagValue, unlockHiddenContent, getEncryptedContent } from "applesauce-core/helpers";
+import { getTagValue } from "applesauce-core/helpers";
 import confirmations$ from "./confirmations";
-import payouts$ from "./payouts";
 import { SimpleSigner } from "applesauce-signers";
 
 
@@ -72,18 +71,6 @@ function receiptConfirmations(receiptEventId){
     )
 }
 
-// Create a stream of all payouts related to a receipt
-function receiptPayouts(receiptEventId){
-    return payouts$.pipe(
-        // Every time the payouts array updates create a stream of events
-        mergeMap(payouts => 
-            // Select payouts for this receipt
-            payouts.filter(payout => 
-                payout.tags.some(t => t[0] == "e" && t[1] == receiptEventId)
-            )
-        )
-    )
-}
 
 const receiptModelCache = new Map()
 
@@ -120,27 +107,11 @@ export const receiptModel = (receiptEventId, sharedEncryptionKey = null) => {
 
             const settlements$ = receiptSettlements(receiptEventId)
             const confirmations$ = receiptConfirmations(receiptEventId)
-            const payouts$ = ownerSigner ?
-                // If we own the receipt fetch the payouts
-                receiptPayouts(receiptEventId).pipe(
-                    // Every time the payouts array updates
-                    mergeMap(payout =>
-                        // Decrypt the hidden content and then return the event again
-                        unlockHiddenContent(payout, ownerSigner).then(() => payout)
-                    ),
-                    // Add events to timeline (array)
-                    mapEventsToTimeline(),
-                    // Temp fix till applesauce v4
-                    withImmediateValueOrDefault([]),
-                )
-                // Otherwise ignore payouts
-                : of([])
 
             return combineLatest({
                 event: event$,
                 settlements: settlements$,
                 confirmations: confirmations$,
-                payouts: payouts$,
                 ownerSigner: of(ownerSigner),
                 sharedSigner: of(sharedSigner),
                 metadata: of(metadata)
@@ -185,49 +156,8 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                         const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
                         const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
                         
-                        // Calculate total payouts for this settlement (only if owned)
-                        let totalPayouts = 0;
-                        let fullyPaidOut = false;
-                        
-                        if (receiptModel.ownerSigner && receiptModel.payouts) {
-                            // Filter payouts that reference this settlement
-                            const settlementPayouts = receiptModel.payouts.filter(payout =>
-                                payout.tags.some(tag => tag[0] === 'e' && tag[1] === settlement.id)
-                            );
-                            
-                            
-                            // Deduplicate payouts by event ID
-                            const uniquePayouts = [];
-                            const seenIds = new Set();
-                            settlementPayouts.forEach(payout => {
-                                if (!seenIds.has(payout.id)) {
-                                    seenIds.add(payout.id);
-                                    uniquePayouts.push(payout);
-                                } else {
-                                    // console.log(`   ⚠️ Duplicate payout detected: ${payout.id.substring(0, 8)}`);
-                                }
-                            });
-                            
-                            
-                            // Sum up payout amounts from decrypted content
-                            totalPayouts = uniquePayouts.reduce((sum, payout, index) => {
-                                try {
-                                    // Payout content should already be decrypted by receiptModel
-                                    const payoutContent = JSON.parse(getEncryptedContent(payout))
-                                    const amount = payoutContent?.amount || 0;
-                                    return sum + amount;
-                                } catch (error) {
-                                    console.error(`   Error parsing payout ${index + 1}:`, error);
-                                    return sum;
-                                }
-                            }, 0);
-                            
-                            // Check if fully paid out (>= 99% of settlement total)
-                            const payoutPercentage = (totalPayouts / settlementTotal) * 100;
-                            fullyPaidOut = payoutPercentage >= 99;
-                        } else {
-                            console.log(`🔍 Skipping payout check for settlement ${settlement.id.substring(0, 8)} (not owned or no payouts)`);
-                        }
+                        // TODO: Calculate fullyPaidOut from accountingService instead of payout events
+                        const fullyPaidOut = false;
                         
                         return {
                             event: settlement,

@@ -2,7 +2,7 @@ import { EventStore } from "applesauce-core";
 import { presistEventsToCache, setHiddenContentEncryptionMethod } from "applesauce-core/helpers";
 import { RelayPool } from "applesauce-relay";
 import { createEventLoader, createTagValueLoader } from "applesauce-loaders/loaders";
-import { DEFAULT_RELAYS, KIND_SETTLEMENT, KIND_SETTLEMENT_PAYOUT } from "./constants";
+import { DEFAULT_RELAYS, KIND_SETTLEMENT } from "./constants";
 import { addEvents, getEventsForFilters, openDB } from "nostr-idb";
 
 // Create a relay pool
@@ -53,8 +53,6 @@ export const settlementLoader = createTagValueLoader(globalPool, "e", {
 
 // Initialize cache on module load
 initCache().catch(console.error);
-
-setHiddenContentEncryptionMethod(KIND_SETTLEMENT_PAYOUT, "nip44")
 
 // TODO: AI write docs on cache
 

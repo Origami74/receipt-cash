@@ -3,7 +3,6 @@ import { sumProofs } from '../../../utils/cashuUtils.js';
 import { DEV_CASHU_REQ } from '../../nostr/constants.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
-import { payoutEventPublisher } from './payoutEventPublisher.js';
 import { cocoService } from '../../cocoService';
 import { accountingService } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
@@ -163,24 +162,6 @@ class DevPayoutManager {
           0
         );
         
-        // Publish payout event
-        try {
-          const ownerSigner = await this._createSignerFromSessionId(devSplit.receiptEventId);
-          await payoutEventPublisher.publishCashuPayout(
-            ownerSigner,
-            devSplit.receiptEventId,
-            devSplit.settlementEventId,
-            {
-              amount: devSplit.amount,
-              fees: 0,
-              recipient: 'developer'
-            }
-          );
-          console.log(`📝 Published dev payout event: ${devSplit.amount} sats`);
-        } catch (payoutEventError) {
-          console.error('Failed to publish payout event:', payoutEventError);
-        }
-
         console.log(`✅ Dev payout complete with safety buffer`);
 
     } catch (error) {

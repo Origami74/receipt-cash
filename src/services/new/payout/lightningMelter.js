@@ -3,7 +3,6 @@ import cashuWalletManager from '../../flows/shared/cashuWalletManager.js';
 import { storeChangeForMint } from '../../storageService.js';
 import { sumProofs } from '../../../utils/cashuUtils.js';
 import meltSessionStorageManager from '../storage/meltSessionStorageManager.js';
-import { payoutEventPublisher } from './payoutEventPublisher.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { SimpleSigner } from 'applesauce-signers';
 import { Buffer } from 'buffer';
@@ -261,20 +260,6 @@ class LightningMelter {
           await storeChangeForMint(mintUrl, finalRemainingProofs);
           console.log(`💰 Stored ${finalRemainingAmount} sats in change jar for mint: ${mintUrl}`);
           
-          // Publish change jar payout event
-          try {
-            const { signer, receiptEventId, settlementEventId } = await this._createSignerFromSessionId(finalSessionId);
-            await payoutEventPublisher.publishChangeJarPayout(signer, receiptEventId, settlementEventId, {
-              amount: finalRemainingAmount,
-              mint: mintUrl,
-              proofsCount: finalRemainingProofs.length,
-              sessionId: finalSessionId
-            });
-            console.log(`📝 Published change jar payout event: ${finalRemainingAmount} sats`);
-          } catch (payoutEventError) {
-            console.error('Failed to publish change jar payout event:', payoutEventError);
-            // Don't fail the entire operation if payout event publishing fails
-          }
         }
       }
       
@@ -424,22 +409,6 @@ class LightningMelter {
           }
 
 
-          // Publish payout event for successful melt
-          try {
-            const { signer, receiptEventId, settlementEventId } = await this._createSignerFromSessionId(sessionId);
-            await payoutEventPublisher.publishLightningPayout(signer, receiptEventId, settlementEventId, {
-              amount: meltResult.quote.amount,
-              fees: meltResult.quote.fee_reserve - sumProofs(changeProofs),
-              lightningReceipt: meltResult.payment_preimage,
-              sessionId: sessionId,
-              roundNumber: meltAttempts
-            });
-            console.log(`📝 Published payout event for Lightning melt: ${meltQuote.amount} sats`);
-          } catch (payoutEventError) {
-            console.error('Failed to publish payout event:', payoutEventError);
-            // Don't fail the entire melt operation if payout event publishing fails
-          }
-          
           // Update the round as completed
           meltSessionStorageManager.updateCurrentRound(sessionId, false, {
             changeProofs,
