@@ -307,9 +307,10 @@ export default {
             previousConfirmedCount.value = currentConfirmedCount;
           }
           
-          // Check for pending payments (show processing reminder)
+          // Check for pending payments (show processing reminder) - ONLY for owned receipts
           const hasPendingPayments = (model?.unConfirmedSettlements?.length || 0) > 0;
           if (hasPendingPayments &&
+              isOwnedReceipt.value &&
               !onboardingService.hasSeen('ProcessingReminder') &&
               onboardingService.hasSeenWelcome()) {
             // Show processing reminder after a delay
