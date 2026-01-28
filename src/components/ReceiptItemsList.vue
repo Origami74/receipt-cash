@@ -17,13 +17,14 @@
           
           <!-- Enhanced Settlement Progress Bar -->
           <div class="w-full bg-gray-200 rounded-full h-2 mb-2 relative">
-            <!-- Collected but not distributed (yellow) -->
+            <!-- Collected but not distributed (yellow for owned, green for guests) -->
             <div
               v-if="itemWithSettlements.collectedPercent > 0"
               :style="{ width: itemWithSettlements.collectedPercent + '%' }"
-              class="bg-yellow-400 h-2 rounded-full transition-all duration-300 absolute"
+              :class="itemWithSettlements.collectedColor === 'orange' ? 'bg-yellow-400' : 'bg-green-500'"
+              class="h-2 rounded-full transition-all duration-300 absolute"
             ></div>
-            <!-- Distributed (green overlay) -->
+            <!-- Distributed (green overlay, only for owned receipts) -->
             <div
               v-if="itemWithSettlements.distributedPercent > 0"
               :style="{ width: itemWithSettlements.distributedPercent + '%' }"
@@ -43,7 +44,7 @@
               (<span :class="itemWithSettlements.confirmedQuantity > itemWithSettlements.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ itemWithSettlements.confirmedQuantity }}</span>/{{ itemWithSettlements.quantity }})
             </span>
             × {{ formatSats(itemWithSettlements.price) }} sats
-            <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span><span v-if="itemWithSettlements.pendingQuantity > 0" class="text-orange-600"> + {{ itemWithSettlements.pendingQuantity }} pending payment</span>
+            <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span><span v-if="itemWithSettlements.pendingQuantity > 0 && itemWithSettlements.isOwnedReceipt" class="text-orange-600"> + {{ itemWithSettlements.pendingQuantity }} pending payment</span>
           </div>
         </div>
         </div>
@@ -153,7 +154,8 @@ export default {
           collectedPercent,
           distributedPercent,
           pendingPercent,
-          collectedColor
+          collectedColor,
+          isOwnedReceipt
         };
       });
     });
