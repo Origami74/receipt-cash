@@ -38,7 +38,7 @@
             <div class="text-xl font-bold text-gray-900">
               {{ receiptModel?.title || 'Receipt' }}
             </div>
-            <div class="text-sm text-gray-500 mt-1">{{ receiptModel?.date }}</div>
+            <div class="text-sm text-gray-500 mt-1">{{ receiptDate }}</div>
           </div>
           
           <!-- Receipt Items (no wrapper, direct content) -->
@@ -164,6 +164,12 @@ export default {
       const baseUrl = window.location.origin;
       return `${baseUrl}/pay/${props.eventId}/${props.decryptionKey}`;
     });
+    
+    // Computed property for receipt date
+    const receiptDate = computed(() => {
+      if (!receiptModel.value?.receiptModel?.event?.created_at) return '';
+      return new Date(receiptModel.value.receiptModel.event.created_at * 1000).toLocaleDateString();
+    });
 
 
     // Currency handling
@@ -284,6 +290,7 @@ export default {
       handleShare,
       handlePay,
       receiptLink,
+      receiptDate,
       
       // Utilities
       formatSats,

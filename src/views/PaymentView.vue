@@ -16,22 +16,41 @@
     />
     
     <div class="flex-1 overflow-y-auto p-4">
-      <!-- Payment Items List with quantity selection -->
-      <PaymentItemsList
-        :items="itemsWithSettlements"
-        :paymentInProgress="paymentInProgress"
-        :paymentSuccess="paymentSuccess"
-        :toFiat="toFiat"
-        @select-all="selectAllItems"
-        @increment-quantity="incrementQuantity"
-        @decrement-quantity="decrementQuantity"
-      />
-      
-      <!-- Receipt Summary -->
-      <ReceiptSummary
-        :receiptModel="paymentReceiptModel"
-        :selectedCurrency="selectedCurrency"
-      />
+      <!-- Unified receipt paper containing items and summary -->
+      <div class="bg-white shadow-lg receipt-paper mb-4">
+        <!-- Zigzag top edge -->
+        <div class="receipt-edge-top"></div>
+        
+        <!-- Receipt Title and Date -->
+        <div class="px-4 pt-6 pb-4 text-center border-b border-dashed border-gray-300">
+          <div class="text-xl font-bold text-gray-900">
+            {{ receiptModel?.title || 'Receipt' }}
+          </div>
+          <div class="text-sm text-gray-500 mt-1">{{ receiptDate }}</div>
+        </div>
+        
+        <!-- Payment Items List with quantity selection -->
+        <PaymentItemsList
+          :items="itemsWithSettlements"
+          :paymentInProgress="paymentInProgress"
+          :paymentSuccess="paymentSuccess"
+          :toFiat="toFiat"
+          :isUnified="true"
+          @select-all="selectAllItems"
+          @increment-quantity="incrementQuantity"
+          @decrement-quantity="decrementQuantity"
+        />
+        
+        <!-- Receipt Summary -->
+        <ReceiptSummary
+          :receiptModel="paymentReceiptModel"
+          :selectedCurrency="selectedCurrency"
+          :isUnified="true"
+        />
+        
+        <!-- Zigzag bottom edge -->
+        <div class="receipt-edge-bottom"></div>
+      </div>
     </div>
 
     <!-- Payment Action Buttons -->
@@ -197,6 +216,12 @@ export default {
       router.push(`/receipt/${props.eventId}/${props.decryptionKey}`);
     };
 
+    // Computed property for receipt date
+    const receiptDate = computed(() => {
+      if (!receiptModel.value?.receiptModel?.event?.created_at) return '';
+      return new Date(receiptModel.value.receiptModel.event.created_at * 1000).toLocaleDateString();
+    });
+    
     // Computed properties
     const selectedItems = computed(() => {
       return items.value.filter(item => item.selectedQuantity > 0);
@@ -578,6 +603,7 @@ export default {
       showSettings,
       selectedCurrency,
       currentBtcPrice,
+      receiptDate,
       selectedItems,
       selectedSubtotal,
       itemsWithSettlements,

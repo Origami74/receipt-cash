@@ -82,15 +82,13 @@
           </div>
         </div>
       </div>
-    </div>
-    
-    <!-- Create Button (sticky) -->
-    <div class="bg-white border-t p-4">
+      
+      <!-- Create Button (inside scrollable area, full width) -->
       <button
         @click="handleCreate"
         :disabled="!isValid || isCreating"
         :class="[
-          'w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-colors',
+          'w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-colors mb-4',
           isValid && !isCreating
             ? 'bg-orange-500 hover:bg-orange-600 text-white'
             : 'bg-gray-300 text-gray-500 cursor-not-allowed'
