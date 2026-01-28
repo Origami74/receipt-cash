@@ -1,6 +1,5 @@
 <template>
   <div class="flex items-center gap-2">
-    <label for="currency-select" class="text-xs text-gray-500">Currency:</label>
     <div class="relative" ref="dropdownRef">
       <!-- Selected Currency Display -->
       <button

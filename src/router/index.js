@@ -22,10 +22,6 @@ const routes = [
     component: () => import('../views/ActivityView.vue')
   },
   {
-    path: '/receipt/create',
-    redirect: '/create/review'
-  },
-  {
     path: '/create/review',
     name: 'ReceiptReview',
     component: () => import('../views/ReceiptReviewView.vue')

@@ -18,53 +18,46 @@
         <h1 class="text-xl font-bold">Review Receipt</h1>
         <div class="text-sm text-gray-500">Step 1 of 2</div>
       </div>
-      
-      <!-- Receipt Title -->
-      <div class="mt-3 mb-2">
-        <div v-if="!titleEditing" class="flex items-center gap-2">
-          <div class="text-lg font-medium text-gray-800">
-            {{ receipt.title || 'Untitled Receipt' }}
-          </div>
-          <button
-            @click="startTitleEditing"
-            class="text-sm text-blue-500 hover:text-blue-600"
-            title="Edit title"
-          >
-            ✏️
-          </button>
-        </div>
-        <div v-else class="flex items-center gap-2">
-          <input
-            v-model="receipt.title"
-            @keyup.enter="saveTitleEdit"
-            @keyup.escape="cancelTitleEdit"
-            class="flex-1 text-lg font-medium p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter receipt title"
-            ref="titleInput"
-          />
-          <button @click="saveTitleEdit" class="text-sm text-green-600 hover:text-green-700">Save</button>
-          <button @click="cancelTitleEdit" class="text-sm text-gray-600 hover:text-gray-700">Cancel</button>
-        </div>
-      </div>
-      
-      <div class="flex justify-between items-center">
-        <div class="text-sm text-gray-500">{{ receipt.date }}</div>
-        <CurrencySelector
-          v-model="selectedCurrency"
-          @update:modelValue="onCurrencyChange"
-        />
-      </div>
     </div>
     
     <!-- Items List (scrollable) -->
     <div class="flex-1 overflow-y-auto p-4">
-      <div class="bg-white rounded-lg shadow mb-4">
-        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
-          Items
+      <!-- Single receipt paper containing both items and summary -->
+      <div class="bg-white shadow-lg receipt-paper mb-4">
+        <!-- Zigzag top edge -->
+        <div class="receipt-edge-top"></div>
+        
+        <!-- Receipt Title and Date -->
+        <div class="px-4 pt-6 pb-4 text-center border-b border-dashed border-gray-300">
+          <div v-if="!titleEditing" class="flex items-center justify-center gap-2">
+            <div class="text-xl font-bold text-gray-900">
+              {{ receipt.title || 'Untitled Receipt' }}
+            </div>
+            <button
+              @click="startTitleEditing"
+              class="text-sm text-blue-500 hover:text-blue-600"
+              title="Edit title"
+            >
+              ✏️
+            </button>
+          </div>
+          <div v-else class="flex items-center justify-center gap-2">
+            <input
+              v-model="receipt.title"
+              @keyup.enter="saveTitleEdit"
+              @keyup.escape="cancelTitleEdit"
+              class="text-xl font-bold p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+              placeholder="Enter receipt title"
+              ref="titleInput"
+            />
+            <button @click="saveTitleEdit" class="text-sm text-green-600 hover:text-green-700">✓</button>
+            <button @click="cancelTitleEdit" class="text-sm text-gray-600 hover:text-gray-700">✕</button>
+          </div>
+          <div class="text-sm text-gray-500 mt-1">{{ receipt.date }}</div>
         </div>
         
         <!-- Item Selection Instructions -->
-        <div v-if="showItemSelection" class="p-3 bg-blue-50 border-b border-blue-100">
+        <div v-if="showItemSelection" class="p-4 bg-blue-50 border-b border-dashed border-gray-300">
           <div class="text-sm text-blue-800">
             <div class="font-medium mb-1">Select your portion of each item:</div>
             <div class="text-xs text-blue-600">
@@ -74,7 +67,7 @@
         </div>
         
         <!-- Items container -->
-        <div>
+        <div class="px-4 pt-4">
           <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
             <!-- Item Selection Controls -->
             <div v-if="showItemSelection" class="flex items-center space-x-2 mr-3">
@@ -192,38 +185,14 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Suggested Actions Section -->
-      <div class="bg-white rounded-lg shadow mb-4">
-        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
-          Suggested Actions
-        </div>
-        <div class="p-3 flex flex-wrap gap-2">
-          <button
-            v-if="!showItemSelection"
-            @click="toggleItemSelection"
-            class="px-3 py-2 text-sm bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
-          >
-            📝 Deduct My Items
-          </button>
-          <button
-            v-if="showItemSelection"
-            @click="toggleItemSelection"
-            class="px-3 py-2 text-sm bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100"
-          >
-            ✅ Done Selecting
-          </button>
-        </div>
-      </div>
-      
-      <div class="bg-white rounded-lg shadow">
-        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+        
+        <!-- Summary section (same receipt paper, no gap) -->
+        <div class="px-4 pt-6 pb-3 border-t-2 border-dashed border-gray-300 font-medium text-center">
           Summary
         </div>
         
         <!-- Show breakdown when items are selected -->
-        <div v-if="getSelectedItemsTotal() > 0" class="p-3 border-b border-gray-100">
+        <div v-if="getSelectedItemsTotal() > 0" class="p-4 border-b border-dashed border-gray-300">
           <div class="flex justify-between items-center text-sm">
             <div>Total for me ({{ getSelectedItemsCount() }} items):</div>
             <div class="text-green-600">
@@ -233,16 +202,54 @@
           </div>
         </div>
         
-        <div class="p-3 flex justify-between items-center font-bold">
+        <div class="p-4 flex justify-between items-center font-bold border-b border-dashed border-gray-300">
           <div>{{ getSelectedItemsTotal() > 0 ? 'Total for others' : 'Total' }}</div>
           <div>
             <div class="font-bold">{{ formatPrice(calculateRemainingTotal()) }}</div>
             <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats(calculateRemainingTotal())) }} sats</div>
           </div>
         </div>
-        <div class="p-3 pt-2 text-xs text-gray-500 border-t border-gray-100">
+        <div class="px-4 pb-6 pt-2 text-xs text-gray-500 text-center">
           <div v-if="currentBtcPrice">
             Live conversion rate: {{ formatCurrency(currentBtcPrice, selectedCurrency) }}/BTC
+          </div>
+        </div>
+        
+        <!-- Zigzag bottom edge -->
+        <div class="receipt-edge-bottom"></div>
+      </div>
+
+      <!-- Suggested Actions Section -->
+      <div class="bg-white rounded-lg shadow mb-4">
+        <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+          Quick Actions
+        </div>
+        <div class="p-3 space-y-3">
+          <!-- Currency Selector Row -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-700">Select receipt currency</span>
+            <CurrencySelector
+              v-model="selectedCurrency"
+              @update:modelValue="onCurrencyChange"
+            />
+          </div>
+          
+          <!-- Action Buttons Row -->
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-if="!showItemSelection"
+              @click="toggleItemSelection"
+              class="px-3 py-2 text-sm bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+            >
+              📝 Deduct My Items
+            </button>
+            <button
+              v-if="showItemSelection"
+              @click="toggleItemSelection"
+              class="px-3 py-2 text-sm bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100"
+            >
+              ✅ Done Selecting
+            </button>
           </div>
         </div>
       </div>
@@ -591,5 +598,37 @@ export default {
 
 .receipt-item:last-child {
   @apply border-b-0;
+}
+
+/* Receipt paper styling */
+.receipt-paper {
+  position: relative;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Zigzag top edge */
+.receipt-edge-top {
+  height: 12px;
+  background:
+    linear-gradient(135deg, #f9fafb 25%, transparent 25%) -6px 0,
+    linear-gradient(225deg, #f9fafb 25%, transparent 25%) -6px 0,
+    linear-gradient(315deg, #f9fafb 25%, transparent 25%),
+    linear-gradient(45deg, #f9fafb 25%, transparent 25%);
+  background-size: 12px 12px;
+  background-color: white;
+}
+
+/* Zigzag bottom edge */
+.receipt-edge-bottom {
+  height: 12px;
+  background:
+    linear-gradient(135deg, white 25%, transparent 25%) -6px 0,
+    linear-gradient(225deg, white 25%, transparent 25%) -6px 0,
+    linear-gradient(315deg, white 25%, transparent 25%),
+    linear-gradient(45deg, white 25%, transparent 25%);
+  background-size: 12px 12px;
+  background-color: #f9fafb;
 }
 </style>

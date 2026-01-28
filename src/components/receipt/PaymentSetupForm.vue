@@ -30,6 +30,7 @@
         <div class="text-sm text-blue-800">
           <div class="font-medium mb-1">Receipt Summary</div>
           <div>{{ itemCount }} items • {{ formatPrice(totalForOthers) }}</div>
+          <div class="text-xs text-blue-600 mt-0.5">{{ formatSats(convertToSats(totalForOthers)) }} sats</div>
           <div v-if="selectedItemsTotal > 0" class="text-xs text-blue-600 mt-1">
             (Your portion: {{ formatPrice(selectedItemsTotal) }} deducted)
           </div>
@@ -57,19 +58,27 @@
         <div class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span>Total to collect:</span>
-            <span class="font-medium">{{ formatPrice(totalForOthers) }}</span>
+            <div class="text-right">
+              <div class="font-medium">{{ formatPrice(totalForOthers) }}</div>
+              <div class="text-xs text-gray-500">{{ formatSats(convertToSats(totalForOthers)) }} sats</div>
+            </div>
           </div>
           <div class="flex justify-between text-gray-600">
             <span>Developer fee ({{ developerSplit }}%):</span>
-            <span>{{ formatPrice(devFee) }}</span>
+            <div class="text-right">
+              <div>{{ formatPrice(devFee) }}</div>
+              <div class="text-xs text-gray-500">{{ formatSats(convertToSats(devFee)) }} sats</div>
+            </div>
           </div>
           <div class="flex justify-between text-lg font-bold border-t pt-2">
             <span>You receive:</span>
-            <span class="text-green-600">{{ formatPrice(youReceive) }}</span>
+            <div class="text-right text-green-600">
+              <div>{{ formatPrice(youReceive) }}</div>
+              <div class="text-sm font-normal text-gray-500">{{ formatSats(convertToSats(youReceive)) }} sats</div>
+            </div>
           </div>
-          <div class="text-xs text-gray-500 mt-2">
-            <div>Total in sats: {{ formatSats(convertToSats(totalForOthers)) }}</div>
-            <div>You receive: {{ formatSats(convertToSats(youReceive)) }} sats</div>
+          <div class="text-xs text-gray-500 mt-3 pt-2 border-t">
+            Note: Amounts shown do not include network fees
           </div>
         </div>
       </div>
