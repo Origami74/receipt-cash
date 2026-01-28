@@ -7,7 +7,7 @@
     />
     <template v-else>
       <!-- Show captured image immediately after taking photo -->
-      <div v-if="capturedImage && !capturedReceipt" class="h-full flex flex-col bg-gray-900">
+      <div v-if="capturedImage" class="h-full flex flex-col bg-gray-900">
         <div class="flex-1 flex items-center justify-center p-4">
           <img :src="capturedImage" alt="Captured receipt" class="max-w-full max-h-full object-contain" />
         </div>
@@ -16,7 +16,7 @@
         </div>
       </div>
       
-      <div v-else-if="!capturedReceipt && !capturedImage" class="camera-container">
+      <div v-else-if="!capturedImage" class="camera-container">
         <video ref="videoElement" class="h-full w-full object-cover"></video>
         
         <!-- Camera Permission Overlay Component -->
@@ -42,7 +42,7 @@
             @toggle-flash="toggleFlash"
             @capture-receipt="captureReceipt"
             @toggle-settings="$emit('toggle-settings')"
-            @image-uploaded="handleImageUpload"
+            @file-selected="handleFileSelected"
           />
         </div>
         
@@ -349,17 +349,54 @@ export default {
       }
     };
 
-    const handleImageUpload = (processedReceipt) => {
-      // Navigate to receipt creation view with data in URL
-      const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
-      router.push({
-        path: '/receipt/create',
-        query: { data: receiptDataEncoded }
-      });
-      
-      // Stop the camera since we don't need it anymore
-      if (qrScanner.value) {
-        qrScanner.value.stop();
+    const handleFileSelected = async (file) => {
+      try {
+        // Show the uploaded image preview immediately
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          capturedImage.value = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        // Stop the camera
+        if (qrScanner.value) {
+          qrScanner.value.stop();
+        }
+        
+        isProcessing.value = true;
+        showNotification('Processing uploaded image...', 'info');
+        
+        // Convert file to base64 for processing
+        const base64Image = await new Promise((resolve) => {
+          const fileReader = new FileReader();
+          fileReader.onloadend = () => resolve(fileReader.result.split(',')[1]);
+          fileReader.readAsDataURL(file);
+        });
+        
+        // Process the image
+        const processedReceipt = await receiptService.processReceiptImage(base64Image);
+        
+        // Clear the preview image
+        capturedImage.value = null;
+        
+        showNotification('Receipt processed successfully!', 'success');
+        
+        // Navigate to receipt creation view with data in URL
+        const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
+        router.push({
+          path: '/receipt/create',
+          query: { data: receiptDataEncoded }
+        });
+      } catch (error) {
+        console.error('Error processing uploaded image:', error);
+        showNotification(error.message || 'Failed to process uploaded image');
+        capturedImage.value = null;
+        // Restart camera
+        if (hasPermission.value && qrScanner.value) {
+          qrScanner.value.start();
+        }
+      } finally {
+        isProcessing.value = false;
       }
     };
 
@@ -378,7 +415,7 @@ export default {
       captureReceipt,
       handleToggleActivity,
       handleQrCodeResult,
-      handleImageUpload,
+      handleFileSelected,
       requestCameraPermission
     };
   }

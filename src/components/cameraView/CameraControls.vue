@@ -82,7 +82,7 @@ import receiptService from '../../services/aiService';
 
 export default {
   name: 'CameraControls',
-  emits: ['toggle-flash', 'capture-receipt', 'toggle-settings', 'image-uploaded'],
+  emits: ['toggle-flash', 'capture-receipt', 'toggle-settings', 'image-uploaded', 'file-selected'],
   setup(props, { emit }) {
     const fileInput = ref(null);
     const lastCapturedImage = ref(null);
@@ -115,35 +115,8 @@ export default {
         return;
       }
       
-      try {
-        // Create a preview image URL
-        const previewUrl = URL.createObjectURL(file);
-        lastCapturedImage.value = previewUrl;
-        
-        // Save preview to localStorage (as data URL for persistence)
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          localStorage.setItem('lastCapturedImagePreview', e.target.result);
-        };
-        reader.readAsDataURL(file);
-        
-        // Convert file to base64 for processing
-        const base64Image = await convertFileToBase64(file);
-        
-        showNotification('Processing uploaded image...', 'info');
-        
-        // Process the uploaded image
-        const processedReceipt = await receiptService.processReceiptImage(base64Image);
-        
-        // Emit the processed receipt to parent
-        emit('image-uploaded', processedReceipt);
-        
-        showNotification('Image processed successfully!', 'success');
-        
-      } catch (error) {
-        console.error('Error processing uploaded image:', error);
-        showNotification(error.message || 'Failed to process uploaded image', 'error');
-      }
+      // Emit the file to parent for preview and processing
+      emit('file-selected', file);
       
       // Reset file input
       event.target.value = '';
