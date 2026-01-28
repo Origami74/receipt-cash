@@ -69,119 +69,6 @@
         </div>
       </div>
 
-      <!-- Proofs Section -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Proofs
-          </h2>
-          <button
-            @click="loadV2Proofs"
-            class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-        </div>
-        
-        <p class="text-sm text-gray-600 mb-4">
-          All Cashu proofs stored in the app. Copy individual proofs or export all at once.
-        </p>
-
-        <div v-if="Object.keys(v2Proofs).length === 0" class="text-sm text-gray-500 italic text-center py-8">
-          No proofs found in storage
-        </div>
-
-        <div v-else class="space-y-4">
-          <!-- Summary Card -->
-          <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <div class="text-sm font-medium text-purple-900 mb-1">Summary</div>
-            <div class="text-xs text-purple-700">
-              {{ Object.keys(v2Proofs).length }} transaction(s) with proofs
-            </div>
-          </div>
-
-          <!-- Export All Button -->
-          <button
-            @click="exportAllProofs"
-            class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center text-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-            </svg>
-            Export All Proofs to File
-          </button>
-
-          <!-- Individual Transactions -->
-          <div v-for="(transaction, txId) in v2Proofs" :key="txId" class="border border-gray-200 rounded-lg p-3">
-            <div class="flex justify-between items-start mb-2">
-              <div class="flex-1">
-                <div class="text-sm font-medium text-gray-900 break-all">
-                  {{ formatTransactionId(txId) }}
-                </div>
-                <div class="text-xs text-gray-500 mt-1">
-                  {{ formatDate(transaction.timestamp) }}
-                </div>
-              </div>
-            </div>
-
-            <!-- Categories -->
-            <div v-for="(category, catName) in transaction.categories" :key="catName" class="mt-3 bg-gray-50 rounded p-2">
-              <div class="flex justify-between items-center mb-2">
-                <div>
-                  <div class="text-sm font-medium capitalize text-gray-700">{{ catName }}</div>
-                  <div class="text-xs text-gray-500">
-                    {{ category.proofs.length }} proof(s) • {{ calculateProofAmount(category.proofs) }} sats
-                  </div>
-                  <div class="text-xs text-gray-500 break-all mt-1">
-                    Mint: {{ category.mintUrl }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="space-y-2 mt-2">
-                <div class="flex space-x-2">
-                  <button
-                    @click="copyProofs(txId, catName, category)"
-                    class="flex-1 text-xs bg-blue-100 text-blue-800 px-3 py-2 rounded hover:bg-blue-200 transition-colors"
-                  >
-                    Copy Token
-                  </button>
-                  <button
-                    @click="copyProofsRaw(category.proofs)"
-                    class="flex-1 text-xs bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors"
-                  >
-                    Copy Raw JSON
-                  </button>
-                </div>
-                <button
-                  @click="checkProofsSpent(txId, catName, category)"
-                  :disabled="checkingProofs[`${txId}-${catName}`]"
-                  class="w-full text-xs px-3 py-2 rounded transition-colors"
-                  :class="checkingProofs[`${txId}-${catName}`]
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-amber-100 text-amber-800 hover:bg-amber-200'"
-                >
-                  <span v-if="checkingProofs[`${txId}-${catName}`]">Checking...</span>
-                  <span v-else>Check if Spent</span>
-                </button>
-                <div v-if="proofCheckResults[`${txId}-${catName}`]" class="text-xs p-2 rounded mt-2" :class="{
-                  'bg-green-50 text-green-800': proofCheckResults[`${txId}-${catName}`].success,
-                  'bg-red-50 text-red-800': !proofCheckResults[`${txId}-${catName}`].success
-                }">
-                  {{ proofCheckResults[`${txId}-${catName}`].message }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Incomplete Melt Sessions Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <div class="flex items-center justify-between mb-3">
@@ -469,7 +356,6 @@ export default {
   name: 'DebugRecoveryView',
   setup() {
     const router = useRouter();
-    const v2Proofs = ref({});
     const incompleteMeltSessions = ref([]);
     const showConfirmModal = ref(false);
     const confirmMessage = ref('');
@@ -603,60 +489,6 @@ export default {
       showConfirmModal.value = true;
     };
 
-    const loadV2Proofs = () => {
-      try {
-        const allProofs = {};
-        
-        // Load from v2 storage keys
-        const v2Keys = {
-          'incoming': 'receipt-cash-v2-money-incoming',
-          'dev': 'receipt-cash-v2-money-dev',
-          'payer': 'receipt-cash-v2-money-payer'
-        };
-        
-        Object.entries(v2Keys).forEach(([category, storageKey]) => {
-          const stored = localStorage.getItem(storageKey);
-          if (stored) {
-            try {
-              const data = JSON.parse(stored);
-              // The v2 storage uses a Map structure with keys like "receiptId-settlementId"
-              Object.entries(data).forEach(([key, item]) => {
-                // Skip items that are marked as spent
-                if (item && item.isSpent === true) {
-                  return;
-                }
-                
-                if (item && item.proofs && Array.isArray(item.proofs) && item.proofs.length > 0) {
-                  // Use the key as transaction ID
-                  if (!allProofs[key]) {
-                    allProofs[key] = {
-                      timestamp: item.timestamp || Date.now(),
-                      categories: {}
-                    };
-                  }
-                  
-                  allProofs[key].categories[category] = {
-                    proofs: item.proofs,
-                    mintUrl: item.mintUrl || item.mint || 'Mint URL not stored',
-                    status: 'v2-storage',
-                    lastUpdated: item.timestamp || Date.now()
-                  };
-                }
-              });
-            } catch (e) {
-              console.error(`Error parsing ${storageKey}:`, e);
-            }
-          }
-        });
-        
-        v2Proofs.value = allProofs;
-        console.log('Loaded v2 proofs:', v2Proofs.value);
-      } catch (error) {
-        console.error('Error loading v2 proofs:', error);
-        showToastMessage('Error loading proofs');
-      }
-    };
-
     const formatTransactionId = (txId) => {
       if (txId.length <= 16) return txId;
       return `${txId.substring(0, 8)}...${txId.substring(txId.length - 8)}`;
@@ -678,64 +510,6 @@ export default {
       return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     };
 
-    const copyProofs = async (txId, catName, category) => {
-      try {
-        const tokenData = {
-          mint: category.mintUrl,
-          proofs: category.proofs
-        };
-        const token = getEncodedToken(tokenData);
-        
-        await navigator.clipboard.writeText(token);
-        showToastMessage(`Copied ${catName} token to clipboard`);
-      } catch (error) {
-        console.error('Error copying proofs:', error);
-        showToastMessage('Error copying token');
-      }
-    };
-
-    const copyProofsRaw = async (proofs) => {
-      try {
-        await navigator.clipboard.writeText(JSON.stringify(proofs, null, 2));
-        showToastMessage('Copied raw proofs to clipboard');
-      } catch (error) {
-        console.error('Error copying raw proofs:', error);
-        showToastMessage('Error copying raw proofs');
-      }
-    };
-
-    const checkProofsSpent = async (txId, catName, category) => {
-      const key = `${txId}-${catName}`;
-      checkingProofs[key] = true;
-      delete proofCheckResults[key];
-      
-      try {
-        const isSpent = await cashuService.checkProofsClaimed(category.proofs, category.mintUrl);
-        
-        if (isSpent) {
-          proofCheckResults[key] = {
-            success: true,
-            message: `✅ All ${category.proofs.length} proofs are SPENT`
-          };
-          showToastMessage(`✅ All ${category.proofs.length} proofs are SPENT`);
-        } else {
-          proofCheckResults[key] = {
-            success: false,
-            message: `⚠️ Some proofs are still UNSPENT - check console for details`
-          };
-          showToastMessage(`⚠️ Some proofs are still UNSPENT - check console for details`);
-        }
-      } catch (error) {
-        console.error('Error checking proofs:', error);
-        proofCheckResults[key] = {
-          success: false,
-          message: `❌ Error: ${error.message || 'Failed to check proofs with mint'}`
-        };
-        showToastMessage(`❌ Error checking proofs: ${error.message || 'Unknown error'}`);
-      } finally {
-        checkingProofs[key] = false;
-      }
-    };
 
     const checkMeltSessionTokenStatus = async (session) => {
       const key = session.sessionId;
@@ -883,24 +657,6 @@ export default {
       }
     };
 
-    const exportAllProofs = () => {
-      try {
-        const dataStr = JSON.stringify(v2Proofs.value, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `receipt-cash-proofs-${Date.now()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        showToastMessage('Proofs exported successfully');
-      } catch (error) {
-        console.error('Error exporting proofs:', error);
-        showToastMessage('Error exporting proofs');
-      }
-    };
 
     const exportLocalStorage = () => {
       try {
@@ -958,7 +714,6 @@ export default {
             success: true,
             message: `Successfully imported ${Object.keys(data).length} items`
           };
-          loadV2Proofs();
           showToastMessage('Data imported successfully');
         } catch (error) {
           console.error('Error importing localStorage:', error);
@@ -976,7 +731,6 @@ export default {
       confirmAction.value = () => {
         localStorage.clear();
         showToastMessage('All data cleared');
-        loadV2Proofs();
       };
       showConfirmModal.value = true;
     };
@@ -1003,12 +757,10 @@ export default {
     };
 
     onMounted(() => {
-      loadV2Proofs();
       loadMeltSessions();
     });
 
     return {
-      v2Proofs,
       incompleteMeltSessions,
       totalIncompleteSats,
       storageInfo,
@@ -1019,19 +771,15 @@ export default {
       fileInput,
       importStatus,
       goBack,
-      loadV2Proofs,
       loadMeltSessions,
       formatTransactionId,
       formatSessionId,
       formatDate,
       calculateProofAmount,
-      copyProofs,
-      copyProofsRaw,
       copyMeltSessionProofs,
       copyMeltSessionRaw,
       moveToChangeJar,
       deleteMeltSession,
-      checkProofsSpent,
       checkMeltSessionTokenStatus,
       recoverMeltSession,
       checkingProofs,
@@ -1040,7 +788,6 @@ export default {
       toggleRounds,
       copyRoundInputProofs,
       copyRoundInputProofsRaw,
-      exportAllProofs,
       exportLocalStorage,
       handleFileSelect,
       confirmClearAll,

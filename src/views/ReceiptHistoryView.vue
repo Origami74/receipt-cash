@@ -71,12 +71,15 @@ export default {
     var loading = true
     
     ownedReceiptsStorageManager.receipts$
-      .subscribe(receipts => {
-        receiptsDisplay = receipts
-        loading = false
-      }).error(err => {
-        error = err
-        loading = false;
+      .subscribe({
+        next: (receipts) => {
+          receiptsDisplay = receipts
+          loading = false
+        },
+        error: (err) => {
+          error = err
+          loading = false
+        }
       })
 
     return {
