@@ -46,7 +46,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
-import addressValidation, { AddressType } from '../utils/receiveAddressValidationUtils';
+import addressValidation, { AddressType, verifyLightningAddress } from '../utils/receiveAddressValidationUtils';
 
 export default {
   name: 'ReceiveAddressInput',
@@ -66,21 +66,81 @@ export default {
     inputId: {
       type: String,
       default: 'receive-address'
+    },
+    skipInitialVerification: {
+      type: Boolean,
+      default: true
     }
   },
   emits: ['update:modelValue', 'validation-change'],
   setup(props, { emit }) {
     const validationResult = ref({ isValid: true, type: '', error: '' });
+    const isVerifying = ref(false);
+    const isInitialLoad = ref(true);
+    let verificationTimeout = null;
     
-    const validateAddress = (address) => {
-      if (!address || address.trim() === '') {
-        validationResult.value = { isValid: true, type: '', error: '' };
-      } else {
-        validationResult.value = addressValidation.validateReceiveAddress(address);
+    const validateAddress = async (address) => {
+      // Clear any pending verification
+      if (verificationTimeout) {
+        clearTimeout(verificationTimeout);
+        verificationTimeout = null;
       }
       
-      // Emit validation result for parent component
+      if (!address || address.trim() === '') {
+        validationResult.value = { isValid: true, type: '', error: '', isVerifying: false };
+        isVerifying.value = false;
+        emit('validation-change', validationResult.value);
+        return;
+      }
+      
+      // First do format validation
+      const formatValidation = addressValidation.validateReceiveAddress(address);
+      validationResult.value = { ...formatValidation, isVerifying: false };
       emit('validation-change', validationResult.value);
+      
+      // If it's a Lightning address and format is valid, verify it actually works
+      if (formatValidation.isValid && formatValidation.type === AddressType.LIGHTNING) {
+        // Emit verifying state immediately
+        isVerifying.value = true;
+        validationResult.value = { ...formatValidation, isVerifying: true };
+        emit('validation-change', validationResult.value);
+        
+        // Debounce verification to avoid too many requests while typing
+        verificationTimeout = setTimeout(async () => {
+          try {
+            const verificationResult = await verifyLightningAddress(address);
+            
+            if (!verificationResult.isValid) {
+              validationResult.value = {
+                isValid: false,
+                type: AddressType.LIGHTNING,
+                error: verificationResult.error,
+                isVerifying: false
+              };
+            } else {
+              validationResult.value = {
+                isValid: true,
+                type: AddressType.LIGHTNING,
+                isVerifying: false
+              };
+            }
+            
+            emit('validation-change', validationResult.value);
+          } catch (error) {
+            console.error('Lightning address verification error:', error);
+            // Don't fail validation on network errors, just warn
+            validationResult.value = {
+              isValid: true,
+              type: AddressType.LIGHTNING,
+              warning: 'Could not verify Lightning address (network error)',
+              isVerifying: false
+            };
+            emit('validation-change', validationResult.value);
+          } finally {
+            isVerifying.value = false;
+          }
+        }, 1000); // Wait 1 second after user stops typing
+      }
     };
     
     // Validate address whenever modelValue changes
@@ -100,6 +160,10 @@ export default {
     const statusEmoji = computed(() => {
       if (!props.modelValue || props.modelValue.trim() === '') {
         return '⚠️';
+      }
+      
+      if (isVerifying.value) {
+        return '🔄';
       }
       
       if (!validationResult.value.isValid) {
@@ -178,13 +242,21 @@ export default {
         return 'Enter Lightning address (user@domain.com) or Cashu payment request';
       }
       
+      if (isVerifying.value) {
+        return 'Verifying Lightning address...';
+      }
+      
       if (!validationResult.value.isValid) {
         return validationResult.value.error;
       }
       
+      if (validationResult.value.warning) {
+        return validationResult.value.warning;
+      }
+      
       switch (validationResult.value.type) {
         case AddressType.LIGHTNING:
-          return 'Lightning Address - Used for receiving Lightning payments';
+          return 'Lightning Address - Verified and ready to receive payments';
         case AddressType.CASHU:
           return 'Cashu Payment Request - Used for receiving Cashu payments';
         default:
@@ -197,13 +269,21 @@ export default {
         return 'text-gray-500';
       }
       
+      if (isVerifying.value) {
+        return 'text-blue-500';
+      }
+      
       if (!validationResult.value.isValid) {
         return 'text-red-500';
       }
       
+      if (validationResult.value.warning) {
+        return 'text-yellow-600';
+      }
+      
       switch (validationResult.value.type) {
         case AddressType.LIGHTNING:
-          return 'text-orange-600';
+          return 'text-green-600';
         case AddressType.CASHU:
           return 'text-purple-600';
         default:

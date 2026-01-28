@@ -2,6 +2,9 @@
 
 This document contains prioritized user feedback and feature requests for the Receipt.Cash application. Items are organized by priority level to guide development efforts.
 
+## TODO add
+
+
 ## Priority 90-100 (Critical - Core Flow Blockers)
 
 ### Priority 90 - Fix subsidy in next.receipt.cash
@@ -21,32 +24,12 @@ This document contains prioritized user feedback and feature requests for the Re
 **Impact**: Reduces onboarding friction significantly
 **Reason**: Current flow requires payers to have Cashu tokens already. Allowing immediate funding improves first-time user experience and removes major adoption barrier
 
-### Priority 77 - Validate lightning address is actually valid
-**Status**: Open
-**Impact**: Input validation for payment addresses
-**Reason**: Prevents users from entering invalid lightning addresses that will fail during payout, improving error handling and user experience
 
-### Priority 75 - Hide unconfirmed settlements
-**Status**: Open
-**Impact**: UI clarity issue that confuses users about payment status
-**Reason**: Given the reversed payment architecture complexity, clear status indication is crucial for user confidence
 
 ## Priority 50-69 (Medium - User Experience Enhancements)
 
-### Priority 65 - Receipt preview scrolling issue
-**Status**: Open
-**Impact**: UX issue affecting receipt preview readability
-**Reason**: Line items are in their own scroll box instead of making the page longer, creating nested scrolling which is confusing
 
-### Priority 64 - Receipt preview missing bottom navigation bar
-**Status**: Open
-**Impact**: Navigation consistency issue
-**Reason**: Bottom navigation bar is not visible in receipt preview, breaking expected navigation pattern
 
-### Priority 63 - Receipt 'create' button needs loading state
-**Status**: Open
-**Impact**: User feedback during async operation
-**Reason**: Button should block and show spinner while publishing receipt to prevent double-clicks and provide visual feedback
 
 ### Priority 62 - Add silent background audio player
 **Status**: Open
@@ -74,11 +57,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Status**: Open  
 **Impact**: Data structure enhancement improving accuracy and transparency  
 **Reason**: Shows detailed cost breakdown but requires significant backend changes and data migration. Important for accuracy but not blocking current functionality
-
-### Priority 35 - Save receipts in kind 30078 (spam hard to write docs on this for applesauce)
-**Status**: Open  
-**Impact**: Technical implementation change for better Nostr integration  
-**Reason**: Likely improves data organization and relay compatibility but doesn't directly impact user experience. Documentation difficulty suggests implementation complexity
 
 ## Priority 20-29 (Low - Nice-to-Have)
 

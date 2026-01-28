@@ -26,24 +26,55 @@ export const fetchBtcPrice = async (currency = 'usd') => {
   }
   
   try {
-    // Using Coinbase API for BTC price data
-    const response = await fetch(`https://api.coinbase.com/v2/prices/btc-${currency.toLowerCase()}/spot`);
+    let price = null;
+    let lastError = null;
     
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    // Handle Coinbase API error response format
-    if (data.error) {
-      throw new Error(`Coinbase API error: ${data.message || data.error}`);
-    }
-    
-    const price = parseFloat(data.data.amount);
-
-    if (!price) {
-      throw Error(`No price returned for ${currency}`)
+    // Try Coinbase API first
+    try {
+      const response = await fetch(`https://api.coinbase.com/v2/prices/btc-${currency.toLowerCase()}/spot`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Handle Coinbase API error response format
+      if (data.error) {
+        throw new Error(`Coinbase API error: ${data.message || data.error}`);
+      }
+      
+      price = parseFloat(data.data.amount);
+      
+      if (!price) {
+        throw new Error(`No price returned for ${currency}`);
+      }
+      
+      console.log(`Fetched BTC price from Coinbase for ${currency}: ${price}`);
+    } catch (coinbaseError) {
+      lastError = coinbaseError;
+      console.warn('Coinbase API failed, trying fallback:', coinbaseError.message);
+      
+      // Fallback to CoinGecko API (no API key required, more permissive CORS)
+      try {
+        const geckoResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${currency.toLowerCase()}`);
+        
+        if (!geckoResponse.ok) {
+          throw new Error(`HTTP ${geckoResponse.status}: ${geckoResponse.statusText}`);
+        }
+        
+        const geckoData = await geckoResponse.json();
+        price = parseFloat(geckoData.bitcoin?.[currency.toLowerCase()]);
+        
+        if (!price) {
+          throw new Error(`No price returned from CoinGecko for ${currency}`);
+        }
+        
+        console.log(`Fetched BTC price from CoinGecko for ${currency}: ${price}`);
+      } catch (geckoError) {
+        console.error('CoinGecko API also failed:', geckoError.message);
+        throw lastError; // Throw the original Coinbase error
+      }
     }
     
     // Cache the new price
@@ -52,10 +83,18 @@ export const fetchBtcPrice = async (currency = 'usd') => {
       timestamp: now
     });
     
-    console.log(`Fetched and cached new BTC price for ${currency}: ${price}`);
+    console.log(`Cached new BTC price for ${currency}: ${price}`);
     return price;
   } catch (err) {
-    console.error('Error fetching BTC price:', err);
+    // Better error logging for debugging
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorDetails = {
+      message: errorMessage,
+      name: err?.name,
+      stack: err?.stack,
+      currency: currency
+    };
+    console.error('Error fetching BTC price:', errorDetails);
     
     // If we have an expired cached price, use it as fallback
     if (priceCache.has(cacheKey)) {
@@ -64,7 +103,8 @@ export const fetchBtcPrice = async (currency = 'usd') => {
       return fallback.price;
     }
     
-    throw new Error('Failed to fetch Bitcoin price and no cached fallback available');
+    // Throw a more descriptive error
+    throw new Error(`Failed to fetch Bitcoin price for ${currency}: ${errorMessage}`);
   }
 };
 

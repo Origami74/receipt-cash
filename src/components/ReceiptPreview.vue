@@ -266,10 +266,10 @@
           
           <button
             @click="createRequest"
-            :disabled="!addressValid || !receiveAddress || isPublishing"
+            :disabled="!addressValid || !receiveAddress || isPublishing || addressVerifying"
             :class="[
               'w-full flex items-center justify-center gap-2',
-              (!addressValid || !receiveAddress || isPublishing)
+              (!addressValid || !receiveAddress || isPublishing || addressVerifying)
                 ? 'btn-secondary opacity-50 cursor-not-allowed'
                 : 'btn-primary'
             ]"
@@ -374,6 +374,7 @@ export default {
     const addressValid = ref(true);
     const addressError = ref('');
     const addressType = ref('');
+    const addressVerifying = ref(false);
     const eventId = ref('');
     const eventEncryptionPrivateKey = ref('');
     const currentBtcPrice = ref(0);
@@ -425,8 +426,9 @@ export default {
       try {
         currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
-        console.error('Error fetching BTC price for preview:', error);
-        showNotification('Failed to fetch BTC price for preview', 'error');
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error fetching BTC price for preview:', errorMessage, error);
+        showNotification(`Failed to fetch BTC price: ${errorMessage}`, 'error');
       }
     });
     
@@ -435,6 +437,7 @@ export default {
       addressValid.value = validationResult.isValid;
       addressError.value = validationResult.error;
       addressType.value = validationResult.type;
+      addressVerifying.value = validationResult.isVerifying || false;
       
       // Update legacy paymentRequest for backward compatibility
       paymentRequest.value = receiveAddress.value;
@@ -456,8 +459,9 @@ export default {
         // Fetch new BTC price for the selected currency
         currentBtcPrice.value = await btcPriceService.fetchBtcPrice(selectedCurrency.value);
       } catch (error) {
-        console.error('Error fetching BTC price for new currency:', error);
-        showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}`, 'error');
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error fetching BTC price for new currency:', errorMessage, error);
+        showNotification(`Failed to fetch BTC price for ${selectedCurrency.value}: ${errorMessage}`, 'error');
       }
     };
     
@@ -635,6 +639,16 @@ export default {
         return;
       }
       
+      if (addressVerifying.value) {
+        showNotification('Please wait for address verification to complete', 'warning');
+        return;
+      }
+      
+      if (!addressValid.value) {
+        showNotification('Please enter a valid receive address', 'error');
+        return;
+      }
+      
       if (!addressValid.value) {
         showNotification(addressError.value, 'error');
         return;
@@ -760,6 +774,7 @@ export default {
       addressValid,
       addressError,
       addressType,
+      addressVerifying,
       validatePaymentRequest,
       handleAddressValidation,
       eventId,

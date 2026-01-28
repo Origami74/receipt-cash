@@ -99,6 +99,72 @@ function isLightningAddress(address) {
 }
 
 /**
+ * Verify that a Lightning address actually works by checking the LNURL endpoint
+ * @param {String} address - The Lightning address to verify (user@domain.com)
+ * @returns {Promise<{isValid: boolean, error?: string}>}
+ */
+export async function verifyLightningAddress(address) {
+  if (!isLightningAddress(address)) {
+    return {
+      isValid: false,
+      error: 'Invalid Lightning address format'
+    };
+  }
+
+  try {
+    const [username, domain] = address.split('@');
+    const url = `https://${domain}/.well-known/lnurlp/${username}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      return {
+        isValid: false,
+        error: `Lightning address not found (${response.status})`
+      };
+    }
+    
+    const data = await response.json();
+    
+    // Verify it's a valid LNURL-pay response
+    if (!data.callback || !data.minSendable || !data.maxSendable) {
+      return {
+        isValid: false,
+        error: 'Invalid LNURL-pay response from server'
+      };
+    }
+    
+    return {
+      isValid: true
+    };
+    
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return {
+        isValid: false,
+        error: 'Lightning address verification timed out'
+      };
+    }
+    
+    return {
+      isValid: false,
+      error: `Failed to verify Lightning address: ${error.message}`
+    };
+  }
+}
+
+/**
  * Get a user-friendly description of the address type
  * @param {String} type - The address type
  * @returns {String} User-friendly description

@@ -35,7 +35,6 @@
                 label="Receive Address"
                 input-id="receiveAddress"
                 @validation-change="handleReceiveAddressValidation"
-                @update:modelValue="saveSettings"
               />
             </div>
           </div>
@@ -665,12 +664,16 @@ export default {
         model: settings.value.model
       });
       
-      // Save receive address (validation is handled by the component)
+      // Save receive address only if valid and not currently verifying
       if (settings.value.receiveAddress) {
-        if (receiveAddressValidation.value.isValid) {
+        if (receiveAddressValidation.value.isValid && !receiveAddressValidation.value.isVerifying) {
           saveReceiveAddress(settings.value.receiveAddress);
           const typeDescription = addressValidation.getAddressTypeDescription(receiveAddressValidation.value.type);
           showNotification(`${typeDescription} saved successfully`, 'success');
+        } else if (receiveAddressValidation.value.isVerifying) {
+          showNotification('Please wait for address verification to complete', 'warning');
+        } else {
+          showNotification('Please enter a valid receive address', 'error');
         }
       } else {
         // Clear the receive address if empty
