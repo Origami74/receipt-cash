@@ -274,10 +274,10 @@ export default {
           
           showNotification('Receipt processed successfully!', 'success');
           
-          // Navigate to receipt creation view with data in URL
+          // Navigate to receipt review view with data in URL
           const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
           router.push({
-            path: '/receipt/create',
+            path: '/create/review',
             query: { data: receiptDataEncoded }
           });
         } catch (processingError) {
@@ -411,10 +411,10 @@ export default {
         
         showNotification('Receipt processed successfully!', 'success');
         
-        // Navigate to receipt creation view with data in URL
+        // Navigate to receipt review view with data in URL
         const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
         router.push({
-          path: '/receipt/create',
+          path: '/create/review',
           query: { data: receiptDataEncoded }
         });
       } catch (error) {

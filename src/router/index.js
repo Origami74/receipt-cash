@@ -23,8 +23,17 @@ const routes = [
   },
   {
     path: '/receipt/create',
-    name: 'ReceiptCreate',
-    component: () => import('../views/ReceiptCreateView.vue')
+    redirect: '/create/review'
+  },
+  {
+    path: '/create/review',
+    name: 'ReceiptReview',
+    component: () => import('../views/ReceiptReviewView.vue')
+  },
+  {
+    path: '/create/payment',
+    name: 'ReceiptPayment',
+    component: () => import('../views/ReceiptPaymentView.vue')
   },
   {
     path: '/debug-recovery',
