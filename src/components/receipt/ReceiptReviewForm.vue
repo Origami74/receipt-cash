@@ -219,7 +219,7 @@
         <div class="receipt-edge-bottom"></div>
       </div>
 
-      <!-- Suggested Actions Section -->
+      <!-- Quick Actions Section -->
       <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
           Quick Actions
@@ -600,35 +600,5 @@ export default {
   @apply border-b-0;
 }
 
-/* Receipt paper styling */
-.receipt-paper {
-  position: relative;
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Zigzag top edge */
-.receipt-edge-top {
-  height: 12px;
-  background:
-    linear-gradient(135deg, #f9fafb 25%, transparent 25%) -6px 0,
-    linear-gradient(225deg, #f9fafb 25%, transparent 25%) -6px 0,
-    linear-gradient(315deg, #f9fafb 25%, transparent 25%),
-    linear-gradient(45deg, #f9fafb 25%, transparent 25%);
-  background-size: 12px 12px;
-  background-color: white;
-}
-
-/* Zigzag bottom edge */
-.receipt-edge-bottom {
-  height: 12px;
-  background:
-    linear-gradient(135deg, white 25%, transparent 25%) -6px 0,
-    linear-gradient(225deg, white 25%, transparent 25%) -6px 0,
-    linear-gradient(315deg, white 25%, transparent 25%),
-    linear-gradient(45deg, white 25%, transparent 25%);
-  background-size: 12px 12px;
-  background-color: #f9fafb;
-}
+/* Receipt paper styling is now in src/style/receipt-paper.css */
 </style>

@@ -8,11 +8,10 @@
     @retry="fetchReceipt"
   >
     <ReceiptHeader
-      :receiptModel="receiptModel"
-      :selectedCurrency="selectedCurrency"
-      backButtonText="Back"
+      :show-back-button="true"
+      back-button-text="Back"
+      :selected-currency="selectedCurrency"
       @back-click="goBack"
-      @toggle-settings="showSettings = true"
       @currency-change="onCurrencyChange"
     />
     

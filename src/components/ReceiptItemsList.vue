@@ -1,10 +1,11 @@
 <template>
-  <div class="bg-white rounded-lg shadow mb-4">
-    <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+  <div :class="isUnified ? '' : 'bg-white rounded-lg shadow mb-4'">
+    <div v-if="!isUnified" class="p-3 border-b border-gray-200 font-medium bg-gray-50">
       Items
     </div>
-    <div v-for="(itemWithSettlements, index) in itemsWithSettlements" :key="index" class="receipt-item">
-      <div class="flex items-start w-full">
+    <div :class="isUnified ? 'px-4' : ''">
+      <div v-for="(itemWithSettlements, index) in itemsWithSettlements" :key="index" class="receipt-item">
+        <div class="flex items-start w-full">
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between mb-2">
             <div class="font-medium">{{ itemWithSettlements.name }}</div>
@@ -45,6 +46,7 @@
             <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span><span v-if="itemWithSettlements.pendingQuantity > 0" class="text-orange-600"> + {{ itemWithSettlements.pendingQuantity }} pending payment</span>
           </div>
         </div>
+        </div>
       </div>
     </div>
   </div>
@@ -65,6 +67,10 @@ export default {
     selectedCurrency: {
       type: String,
       default: 'USD'
+    },
+    isUnified: {
+      type: Boolean,
+      default: false
     }
   },
   setup(props) {

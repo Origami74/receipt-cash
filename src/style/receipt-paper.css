@@ -1,52 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-#app {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.camera-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.camera-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  z-index: 10;
-}
-
-.receipt-item {
-  @apply p-3 border-b border-gray-200 flex justify-between items-center;
-}
-
-.btn-primary {
-  @apply bg-blue-500 text-white py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 active:bg-blue-700;
-}
-
-.btn-secondary {
-  @apply bg-gray-100 text-gray-800 py-2 px-4 rounded-lg shadow-md hover:bg-gray-200 active:bg-gray-300;
-}
-
 /* Receipt paper styling - shared across components */
+
 .receipt-paper {
   position: relative;
   max-width: 500px;
@@ -57,7 +10,7 @@ html, body {
 /* Zigzag top edge */
 .receipt-edge-top {
   height: 12px;
-  background:
+  background: 
     linear-gradient(135deg, #f9fafb 25%, transparent 25%) -6px 0,
     linear-gradient(225deg, #f9fafb 25%, transparent 25%) -6px 0,
     linear-gradient(315deg, #f9fafb 25%, transparent 25%),
@@ -69,7 +22,7 @@ html, body {
 /* Zigzag bottom edge */
 .receipt-edge-bottom {
   height: 12px;
-  background:
+  background: 
     linear-gradient(135deg, white 25%, transparent 25%) -6px 0,
     linear-gradient(225deg, white 25%, transparent 25%) -6px 0,
     linear-gradient(315deg, white 25%, transparent 25%),

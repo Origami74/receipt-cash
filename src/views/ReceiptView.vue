@@ -20,32 +20,50 @@
       />
       
       <ReceiptHeader
-        :receiptModel="receiptModel"
-        :selectedCurrency="selectedCurrency"
-        backButtonText="Back"
+        :show-back-button="true"
+        back-button-text="Back"
+        :selected-currency="selectedCurrency"
         @back-click="goBack"
-        @toggle-settings="showSettings = true"
         @currency-change="onCurrencyChange"
       />
       
       <div class="flex-1 overflow-y-auto p-4">
-        <!-- Receipt Items -->
-        <ReceiptItemsList
-          :receiptModel="receiptModel"
-          :selectedCurrency="selectedCurrency"
-        />
+        <!-- Unified receipt paper containing items and summary -->
+        <div class="bg-white shadow-lg receipt-paper mb-4">
+          <!-- Zigzag top edge -->
+          <div class="receipt-edge-top"></div>
+          
+          <!-- Receipt Title and Date -->
+          <div class="px-4 pt-6 pb-4 text-center border-b border-dashed border-gray-300">
+            <div class="text-xl font-bold text-gray-900">
+              {{ receiptModel?.title || 'Receipt' }}
+            </div>
+            <div class="text-sm text-gray-500 mt-1">{{ receiptModel?.date }}</div>
+          </div>
+          
+          <!-- Receipt Items (no wrapper, direct content) -->
+          <ReceiptItemsList
+            :receiptModel="receiptModel"
+            :selectedCurrency="selectedCurrency"
+            :isUnified="true"
+          />
 
-        <ReceiptSummary
-          :receiptModel="receiptModel"
-          :selectedCurrency="selectedCurrency"
-        />
+          <!-- Receipt Summary (no wrapper, direct content) -->
+          <ReceiptSummary
+            :receiptModel="receiptModel"
+            :selectedCurrency="selectedCurrency"
+            :isUnified="true"
+          />
+          
+          <!-- Zigzag bottom edge -->
+          <div class="receipt-edge-bottom"></div>
+        </div>
         
-        <!-- Settlements List -->
+        <!-- Settlements List (outside receipt paper) -->
         <ReceiptSettlementsList
           :receiptModel="receiptModel"
           :selectedCurrency="selectedCurrency"
         />
-         <!-- :toFiat="toFiat" -->
 
         <!-- Share QR Code Section (conditionally shown) -->
         <ReceiptShareQR
@@ -297,4 +315,6 @@ export default {
 .emoji-display {
   font-size: 1.2em;
 }
+
+/* Receipt paper styling is now in src/style/receipt-paper.css */
 </style>
