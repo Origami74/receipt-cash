@@ -402,7 +402,7 @@ export default {
                  session.remainingAmount > 0;
         });
         
-        incompleteMeltSessions.value = allSessions;
+        incompleteMeltSessions.value = sessionsWithRemainingProofs;
         console.log('Loaded melt sessions with remaining proofs:', sessionsWithRemainingProofs);
       } catch (error) {
         console.error('Error loading melt sessions:', error);
