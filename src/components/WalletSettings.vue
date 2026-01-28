@@ -304,6 +304,7 @@
 import { cocoService } from '../services/cocoService';
 import { seedphraseService } from '../services/seedphraseService';
 import { showNotification } from '../services/notificationService';
+import { getEncodedToken } from '@cashu/cashu-ts';
 
 export default {
   name: 'WalletSettings',
@@ -396,18 +397,33 @@ export default {
       
       this.draining = true;
       try {
-        // Send all balance from this mint
-        const token = await cocoService.getCoco().wallet.send(
-          this.drainTarget.url,
-          this.drainTarget.balance
-        );
+        const coco = cocoService.getCoco();
+        const mintUrl = this.drainTarget.url;
+        
+        // Get the actual current balance (might be different from displayed)
+        const balances = await coco.wallet.getBalances();
+        const currentBalance = balances[mintUrl] || 0;
+        
+        if (currentBalance <= 0) {
+          throw new Error('No balance available to drain');
+        }
+        
+        // Send all available balance from this mint
+        const tokenData = await coco.wallet.send(mintUrl, currentBalance);
+        
+        // Serialize the token using getEncodedToken
+        const encodedToken = getEncodedToken({
+          mint: mintUrl,
+          proofs: tokenData.proofs,
+          unit: tokenData.unit || 'sat'
+        });
         
         // Save to drained tokens history
         const drainedToken = {
           timestamp: Date.now(),
-          amount: this.drainTarget.balance,
-          mintUrl: this.drainTarget.url,
-          token: token,
+          amount: currentBalance,
+          mintUrl: mintUrl,
+          token: encodedToken,
           copied: false
         };
         
@@ -423,10 +439,13 @@ export default {
         this.showDrainModal = false;
         this.drainTarget = null;
         
-        showNotification(`Drained ${this.formatSats(drainedToken.amount)} and copied to clipboard`, 'success');
+        showNotification(`Drained ${this.formatSats(currentBalance)} and copied to clipboard`, 'success');
       } catch (error) {
         console.error('Failed to drain mint:', error);
         showNotification(`Failed to drain mint: ${error.message}`, 'error');
+        
+        // Refresh balances even on error to show current state
+        await this.refreshBalances();
       } finally {
         this.draining = false;
       }
@@ -481,6 +500,35 @@ export default {
       }
     },
     
+    async performMintRecovery(mintUrl, oldBalance) {
+      // Get the BIP39 seed for sweep operation
+      const mnemonic = seedphraseService.getSeedphrase();
+      if (!mnemonic) {
+        throw new Error('No seedphrase found');
+      }
+      const seed = seedphraseService.mnemonicToSeed(mnemonic);
+      
+      const coco = cocoService.getCoco();
+      
+      try {
+        // Sweep to recover proofs from the mint
+        await coco.wallet.sweep(mintUrl, seed);
+      } catch (error) {
+        // Log error but don't throw - sweep may have partially succeeded
+        console.warn(`Recovery completed with errors: ${error.message}`);
+      }
+      
+      // Always refresh balances to see what was recovered (even if there were errors)
+      await this.refreshBalances();
+      
+      // Calculate recovered amount
+      const updatedMint = this.mintBalances.find(m => m.url === mintUrl);
+      const newBalance = updatedMint?.balance || 0;
+      const recovered = newBalance - oldBalance;
+      
+      return recovered;
+    },
+    
     async addMintForRecovery() {
       if (!this.newMintUrl) return;
       
@@ -500,33 +548,11 @@ export default {
         
         console.log(`✅ Added mint: ${mintUrl}`);
         
-        // Get balance before restore
+        // Get balance before recovery
         const oldBalance = this.totalBalance;
         
-        // Get the BIP39 seed for sweep operation
-        const mnemonic = seedphraseService.getSeedphrase();
-        if (!mnemonic) {
-          throw new Error('No seedphrase found');
-        }
-        const seed = seedphraseService.mnemonicToSeed(mnemonic);
-        
-        // Use coco's restore method to sweep the mint for proofs
-        console.log(`🔄 Restoring proofs from ${mintUrl}...`);
-        await coco.wallet.restore(mintUrl);
-        console.log(`✅ Restore complete for ${mintUrl}`);
-        
-        // Also run sweep to catch any additional proofs
-        console.log(`🧹 Sweeping mint for additional proofs...`);
-        await coco.wallet.sweep(mintUrl, seed);
-        console.log(`✅ Sweep complete for ${mintUrl}`);
-        
-        // Wait a moment for proofs to be added
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Refresh balances to see if we recovered anything
-        await this.refreshBalances();
-        const newBalance = this.totalBalance;
-        const recovered = newBalance - oldBalance;
+        // Perform recovery using shared method
+        const recovered = await this.performMintRecovery(mintUrl, oldBalance);
         
         if (recovered > 0) {
           this.recoveryMessage = `✅ Success! Recovered ${this.formatSats(recovered)} from this mint.`;
@@ -562,63 +588,12 @@ export default {
         // Get current balance before recovery
         const oldBalance = mint.balance;
         
-        let restoreError = null;
-        let sweepError = null;
-        
-        // Get the BIP39 seed for sweep operation
-        const mnemonic = seedphraseService.getSeedphrase();
-        if (!mnemonic) {
-          throw new Error('No seedphrase found');
-        }
-        const seed = seedphraseService.mnemonicToSeed(mnemonic);
-        
-        // Use coco's built-in restore method
-        // This sweeps each keyset and adds swept proofs to the wallet
-        const coco = cocoService.getCoco();
-        try {
-          await coco.wallet.restore(mint.url);
-          console.log(`✅ Restore complete for ${mint.url}`);
-        } catch (error) {
-          // Restore may partially fail if some keysets are unavailable
-          // But it might still have recovered some proofs
-          console.warn(`⚠️ Restore had issues: ${error.message}`);
-          restoreError = error;
-        }
-        
-        // Also run sweep to catch any additional proofs
-        try {
-          console.log(`🧹 Sweeping mint for additional proofs...`);
-          await coco.wallet.sweep(mint.url, seed);
-          console.log(`✅ Sweep complete for ${mint.url}`);
-        } catch (error) {
-          console.warn(`⚠️ Sweep had issues: ${error.message}`);
-          sweepError = error;
-        }
-        
-        // Wait a moment for proofs to be added
-        // await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Refresh balances to see what was recovered
-        await this.refreshBalances();
-        
-        // Find the updated mint
-        const updatedMint = this.mintBalances.find(m => m.url === mint.url);
-        const newBalance = updatedMint?.balance || 0;
-        const recovered = newBalance - oldBalance;
+        // Perform recovery using shared method
+        const recovered = await this.performMintRecovery(mint.url, oldBalance);
         
         if (recovered > 0) {
-          // Show success even if there were partial errors
-          const hasErrors = restoreError || sweepError;
-          const message = hasErrors
-            ? `Recovered ${this.formatSats(recovered)} from ${this.formatMintUrl(mint.url)} (some keysets unavailable)`
-            : `Recovered ${this.formatSats(recovered)} from ${this.formatMintUrl(mint.url)}!`;
-          showNotification(message, 'success');
-        } else if (restoreError || sweepError) {
-          // No recovery and there were errors
-          const errorMsg = restoreError?.message || sweepError?.message || 'Unknown error';
-          showNotification(`Recovery scan completed with issues. No funds recovered. ${errorMsg}`, 'warning');
+          showNotification(`Recovered ${this.formatSats(recovered)} from ${this.formatMintUrl(mint.url)}!`, 'success');
         } else {
-          // No recovery but no errors
           showNotification(`Scan complete. No additional funds found on ${this.formatMintUrl(mint.url)}.`, 'info');
         }
         
