@@ -29,7 +29,7 @@ const initCache = async () => {
 export async function cacheRequest(filters) {
   return initCache().then((cache) => {
     return getEventsForFilters(cache, filters).then((events) => {
-      console.log("loaded events from cache", events.length, "for filters", filters);
+      // console.log("loaded events from cache", events.length, "for filters", filters);
       return events;
     });
   });
