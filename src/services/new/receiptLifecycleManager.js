@@ -1,5 +1,6 @@
 import { ownedReceiptsStorageManager } from './storage/ownedReceiptsStorageManager.js';
 import { ReceiptPaymentCollector } from './paymentCollector/receiptPaymentCollector.js';
+import { backgroundAudioService } from '../backgroundAudioService';
 
 class ReceiptLifecycleManager {
   constructor() {
@@ -84,6 +85,9 @@ class ReceiptLifecycleManager {
 
     console.log(`🔍 Starting payment collector for receipt: ${receiptEventId}`);
     
+    // Start background audio to maintain WebSocket connection
+    backgroundAudioService.start('payment_collection_started');
+    
     // Create and start a payment collector for this receipt
     const paymentCollector = new ReceiptPaymentCollector(receipt);
     paymentCollector.start();
@@ -99,6 +103,11 @@ class ReceiptLifecycleManager {
       console.log(`⛔ Stopping payment collector for receipt: ${receiptEventId}`);
       paymentCollector.stop();
       this.paymentCollectors.delete(receiptEventId);
+      
+      // Stop background audio if no more active collectors
+      if (this.paymentCollectors.size === 0) {
+        backgroundAudioService.stop('no_active_collectors');
+      }
     }
   }
 }

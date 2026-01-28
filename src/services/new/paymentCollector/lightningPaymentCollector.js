@@ -10,6 +10,8 @@ import { confirmSettlement } from '../settlementConfirmer.js';
 import { accountingService } from '../../accountingService';
 import { cocoService } from '../../cocoService';
 import { getEncodedToken } from '@cashu/cashu-ts';
+import { backgroundAudioService } from '../../backgroundAudioService';
+import { paymentNotificationService } from '../../paymentNotificationService';
 
 /**
  * Collects lightning payments for a specific settlement
@@ -190,6 +192,13 @@ class LightningPaymentCollector {
         
         if (currentStatus.state === MintQuoteState.PAID) {
           console.log(`⚡ Polling detected: mint quote ${mintQuoteId} paid!`);
+          
+          // Send notification IMMEDIATELY when payment detected
+          paymentNotificationService.notifyPaymentReceived(currentStatus.amount, 'sats');
+          
+          // Extend background audio when quote is paid
+          backgroundAudioService.extend('lightning_quote_paid');
+          
           this._handleMintQuotePaid(currentStatus.amount, mintQuoteId, wallet);
           return; // Stop polling
         } else if (currentStatus.state === MintQuoteState.ISSUED) {
@@ -223,6 +232,9 @@ class LightningPaymentCollector {
    */
   async _handleMintQuotePaid(amount, mintQuoteId, wallet) {
     console.log(`💰 Processing paid Lightning quote: ${mintQuoteId} for settlement: ${this.settlementEvent.id}`);
+    
+    // Extend background audio for payment processing
+    backgroundAudioService.extend('payment_received');
     
     try {
       // Claim the ecash tokens from the mint
@@ -266,6 +278,9 @@ class LightningPaymentCollector {
       console.log(`📊 Recorded ${totalAmount} sats in accounting for settlement: ${this.settlementEvent.id}`);
 
       await confirmSettlement(this.signer, this.receipt.eventId, this.settlementEvent.id)
+
+      // Send notification to user
+      await paymentNotificationService.notifyPaymentReceived(totalAmount, 'sats');
 
       // Stop monitoring first
       this._stopMintQuoteMonitoring();

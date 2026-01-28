@@ -6,6 +6,7 @@ import { cashuDmSender } from './cashuDmSender.js';
 import { cocoService } from '../../cocoService';
 import { accountingService } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
+import { backgroundAudioService } from '../../backgroundAudioService';
 import { Buffer } from 'buffer';
 
 /**
@@ -89,6 +90,9 @@ class DevPayoutManager {
    */
   async _processDevSplit(devSplit) {
     try {
+        // Extend background audio for dev payout
+        backgroundAudioService.extend('dev_payout_started');
+        
         // Check if already paid out
         const records = accountingService.getSettlementAccounting(
           devSplit.receiptEventId,

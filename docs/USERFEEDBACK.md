@@ -3,7 +3,7 @@
 This document contains prioritized user feedback and feature requests for the Receipt.Cash application. Items are organized by priority level to guide development efforts.
 
 ## TODO add
-
+- when restoring, and doing that multiple times, the total balance of coco keeps increasing, something must be wrong.
 
 ## Priority 90-100 (Critical - Core Flow Blockers)
 

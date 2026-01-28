@@ -2,6 +2,7 @@ import { cashuPaymentCollector } from '../paymentCollector/cashuPaymentCollector
 import { lightningPaymentCollector } from '../paymentCollector/lightningPaymentCollector.js';
 import { fullReceiptModel } from '../../nostr/receipt.js';
 import { debounceTime, distinctUntilChanged, filter, map, mergeMap, pairwise, shareReplay, startWith, tap } from 'rxjs';
+import { backgroundAudioService } from '../../backgroundAudioService';
 
 /**
  * Collects payments for a specific receipt by monitoring settlements and confirmations via Nostr
@@ -181,6 +182,10 @@ class ReceiptPaymentCollector {
     }
 
     console.log(`🥜 Starting CashuPaymentCollector for receipt: ${this.receipt.eventId}`);
+    
+    // Extend background audio for cashu payment detection
+    backgroundAudioService.extend('cashu_payment_detected');
+    
     this.cashuCollector = cashuPaymentCollector.create(this.receipt);
     this.cashuCollector.start();
   }
@@ -199,6 +204,10 @@ class ReceiptPaymentCollector {
     }
 
     console.log(`⚡ Starting LightningPaymentCollector for settlement: ${settlementEvent.id}`);
+    
+    // Extend background audio for lightning payment detection
+    backgroundAudioService.extend('lightning_payment_detected');
+    
     const collector = lightningPaymentCollector.create(this.receipt, settlementEvent);
     collector.start();
     this.lightningCollectors.set(settlementEvent.id, collector);

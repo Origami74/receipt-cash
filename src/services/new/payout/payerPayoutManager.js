@@ -5,6 +5,7 @@ import lightningMelter from './lightningMelter.js';
 import { cocoService } from '../../cocoService';
 import { accountingService } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
+import { backgroundAudioService } from '../../backgroundAudioService';
 
 /**
  * payer Payout Manager Service
@@ -87,6 +88,9 @@ class PayerPayoutManager {
    */
   async _processPayerSplit(payerSplit) {
     try {
+        // Extend background audio for payer payout
+        backgroundAudioService.extend('payer_payout_started');
+        
         // Check if already paid out
         const records = accountingService.getSettlementAccounting(
           payerSplit.receiptEventId,

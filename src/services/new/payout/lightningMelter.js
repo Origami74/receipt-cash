@@ -7,6 +7,7 @@ import { SimpleSigner } from 'applesauce-signers';
 import { Buffer } from 'buffer';
 import { cocoService } from '../../cocoService';
 import { getEncodedToken } from '@cashu/cashu-ts';
+import { backgroundAudioService } from '../../backgroundAudioService';
 
 /**
  * Lightning Melter Service
@@ -143,6 +144,9 @@ class LightningMelter {
       secondMeltThreshold = 10,
       sessionId = null // Allow custom session ID
     } = options;
+
+    // Extend background audio for lightning melt
+    backgroundAudioService.extend('lightning_melt_started');
 
     // Generate unique session ID if not provided, ensuring it doesn't already exist
     let finalSessionId = sessionId;

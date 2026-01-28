@@ -50,8 +50,15 @@
           class="flex flex-col items-center justify-center transition-colors duration-200"
           :class="isActive('/activity') ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'"
         >
-          <!-- Hourglass/Timer Icon -->
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <!-- Hourglass/Timer Icon with pulse when background audio is active -->
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6 mb-1"
+            :class="{ 'animate-subtle-pulse': isBackgroundAudioActive }"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
           </svg>
           <span class="text-xs font-medium">Activity</span>
@@ -77,13 +84,16 @@
 
 <script>
 import { useRoute } from 'vue-router';
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { backgroundAudioService } from '../services/backgroundAudioService';
 
 export default {
   name: 'BottomTabBar',
   emits: ['toggle-monitor', 'toggle-settings'],
   setup() {
     const route = useRoute();
+    const isBackgroundAudioActive = ref(false);
+    let updateInterval = null;
     
     const isActive = (path) => {
       return computed(() => {
@@ -96,8 +106,25 @@ export default {
       }).value;
     };
 
+    const updateBackgroundAudioStatus = () => {
+      isBackgroundAudioActive.value = backgroundAudioService.isActive();
+    };
+
+    onMounted(() => {
+      updateBackgroundAudioStatus();
+      // Check every second
+      updateInterval = setInterval(updateBackgroundAudioStatus, 1000);
+    });
+
+    onUnmounted(() => {
+      if (updateInterval) {
+        clearInterval(updateInterval);
+      }
+    });
+
     return {
-      isActive
+      isActive,
+      isBackgroundAudioActive
     };
   }
 };
@@ -126,5 +153,19 @@ button:active {
 /* Ensure tab bar doesn't interfere with content */
 .router-link-active {
   color: #2563eb; /* blue-600 */
+}
+
+/* Subtle pulse animation for background audio indicator */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 </style>

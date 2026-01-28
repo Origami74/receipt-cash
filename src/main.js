@@ -15,6 +15,7 @@ import { receiptLifecycleManager } from './services/new/receiptLifecycleManager'
 import { cocoService } from './services/cocoService';
 import { proofSafetyService } from './services/proofSafetyService';
 import { migrationService } from './services/migrationService';
+import { paymentNotificationService } from './services/paymentNotificationService';
 
 // CRITICAL: Acquire tab lock FIRST before any initialization
 // This prevents multiple tabs from running simultaneously
@@ -71,7 +72,17 @@ tabLockService.acquireLock().then(lockAcquired => {
     app.use(router);
     app.mount('#app');
     
-      console.log('✅ App mounted successfully');
+    console.log('✅ App mounted successfully');
+    
+    // Request notification permission after a short delay (better UX)
+    setTimeout(async () => {
+      const hasPermission = await paymentNotificationService.requestPermission();
+      if (hasPermission) {
+        console.log('🔔 Notification permission granted');
+      } else {
+        console.log('🔔 Notification permission denied or not supported');
+      }
+    }, 2000); // Wait 2 seconds after app loads
     })
     .catch(error => {
       console.error('❌ Failed to initialize Coco:', error);
