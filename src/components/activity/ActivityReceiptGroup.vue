@@ -39,8 +39,8 @@
             <p class="text-sm" :class="receiptSubtextClasses">
               <span v-if="!isErrorState">
                 {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
-                <span v-if="receiptStatus === 'processing'"> • Processing payouts</span>
-                <span v-if="receiptStatus === 'completed'"> • All settlements paid out</span>
+                <span v-if="receiptStatus === 'processing'"> • Processing</span>
+                <span v-if="receiptStatus === 'completed'"> • Ready</span>
                 <span v-if="receiptStatus === 'pending'"> • Awaiting payments</span>
                 <span v-if="receiptStatus === 'error'"> • Errors detected</span>
               </span>
@@ -97,6 +97,7 @@
               :key="settlement.event.id"
               :settlement="settlement"
               :receiptId="eventId"
+              :ref="el => { if (el) paymentRefs[settlement.event.id] = el }"
               @retry-payout="$emit('retry-payout', $event)"
             />
           </div>
@@ -112,7 +113,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
 import ActivityPayment from './ActivityPayment.vue';
 
@@ -136,15 +137,28 @@ export default {
   },
   emits: ['retry-payout'],
   setup(props) {
-    // Determine if should be expanded based on payout status
-    // Collapse only if ALL confirmed settlements are fully paid out
-    const allSettlementsPaidOut = computed(() => {
+    const paymentRefs = ref({});
+    
+    // Check if all payments are complete by checking child ActivityPayment components
+    const allPaymentsComplete = computed(() => {
       const confirmedSettlements = props.receiptModel.confirmedSettlements || [];
       if (confirmedSettlements.length === 0) return false;
-      return confirmedSettlements.every(settlement => settlement.fullyPaidOut === true);
+      
+      // Check each payment component's isPayoutComplete status
+      return confirmedSettlements.every(settlement => {
+        const paymentComponent = paymentRefs.value[settlement.event.id];
+        return paymentComponent?.isPayoutComplete === true;
+      });
     });
     
-    const isExpanded = ref(props.defaultExpanded || !allSettlementsPaidOut.value);
+    const isExpanded = ref(props.defaultExpanded || !allPaymentsComplete.value);
+    
+    // Watch for changes in payment completion status to update expansion
+    watch(allPaymentsComplete, (newValue) => {
+      if (newValue && !props.defaultExpanded) {
+        isExpanded.value = false;
+      }
+    });
 
     const toggleExpanded = () => {
       isExpanded.value = !isExpanded.value;
@@ -232,9 +246,10 @@ export default {
       return props.receiptModel.title || "Untitled Receipt";
     });
 
-    // Receipt status based on settlement payout status
+    // Receipt status based on payment completion from child components
     const receiptStatus = computed(() => {
       const payments = confirmedSettlements.value;
+      const unconfirmed = props.receiptModel.unConfirmedSettlements || [];
       
       if (payments.length === 0) {
         // No payments - check age of receipt
@@ -243,12 +258,17 @@ export default {
         return isOld ? 'error' : 'pending';
       }
 
-      // Check if all settlements are fully paid out
-      if (allSettlementsPaidOut.value) {
+      // If there are unconfirmed settlements, still awaiting payments
+      if (unconfirmed.length > 0) {
+        return 'processing';
+      }
+
+      // Check if all confirmed payments are complete (using child component status)
+      if (allPaymentsComplete.value) {
         return 'completed';
       }
 
-      // Some settlements are still being processed
+      // Payments confirmed but payouts still processing
       return 'processing';
     });
 
@@ -291,6 +311,7 @@ export default {
     };
 
     return {
+      paymentRefs,
       isExpanded,
       toggleExpanded,
       totalAmount,
