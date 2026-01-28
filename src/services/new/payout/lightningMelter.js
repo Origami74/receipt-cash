@@ -146,7 +146,7 @@ class LightningMelter {
     } = options;
 
     // Extend background audio for lightning melt
-    backgroundAudioService.extend('lightning_melt_started');
+    backgroundAudioService.activate('lightning_melt_started');
 
     // Generate unique session ID if not provided, ensuring it doesn't already exist
     let finalSessionId = sessionId;

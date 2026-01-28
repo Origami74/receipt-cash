@@ -46,12 +46,15 @@ class BackgroundAudioService {
   private endTime: number | null = null;
   private lastActivityTime: number | null = null;
   private startReason: ActivityReason | null = null;
+  private lastActivateTime: number = 0;
   
   private readonly config: BackgroundAudioConfig = {
     MAX_DURATION: 5 * 60 * 1000,        // 5 minutes
     ACTIVITY_GRACE_PERIOD: 60 * 1000,   // 60 seconds
     POLL_INTERVAL: 5 * 1000,            // 5 seconds
   };
+  
+  private readonly ACTIVATE_DEBOUNCE_MS = 1000; // 1 second debounce
 
   constructor() {
     this._createAudioElement();
@@ -188,6 +191,32 @@ class BackgroundAudioService {
     // Listen for any user interaction
     document.addEventListener('click', startOnInteraction, { once: true });
     document.addEventListener('touchstart', startOnInteraction, { once: true });
+  }
+
+  /**
+   * Activate background audio - intelligently starts or extends based on current state
+   * Debounced using timestamp to prevent rapid repeated calls (lightweight, background-safe)
+   */
+  activate(reason: ActivityReason): void {
+    const now = Date.now();
+    
+    // Check if we're within the debounce window
+    if (now - this.lastActivateTime < this.ACTIVATE_DEBOUNCE_MS) {
+      // Silently ignore - we're debouncing
+      return;
+    }
+    
+    // Update last activate time
+    this.lastActivateTime = now;
+    
+    // Perform the activation
+    if (!this.isPlaying) {
+      console.log(`🔊 Not playing, starting: ${reason}`);
+      this.start(reason);
+    } else {
+      console.log(`🔊 Already playing, extending: ${reason}`);
+      this.extend(reason);
+    }
   }
 
   /**

@@ -90,8 +90,8 @@ class DevPayoutManager {
    */
   async _processDevSplit(devSplit) {
     try {
-        // Extend background audio for dev payout
-        backgroundAudioService.extend('dev_payout_started');
+        // Activate background audio for dev payout (debounced)
+        backgroundAudioService.activate('dev_payout_started');
         
         // Check if already paid out
         const records = accountingService.getSettlementAccounting(

@@ -197,7 +197,7 @@ class LightningPaymentCollector {
           paymentNotificationService.notifyPaymentReceived(currentStatus.amount, 'sats');
           
           // Extend background audio when quote is paid
-          backgroundAudioService.extend('lightning_quote_paid');
+          backgroundAudioService.activate('lightning_quote_paid');
           
           this._handleMintQuotePaid(currentStatus.amount, mintQuoteId, wallet);
           return; // Stop polling
@@ -234,7 +234,7 @@ class LightningPaymentCollector {
     console.log(`💰 Processing paid Lightning quote: ${mintQuoteId} for settlement: ${this.settlementEvent.id}`);
     
     // Extend background audio for payment processing
-    backgroundAudioService.extend('payment_received');
+    backgroundAudioService.activate('payment_received');
     
     try {
       // Claim the ecash tokens from the mint

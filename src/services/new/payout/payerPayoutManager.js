@@ -89,7 +89,7 @@ class PayerPayoutManager {
   async _processPayerSplit(payerSplit) {
     try {
         // Extend background audio for payer payout
-        backgroundAudioService.extend('payer_payout_started');
+        backgroundAudioService.activate('payer_payout_started');
         
         // Check if already paid out
         const records = accountingService.getSettlementAccounting(

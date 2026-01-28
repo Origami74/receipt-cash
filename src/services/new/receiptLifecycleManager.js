@@ -22,6 +22,10 @@ class ReceiptLifecycleManager {
     const receiptsSubscription = ownedReceiptsStorageManager.receipts$.subscribe(receipts => {
       if (receipts.length > 0) {
         console.log(`📦 Existing owned receipts loaded: ${receipts.length} receipts`);
+        
+        // Activate background audio once for all receipts (debounced)
+        backgroundAudioService.activate('payment_collection_started');
+        
         receipts.forEach(receipt => {
           console.log(`  📝 Receipt eventId: ${receipt.eventId}`);
           this._startMonitoringReceipt(receipt);
@@ -85,8 +89,8 @@ class ReceiptLifecycleManager {
 
     console.log(`🔍 Starting payment collector for receipt: ${receiptEventId}`);
     
-    // Start background audio to maintain WebSocket connection
-    backgroundAudioService.start('payment_collection_started');
+    // Activate background audio (debounced, will start or extend as needed)
+    backgroundAudioService.activate('payment_collection_started');
     
     // Create and start a payment collector for this receipt
     const paymentCollector = new ReceiptPaymentCollector(receipt);

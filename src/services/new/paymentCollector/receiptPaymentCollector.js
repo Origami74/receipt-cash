@@ -184,7 +184,7 @@ class ReceiptPaymentCollector {
     console.log(`🥜 Starting CashuPaymentCollector for receipt: ${this.receipt.eventId}`);
     
     // Extend background audio for cashu payment detection
-    backgroundAudioService.extend('cashu_payment_detected');
+    backgroundAudioService.activate('cashu_payment_detected');
     
     this.cashuCollector = cashuPaymentCollector.create(this.receipt);
     this.cashuCollector.start();
@@ -206,7 +206,7 @@ class ReceiptPaymentCollector {
     console.log(`⚡ Starting LightningPaymentCollector for settlement: ${settlementEvent.id}`);
     
     // Extend background audio for lightning payment detection
-    backgroundAudioService.extend('lightning_payment_detected');
+    backgroundAudioService.activate('lightning_payment_detected');
     
     const collector = lightningPaymentCollector.create(this.receipt, settlementEvent);
     collector.start();
