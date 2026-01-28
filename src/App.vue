@@ -1,5 +1,8 @@
 <template>
   <div class="h-full flex flex-col">
+    <!-- Tab blocked overlay -->
+    <TabBlockedOverlay v-if="isTabBlocked" />
+    
     <!-- Experimental warning banner -->
     <ExperimentalModal />
     
@@ -49,9 +52,11 @@ import ExperimentalModal from './components/ExperimentalModal.vue';
 import ReportModal from './components/ReportModal.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
+import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
 import { checkForVersionUpdate } from './services/updaterService';
+import { tabLockService } from './services/tabLockService';
 
 export default {
   name: 'App',
@@ -60,7 +65,8 @@ export default {
     ExperimentalModal,
     ReportModal,
     BottomTabBar,
-    SettingsMenu
+    SettingsMenu,
+    TabBlockedOverlay
   },
   setup() {
     const route = useRoute();
@@ -68,15 +74,27 @@ export default {
     const showReportModal = ref(false);
     const currentErrorMessage = ref('');
     const isSettingsOpen = ref(false);
+    const isTabBlocked = ref(false);
     
     // Hide tab bar on home/camera view
     const shouldShowTabBar = computed(() => {
       return route.path !== '/';
     });
     
-    // Initialize debug logging by default
+    // Set up callback for if we get blocked later (can happen if another tab takes over)
+    tabLockService.onBlocked(() => {
+      isTabBlocked.value = true;
+    });
+    
+    // Initialize on mount
     onMounted(async () => {
-      // Check for version updates first
+      // Check if we have the lock (should already be acquired in main.js)
+      if (!tabLockService.hasLock()) {
+        isTabBlocked.value = true;
+        return;
+      }
+      
+      // Check for version updates
       try {
         const updatePerformed = await checkForVersionUpdate();
         if (updatePerformed) {
@@ -126,6 +144,7 @@ export default {
       clearNotification,
       showReportModal,
       currentErrorMessage,
+      isTabBlocked,
       openReportModal,
       handleReportSubmitted,
       shouldShowTabBar,
