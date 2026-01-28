@@ -4,7 +4,6 @@ import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_NIP17_DM } from '../../nostr
 import { SendWrappedMessage } from 'applesauce-actions/actions';
 import { EventFactory } from 'applesauce-factory';
 import { ActionHub } from 'applesauce-actions';
-import { moneyStorageManager } from '../storage/moneyStorageManager.js';
 import { createPaymentMessage, decodeRequest, extractNostrTransport } from '../../../utils/cashuUtils.js';
 
 /**

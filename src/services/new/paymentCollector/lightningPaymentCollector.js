@@ -2,7 +2,6 @@ import { nip44, getPublicKey } from 'nostr-tools';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import cashuWalletManager from '../../flows/shared/cashuWalletManager.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
-import { moneyStorageManager } from '../storage/moneyStorageManager.js';
 import { getTagValue } from 'applesauce-core/helpers';
 import { Buffer } from 'buffer';
 import { sumProofs } from '../../../utils/cashuUtils.js';
