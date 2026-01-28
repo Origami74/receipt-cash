@@ -10,6 +10,7 @@
     <!-- Guest Onboarding Tips -->
     <ContextualTip
       :show="showGuestWelcomeTip"
+      tip-name="GuestWelcomeTip"
       image="/onboard/onboard-placeholder.png"
       title="You're Invited!"
       description="Someone shared a receipt with you. Select the items you had and pay your share."
@@ -26,12 +27,12 @@
 
     <ContextualTip
       :show="showItemSelectionTip"
+      tip-name="ItemSelectionTip"
       image="/onboard/screen-5-review.png"
       title="Select Your Items"
       description="Tap the + button next to each item you had. You can adjust quantities as needed."
       :bullets="[
-        'Tap + to add items',
-        'Tap - to remove items',
+        'Tap +/- to add or remove items',
         'Select All button for convenience',
         'Only pay for what you had'
       ]"
@@ -42,6 +43,7 @@
 
     <ContextualTip
       :show="showPaymentMethodTip"
+      tip-name="PaymentMethodTip"
       image="/onboard/onboard-placeholder.png"
       title="Choose Payment Method"
       description="Select how you want to pay. Both methods go directly to the host."
@@ -49,7 +51,6 @@
         '🥜 Cashu: Privacy-focused ecash',
         '⚡️ Lightning: Fast Bitcoin payment',
         'Both are instant and secure',
-        'You can leave after paying'
       ]"
       primary-button-text="Got it!"
       @primary-action="dismissPaymentMethodTip"
@@ -58,6 +59,7 @@
 
     <ContextualTip
       :show="showPaymentSuccessCelebration"
+      tip-name="PaymentSuccessCelebration"
       image="/onboard/screen-10-payment-received.png"
       title="Payment Sent!"
       description="Great! Your payment has been sent. The host will process it and you'll be all set."
@@ -155,6 +157,7 @@
       @close="showCashuModal = false"
       @open-wallet="openInCashuWallet"
       @cancel="cancelPayment"
+      @paid="navigateToConfirmation"
     />
 
     <!-- Settings Menu -->
@@ -633,9 +636,15 @@ export default {
             paymentSuccess.value = true;
             paymentInProgress.value = false;
             showNotification('Payment successful! The payer will now process your settlement.', 'success');
+            
+            // Navigate to confirmation page
+            navigateToConfirmation();
           } else if (currentStatus.state === MintQuoteState.ISSUED) {
             paymentSuccess.value = true;
             paymentInProgress.value = false;
+            
+            // Navigate to confirmation page
+            navigateToConfirmation();
           } else {
             setTimeout(checkPayment, 4000);
           }
@@ -684,6 +693,23 @@ export default {
       lightningInvoice.value = '';
       mintQuoteId.value = '';
       mintQuoteWallet.value = null;
+    };
+
+    // Navigate to payment confirmation page
+    const navigateToConfirmation = () => {
+      if (!settlementEventId.value) {
+        console.error('No settlement ID available for navigation');
+        return;
+      }
+
+      router.push({
+        name: 'PaymentConfirmation',
+        params: {
+          receiptEventId: props.eventId,
+          decryptionKey: props.decryptionKey,
+          settlementEventId: settlementEventId.value
+        }
+      });
     };
 
     // Component lifecycle

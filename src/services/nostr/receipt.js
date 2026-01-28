@@ -213,3 +213,68 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
     return fullReceiptModel$
     
 }
+
+/**
+ * Load and decrypt a single settlement event
+ * @param {string} settlementEventId - The settlement event ID
+ * @param {string} sharedEncryptionKey - The shared encryption key in hex format
+ * @returns {Observable} Observable that emits the settlement model
+ */
+const settlementModelCache = new Map();
+
+export const settlementModel = (settlementEventId, sharedEncryptionKey) => {
+    if (settlementModelCache.has(settlementEventId)) {
+        return settlementModelCache.get(settlementEventId);
+    }
+
+    const settlement$ = (globalEventStore.hasEvent(settlementEventId)
+        ? globalEventStore.event(settlementEventId).pipe(
+            filter(e => !!e),
+            take(1))
+        : globalEventLoader({ id: settlementEventId }).pipe(take(1))
+    ).pipe(
+        map(settlementEvent => {
+            if (!settlementEvent) {
+                throw new Error('Settlement event not found');
+            }
+
+            // Decrypt and parse the settlement
+            const settlementData = decryptAndParseSettlement(settlementEvent, sharedEncryptionKey);
+            
+            // Calculate total amount
+            const total = settlementData.settledItems.reduce(
+                (sum, item) => sum + (item.price * item.selectedQuantity),
+                0
+            );
+
+            // Get payment method from tags
+            const paymentMethod = getTagValue(settlementEvent, 'method') || 'lightning';
+            
+            // Get cashu payment request if it exists
+            const cashuPaymentRequest = getTagValue(settlementEvent, 'cashu') || '';
+
+            // Check if confirmed by filtering events
+            const confirmationFilter = {
+                kinds: [KIND_SETTLEMENT_CONFIRMATION],
+                '#e': [settlementEventId]
+            };
+            const confirmations = globalEventStore.filters(confirmationFilter);
+            const isConfirmed = confirmations.length > 0;
+
+            return {
+                event: settlementEvent,
+                items: settlementData.settledItems,
+                total,
+                paymentMethod,
+                cashuPaymentRequest,
+                isConfirmed,
+                title: settlementData.title,
+                note: settlementData.note
+            };
+        }),
+        share({ connector: () => new ReplaySubject(1), resetOnRefCountZero: () => timer(60000) })
+    );
+
+    settlementModelCache.set(settlementEventId, settlement$);
+    return settlement$;
+};

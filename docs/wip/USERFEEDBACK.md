@@ -6,7 +6,9 @@ This document contains prioritized user feedback and feature requests for the Re
 - when restoring, and doing that multiple times, the total balance of coco keeps increasing, something must be wrong.
 - requesting browser for notification access shouldn't happen emmidately, it comes across as spammy.
 - "Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer.", the 'split between' sounds like a massive chunk is split. change it to imply that only a small / user selected cut goes to the developer.
-
+- Use routstr and use user wallet funds to pay for processing
+    - ppq as fallback
+- " Background audio started, will auto-stop in 5m 0s" 19 times on page load
 
 ## Priority 90-100 (Critical - Core Flow Blockers)
 

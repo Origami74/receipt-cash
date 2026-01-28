@@ -47,6 +47,12 @@ const routes = [
     name: 'PaymentView',
     component: () => import('../views/PaymentView.vue'),
     props: true
+  },
+  {
+    path: '/receipt/:receiptEventId/:decryptionKey/confirmation/:settlementEventId',
+    name: 'PaymentConfirmation',
+    component: () => import('../views/PaymentConfirmationView.vue'),
+    props: true
   }
 ];
 

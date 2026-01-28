@@ -75,10 +75,16 @@
             Copy request
           </button>
           <button
+            @click="handleIPaid"
+            class="w-full py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            I Paid
+          </button>
+          <button
             @click="cancel"
             class="w-full py-2 px-4 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
           >
-            Done
+            Cancel
           </button>
         </template>
         <!-- Show "Done" button when payment is successful -->
@@ -129,7 +135,7 @@ export default {
       default: ''
     }
   },
-  emits: ['close', 'open-wallet', 'cancel'],
+  emits: ['close', 'open-wallet', 'cancel', 'paid'],
   methods: {
     close() {
       this.$emit('close');
@@ -140,6 +146,11 @@ export default {
     },
     openWallet() {
       this.$emit('open-wallet');
+    },
+    handleIPaid() {
+      // Emit 'paid' event to signal that user has paid
+      this.$emit('paid');
+      this.$emit('close');
     },
     async copyRequest() {
       try {
