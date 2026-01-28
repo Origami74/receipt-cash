@@ -1,5 +1,29 @@
 <template>
   <div class="h-full flex flex-col bg-gray-50">
+    <!-- Review & Edit Tip (first time after AI extraction) -->
+    <ContextualTip
+      :show="showReviewTip"
+      tip-name="ReviewTip"
+      image="/onboard/screen-5-review.png"
+      title="Items Extracted!"
+      description="Review and edit the extracted items if needed, then continue to set up payment."
+      :bullets="['Tap any item to edit', 'Add or remove items', 'Adjust quantities and prices', 'Everything looks good? Continue!']"
+      primary-button-text="Looks Good →"
+      @dismiss="showReviewTip = false"
+    />
+    
+    <!-- Payout Address Tip (first time on payment request step) -->
+    <ContextualTip
+      :show="showPayoutTip"
+      tip-name="PayoutTip"
+      image="/onboard/screen-6-payment-address.png"
+      title="Where to Send Money"
+      description="Enter your Lightning address or Cashu payment request to receive payments when friends pay their share."
+      :bullets="['Lightning address (user@domain.com)', 'Or Cashu payment request', 'Funds sent automatically', 'You can change this later']"
+      primary-button-text="Got it!"
+      @dismiss="showPayoutTip = false"
+    />
+    
     <div class="bg-white shadow-sm p-4">
       <div class="flex justify-between items-center">
         <h1 class="text-xl font-bold">Receipt Preview</h1>
@@ -257,6 +281,7 @@
               label="Receive Address"
               placeholder="Lightning address (user@domain.com) or Cashu payment request"
               @validation-change="handleAddressValidation"
+              @focus="handleAddressFocus"
             />
           </div>
           
@@ -317,7 +342,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
@@ -328,6 +353,7 @@ import CurrencySelector from './CurrencySelector.vue';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import DeveloperSplitSlider from './DeveloperSplitSlider.vue';
 import SplitItemModal from './SplitItemModal.vue';
+import ContextualTip from './onboarding/ContextualTip.vue';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../utils/pricingUtils';
 import { saveReceiveAddress, getReceiveAddress } from '../services/storageService';
@@ -335,6 +361,7 @@ import { showNotification } from '../services/notificationService';
 import { getPublicKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager';
+import { onboardingService } from '../services/onboardingService';
 
 export default {
   name: 'ReceiptPreview',
@@ -343,7 +370,8 @@ export default {
     CurrencySelector,
     ReceiveAddressInput,
     DeveloperSplitSlider,
-    SplitItemModal
+    SplitItemModal,
+    ContextualTip
   },
   props: {
     receiptData: {
@@ -403,6 +431,10 @@ export default {
       itemQuantity: 1
     });
     
+    // Onboarding tips
+    const showReviewTip = ref(false);
+    const showPayoutTip = ref(false);
+    
     // Close all dropdowns when clicking outside
     const closeAllMenus = () => {
       receipt.value.items.forEach(item => {
@@ -430,7 +462,33 @@ export default {
         console.error('Error fetching BTC price for preview:', errorMessage, error);
         showNotification(`Failed to fetch BTC price: ${errorMessage}`, 'error');
       }
+      
+      // Show review tip if first time (after AI extraction)
+      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('ReviewTip')) {
+        setTimeout(() => {
+          showReviewTip.value = true;
+        }, 500);
+      }
     });
+    
+    // Watch for review tip dismissal to show payout tip
+    watch(showReviewTip, (newValue) => {
+      if (!newValue && !onboardingService.hasSeen('PayoutTip')) {
+        // Show payout tip after review tip is dismissed
+        setTimeout(() => {
+          showPayoutTip.value = true;
+        }, 300);
+      }
+    });
+    
+    // Handle address input focus for payout tip
+    const handleAddressFocus = () => {
+      if (onboardingService.hasSeenWelcome() &&
+          !onboardingService.hasSeen('PayoutTip') &&
+          !showReviewTip.value) {
+        showPayoutTip.value = true;
+      }
+    };
     
     // Handle address validation from ReceiveAddressInput component
     const handleAddressValidation = (validationResult) => {
@@ -819,7 +877,11 @@ export default {
       splitDialog,
       openSplitDialog,
       closeSplitDialog,
-      applySplit
+      applySplit,
+      // Onboarding
+      showReviewTip,
+      showPayoutTip,
+      handleAddressFocus
     };
   }
 };

@@ -7,6 +7,18 @@
     retryButtonText="Try Again"
     @retry="fetchReceipt"
   >
+      <!-- Sharing Explanation Tip (first time QR is shown) -->
+      <ContextualTip
+        :show="showSharingTip"
+        tip-name="SharingTip"
+        image="/onboard/screen-7-shared-explanation.png"
+        title="Share Your Receipt"
+        description="Share this QR code with your friends so they can select their items and pay their share."
+        :bullets="['They scan the QR code', 'Select their items', 'Pay their share', 'You get reimbursed!']"
+        primary-button-text="Got it!"
+        @dismiss="showSharingTip = false"
+      />
+      
       <ReceiptHeader
         :receiptModel="receiptModel"
         :selectedCurrency="selectedCurrency"
@@ -60,7 +72,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import ReceiptHeader from '../components/ReceiptHeader.vue';
 import ReceiptSummary from '../components/ReceiptSummary.vue';
@@ -71,11 +83,13 @@ import ReceiptActionBar from '../components/ReceiptActionBar.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
+import ContextualTip from '../components/onboarding/ContextualTip.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import { formatSats, convertFromSats, getDevPercentageEmoji, formatDevPercentage } from '../utils/pricingUtils';
 import { formatRelativeTime } from '../utils/dateUtils';
 import btcPriceService from '../services/btcPriceService';
 import { fullReceiptModel, receiptModel } from '../services/nostr/receipt';
+import { onboardingService } from '../services/onboardingService';
 
 
 export default {
@@ -89,7 +103,8 @@ export default {
     ReceiptActionBar,
     LoadingErrorWrapper,
     SettingsMenu,
-    CurrencySelector
+    CurrencySelector,
+    ContextualTip
   },
   props: {
     eventId: {
@@ -112,6 +127,7 @@ export default {
     const shareQRComponent = ref(null);
     const error = ref(null);
     const errorDetails = ref(null);
+    const showSharingTip = ref(false);
 
     // Function to navigate back
     const goBack = () => {
@@ -157,6 +173,13 @@ export default {
           shareQRComponent.value.scrollIntoView();
         }
       });
+      
+      // Show sharing tip if first time
+      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('SharingTip')) {
+        setTimeout(() => {
+          showSharingTip.value = true;
+        }, 500);
+      }
     };
 
     // Action bar event handlers
@@ -234,6 +257,7 @@ export default {
       currentBtcPrice,
       showShareQR,
       shareQRComponent,
+      showSharingTip,
       
       // Functions
       goBack,

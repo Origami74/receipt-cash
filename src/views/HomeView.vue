@@ -1,11 +1,23 @@
 <template>
   <div class="h-full">
-    <settlement-view 
-      v-if="receiptId" 
+    <settlement-view
+      v-if="receiptId"
       :event-id="receiptId"
       :decryption-key="decryptionKey"
     />
     <template v-else>
+      <!-- Camera Tip (first time) -->
+      <ContextualTip
+        :show="showCameraTip"
+        tip-name="CameraTip"
+        image="/onboard/screen-4-photo-manual.png"
+        title="Create Receipt"
+        description="Take a clear photo of your receipt - our AI will extract items automatically!"
+        :bullets="['Point camera at receipt', 'Ensure good lighting', 'Tap capture button', 'Or upload from gallery']"
+        primary-button-text="Got it!"
+        @dismiss="showCameraTip = false"
+      />
+      
       <!-- Show captured image immediately after taking photo -->
       <div v-if="capturedImage" class="h-full flex flex-col bg-gray-900">
         <div class="flex-1 flex items-center justify-center p-4">
@@ -68,9 +80,11 @@ import Spinner from '../components/Spinner.vue';
 import CameraControls from '../components/cameraView/CameraControls.vue';
 import CameraPermissionOverlay from '../components/cameraView/CameraPermissionOverlay.vue';
 import CameraQuickNav from '../components/cameraView/CameraQuickNav.vue';
+import ContextualTip from '../components/onboarding/ContextualTip.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import receiptService from '../services/aiService';
 import { getCameraPermission, saveCameraPermission } from '../services/storageService';
+import { onboardingService } from '../services/onboardingService';
 
 export default {
   name: 'HomeView',
@@ -80,7 +94,8 @@ export default {
     Spinner,
     CameraControls,
     CameraPermissionOverlay,
-    CameraQuickNav
+    CameraQuickNav,
+    ContextualTip
   },
   setup() {
     const route = useRoute();
@@ -95,6 +110,9 @@ export default {
     
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
+    
+    // Onboarding: Camera tip
+    const showCameraTip = ref(false);
     
     const requestCameraPermission = async () => {
       try {
@@ -301,6 +319,16 @@ export default {
         console.log('Auto-enabling camera based on saved preference');
         await requestCameraPermission();
       }
+      
+      // Show camera tip if first time and welcome is complete
+      if (!receiptId.value &&
+          onboardingService.hasSeenWelcome() &&
+          !onboardingService.hasSeen('CameraTip')) {
+        // Delay to let camera initialize first
+        setTimeout(() => {
+          showCameraTip.value = true;
+        }, 1000);
+      }
     });
 
     onUnmounted(() => {
@@ -411,6 +439,7 @@ export default {
       decryptionKey,
       isProcessing,
       cameraInitializing,
+      showCameraTip,
       toggleFlash,
       captureReceipt,
       handleToggleActivity,
