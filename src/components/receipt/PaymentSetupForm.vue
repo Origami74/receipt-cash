@@ -9,7 +9,7 @@
       description="Enter your Lightning address or Cashu payment request to receive payments when friends pay their share."
       :bullets="['Lightning address (user@domain.com)', 'Or Cashu payment request', 'Funds sent automatically', 'You can change this later']"
       primary-button-text="Got it!"
-      @dismiss="handlePayoutTipDismiss"
+      @dismiss="showPayoutTip = false"
     />
     
     <!-- Developer Split Tip (after payout tip) -->
@@ -134,7 +134,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import ReceiveAddressInput from '../ReceiveAddressInput.vue';
 import DeveloperSplitSlider from '../DeveloperSplitSlider.vue';
 import ContextualTip from '../onboarding/ContextualTip.vue';
@@ -223,6 +223,19 @@ export default {
       }
     });
     
+    // Watch for payout tip dismissal to trigger developer split tip
+    watch(() => showPayoutTip.value, (newValue, oldValue) => {
+      // When payout tip is dismissed (goes from true to false)
+      if (oldValue === true && newValue === false) {
+        // Show developer split tip after payout tip is dismissed
+        if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('DeveloperSplitTip')) {
+          setTimeout(() => {
+            showDeveloperSplitTip.value = true;
+          }, 300);
+        }
+      }
+    });
+    
     const formatPrice = (amount) => {
       return formatCurrency(amount, selectedCurrency.value);
     };
@@ -241,17 +254,6 @@ export default {
     const handleAddressFocus = () => {
       if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('PayoutTip')) {
         showPayoutTip.value = true;
-      }
-    };
-    
-    const handlePayoutTipDismiss = () => {
-      showPayoutTip.value = false;
-      
-      // Show developer split tip after payout tip is dismissed
-      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('DeveloperSplitTip')) {
-        setTimeout(() => {
-          showDeveloperSplitTip.value = true;
-        }, 300);
       }
     };
     
@@ -313,7 +315,6 @@ export default {
       convertToSats,
       handleAddressValidation,
       handleAddressFocus,
-      handlePayoutTipDismiss,
       handleCreate
     };
   }

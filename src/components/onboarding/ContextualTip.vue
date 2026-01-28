@@ -100,6 +100,10 @@ export default {
       type: String,
       required: true
     },
+    autoMarkSeen: {
+      type: Boolean,
+      default: true
+    },
     icon: {
       type: String,
       default: ''
@@ -143,14 +147,16 @@ export default {
     let autoDismissTimer = null;
 
     const handleDismiss = () => {
-      if (dontShowAgain.value) {
+      // Auto-mark as seen if enabled, or if "don't show again" is checked
+      if (props.autoMarkSeen || dontShowAgain.value) {
         onboardingService.markTipSeen(props.tipName);
       }
       emit('dismiss');
     };
 
     const handlePrimaryAction = () => {
-      if (dontShowAgain.value) {
+      // Auto-mark as seen if enabled, or if "don't show again" is checked
+      if (props.autoMarkSeen || dontShowAgain.value) {
         onboardingService.markTipSeen(props.tipName);
       }
       emit('primary-action');
@@ -158,6 +164,10 @@ export default {
     };
 
     const handleSecondaryAction = () => {
+      // Auto-mark as seen if enabled, or if "don't show again" is checked
+      if (props.autoMarkSeen || dontShowAgain.value) {
+        onboardingService.markTipSeen(props.tipName);
+      }
       emit('secondary-action');
       emit('dismiss');
     };

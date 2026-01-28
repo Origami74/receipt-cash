@@ -28,7 +28,7 @@
         description="Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer."
         :bullets="['Developer fee deducted', 'Your portion ready', 'Funds in your wallet', 'More payments processed automatically']"
         primary-button-text="Awesome!"
-        @dismiss="handleFirstPaymentDismiss"
+        @dismiss="showFirstPaymentCelebration = false"
       />
       
       <!-- Processing Reminder (when pending payments exist) -->
@@ -255,11 +255,6 @@ export default {
       router.push(`/pay/${eventId}/${decryptionKey}`);
     };
     
-    // Handle first payment celebration dismissal
-    const handleFirstPaymentDismiss = () => {
-      showFirstPaymentCelebration.value = false;
-      onboardingService.markFirstPaymentReceived();
-    };
     
     // Retry function for error state
     const fetchReceipt = () => {
@@ -368,7 +363,6 @@ export default {
       toFiat,
       handleShare,
       handlePay,
-      handleFirstPaymentDismiss,
       fetchReceipt,
       receiptLink,
       receiptDate,

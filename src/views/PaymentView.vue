@@ -21,8 +21,7 @@
         'Done! Host gets reimbursed'
       ]"
       primary-button-text="Got it!"
-      @primary-action="dismissGuestWelcomeTip"
-      @dismiss="dismissGuestWelcomeTip"
+      @dismiss="showGuestWelcomeTip = false"
     />
 
     <ContextualTip
@@ -37,8 +36,7 @@
         'Only pay for what you had'
       ]"
       primary-button-text="Got it!"
-      @primary-action="dismissItemSelectionTip"
-      @dismiss="dismissItemSelectionTip"
+      @dismiss="showItemSelectionTip = false"
     />
 
     <ContextualTip
@@ -53,8 +51,7 @@
         'Both are instant and secure',
       ]"
       primary-button-text="Got it!"
-      @primary-action="dismissPaymentMethodTip"
-      @dismiss="dismissPaymentMethodTip"
+      @dismiss="showPaymentMethodTip = false"
     />
 
     <ContextualTip
@@ -70,8 +67,7 @@
         'Check back later for confirmation'
       ]"
       primary-button-text="Awesome!"
-      @primary-action="dismissPaymentSuccessCelebration"
-      @dismiss="dismissPaymentSuccessCelebration"
+      @dismiss="showPaymentSuccessCelebration = false"
     />
 
     <ReceiptHeader
@@ -862,11 +858,7 @@ export default {
       showGuestWelcomeTip,
       showItemSelectionTip,
       showPaymentMethodTip,
-      showPaymentSuccessCelebration,
-      dismissGuestWelcomeTip,
-      dismissItemSelectionTip,
-      dismissPaymentMethodTip,
-      dismissPaymentSuccessCelebration
+      showPaymentSuccessCelebration
     };
   }
 };

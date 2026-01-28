@@ -2,7 +2,7 @@ name: Trigger Next Branch Deploy
 
 on:
   push:
-    branches: [ next ]
+    branches: [ v3 ]
 
 permissions:
   contents: read
