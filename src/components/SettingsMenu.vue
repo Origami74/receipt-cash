@@ -109,156 +109,6 @@
             <WalletSettings />
           </div>
           
-          <!-- Unprocessed Mint Quotes Section (Collapsible) -->
-          <div class="pt-4 border-t border-gray-200">
-            <div class="flex justify-between items-center mb-3">
-              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Lightning Payments</h4>
-              <div class="flex space-x-2">
-                <button
-                  @click="toggleLightningSection"
-                  class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                >
-                  <span v-if="!showLightningSection">Show</span>
-                  <span v-else>Hide</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1"
-                       :class="{'transform rotate-180': showLightningSection}"
-                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <button
-                  v-if="showLightningSection"
-                  @click="loadUnprocessedMintQuotes"
-                  class="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                  title="Refresh mint quotes list"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </button>
-              </div>
-            </div>
-            
-            <!-- Only show content when expanded -->
-            <div v-if="showLightningSection" class="mt-2">
-              <p class="text-sm text-gray-600 mb-3">
-                Lightning payments available for recovery. These are payments you made as a settler that can be claimed if the payer never received them.
-              </p>
-              
-              <div v-if="Object.keys(mintQuotes).length === 0" class="text-sm text-gray-500 italic">
-                No Lightning payments available for recovery
-              </div>
-              
-              <div v-for="(quoteData, recoveryId) in mintQuotes" :key="recoveryId" class="mb-4 p-3 bg-gray-50 rounded-lg">
-                <div class="flex justify-between mb-2">
-                  <span class="text-sm font-medium">Receipt: {{ mintQuoteRecoveryService.formatRecoveryId(recoveryId) }}</span>
-                  <span class="text-xs text-gray-500">{{ formatDate(quoteData.timestamp) }}</span>
-                </div>
-                
-                <div class="text-sm mb-1">
-                  <span class="font-medium">Status:</span>
-                  <span :class="{
-                    'text-green-600 font-medium': recoveryStatuses[recoveryId]?.isPaid,
-                    'text-amber-600 font-medium': !recoveryStatuses[recoveryId]?.isPaid,
-                    'text-red-600 font-medium': recoveryStatuses[recoveryId]?.error
-                  }">
-                    {{ recoveryStatuses[recoveryId]?.isPaid ? 'PAID (Ready for recovery)' : 'UNPAID' }}
-                    {{ recoveryStatuses[recoveryId]?.error ? '(Error checking status)' : '' }}
-                  </span>
-                </div>
-                
-                <div class="text-sm mb-1">
-                  <span class="font-medium">Amount:</span> {{ formatSats(quoteData.mintQuote?.amount || 0) }}
-                </div>
-                
-                <div class="text-sm mb-1">
-                  <span class="font-medium">Mint:</span>
-                  <span class="text-xs break-all">{{ quoteData.mintUrl }}</span>
-                </div>
-                
-                <div class="flex justify-end mt-2 space-x-2">
-                  <button
-                    @click="copyMintQuoteInvoice(quoteData)"
-                    class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
-                    title="Copy Lightning invoice"
-                  >
-                    Copy Invoice
-                  </button>
-                  <button
-                    v-if="recoveryStatuses[recoveryId]?.isPaid"
-                    @click="showLightningRecoveryConfirmation(recoveryId)"
-                    class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
-                    title="Recover this payment"
-                  >
-                    Recover
-                  </button>
-                  <button
-                    @click="confirmDeleteMintQuote(recoveryId)"
-                    class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- When collapsed, show count if there are any quotes -->
-            <div v-else-if="Object.keys(mintQuotes).length > 0" class="text-sm text-amber-600">
-              {{ Object.keys(mintQuotes).length }} Lightning payment(s) available for recovery
-            </div>
-            
-            <!-- Confirmation Modal for Mint Quote Deletion -->
-            <div v-if="showMintQuoteConfirmation" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h3 class="text-lg font-medium mb-2">Confirm Deletion</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to delete this Lightning mint quote? This action cannot be undone.
-                </p>
-                <div class="flex space-x-3 justify-end">
-                  <button
-                    @click="cancelMintQuoteDeletion"
-                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    @click="deletePendingMintQuote"
-                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    Delete Permanently
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Confirmation Modal for Payment Recovery -->
-            <div v-if="showRecoveryConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
-                <h3 class="text-lg font-medium mb-2">Confirm Recovery</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Are you sure you want to recover this Lightning payment? The ecash will be claimed and stored in your wallet.
-                  <br>
-                  <br>
-                  The payer (receipt creator) will no longer be able to confirm your payment.
-                </p>
-                <div class="flex space-x-3 justify-end">
-                  <button
-                    @click="cancelLightningRecovery"
-                    class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    @click="confirmRecoveryPayment"
-                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-                  >
-                    Recover Payment
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
           <!-- Advanced Debug & Recovery Section -->
           <div class="pt-4 border-t border-gray-200">
             <div class="flex justify-between items-center mb-3">
@@ -366,16 +216,9 @@
           <div class="pt-4 border-t border-gray-200">
             <button
               @click="resetOnboarding"
-              class="w-full py-2 px-4 mb-2 bg-purple-100 text-purple-800 rounded-md text-sm font-medium hover:bg-purple-200 transition-colors"
+              class="w-full py-2 px-4 bg-purple-100 text-purple-800 rounded-md text-sm font-medium hover:bg-purple-200 transition-colors"
             >
               Reset Onboarding
-            </button>
-            
-            <button
-              @click="clearSettings"
-              class="w-full py-2 px-4 bg-red-100 text-red-800 rounded-md text-sm font-medium hover:bg-red-200 transition-colors"
-            >
-              Clear Local Data
             </button>
           </div>
         </div>
@@ -387,15 +230,11 @@
 <script>
 import { ref, onMounted, watch } from 'vue';
 import { getAiSettings, saveAiSettings, clearAiSettings,
-         getUnclaimedMintQuotes, deleteMintQuote,
          getReceiveAddress, saveReceiveAddress } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
-import mintQuoteRecoveryService from '../services/flows/outgoing/mintQuoteRecovery';
 import { showNotification } from '../services/notificationService';
-import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import debugLogger from '../services/debugService';
 import packageInfo from '../../package.json';
-import addressValidation from '../utils/receiveAddressValidationUtils';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import WalletSettings from './WalletSettings.vue';
 import { triggerManualUpdate, getStoredVersion } from '../services/updaterService';
@@ -453,14 +292,6 @@ export default {
       }
     };
     
-    const mintQuotes = ref({});
-    const recoveryStatuses = ref({});
-    const showLightningSection = ref(false); // Track if Lightning section is expanded
-    const pendingMintQuoteDeletion = ref(''); // Store mint quote ID pending deletion
-    const showMintQuoteConfirmation = ref(false); // Control mint quote deletion confirmation
-    const showRecoveryConfirmationModal = ref(false); // Control recovery confirmation modal
-    const pendingRecoveryId = ref(''); // Store recovery ID pending action
-    
     // Debug console state
     const debugEnabled = ref(debugLogger.isCapturingLogsEnabled());
     const debugLogs = ref([]);
@@ -482,105 +313,8 @@ export default {
         settings.value.receiveAddress = storedReceiveAddress;
       }
       
-      // Load mint quotes
-      loadMintQuotes();
     });
 
-    // Load mint quotes from storage
-    const loadMintQuotes = async () => {
-      mintQuotes.value = getUnclaimedMintQuotes();
-      // Also load payment statuses
-      try {
-        recoveryStatuses.value = await mintQuoteRecoveryService.getRecoveryStatuses();
-      } catch (error) {
-        console.error('Error loading recovery statuses:', error);
-      }
-    };
-    
-    // Show confirmation dialog before deleting a mint quote
-    const confirmDeleteMintQuote = (transactionId) => {
-      pendingMintQuoteDeletion.value = transactionId;
-      showMintQuoteConfirmation.value = true;
-    };
-    
-    // Cancel mint quote deletion
-    const cancelMintQuoteDeletion = () => {
-      pendingMintQuoteDeletion.value = '';
-      showMintQuoteConfirmation.value = false;
-    };
-    
-    // Delete a specific mint quote after confirmation
-    const deletePendingMintQuote = () => {
-      const recoveryId = pendingMintQuoteDeletion.value;
-      if (!recoveryId) return;
-      
-      deleteMintQuote(recoveryId);
-      loadMintQuotes();
-      showNotification(`Mint quote ${mintQuoteRecoveryService.formatRecoveryId(recoveryId)} deleted`, 'success');
-      
-      // Reset state
-      pendingMintQuoteDeletion.value = '';
-      showMintQuoteConfirmation.value = false;
-    };
-    
-    // Copy the Lightning invoice from a mint quote
-    const copyMintQuoteInvoice = (quoteData) => {
-      try {
-        if (quoteData && quoteData.mintQuote && quoteData.mintQuote.request) {
-          navigator.clipboard.writeText(quoteData.mintQuote.request);
-          showNotification('Lightning invoice copied to clipboard', 'success');
-        } else {
-          showNotification('No invoice found to copy', 'error');
-        }
-      } catch (error) {
-        console.error('Error copying Lightning invoice:', error);
-        showNotification('Failed to copy Lightning invoice', 'error');
-      }
-    };
-
-    // Show Lightning payment recovery confirmation
-    const showLightningRecoveryConfirmation = (recoveryId) => {
-      pendingRecoveryId.value = recoveryId;
-      showRecoveryConfirmationModal.value = true;
-    };
-
-    // Cancel Lightning payment recovery
-    const cancelLightningRecovery = () => {
-      pendingRecoveryId.value = '';
-      showRecoveryConfirmationModal.value = false;
-    };
-
-    // Confirm and execute recovery
-    const confirmRecoveryPayment = async () => {
-      const recoveryId = pendingRecoveryId.value;
-      if (!recoveryId) return;
-
-      try {
-        showNotification('Starting recovery...', 'info');
-        await mintQuoteRecoveryService.recoverPayment(recoveryId);
-        
-        // Refresh data
-        loadMintQuotes();
-        
-        showNotification('Payment recovered successfully!', 'success');
-      } catch (error) {
-        console.error('Error recovering payment:', error);
-        showNotification(`Recovery failed: ${error.message}`, 'error');
-      } finally {
-        // Reset state
-        pendingRecoveryId.value = '';
-        showRecoveryConfirmationModal.value = false;
-      }
-    };
-    
-    // Toggle the Lightning section visibility
-    const toggleLightningSection = () => {
-      showLightningSection.value = !showLightningSection.value;
-      // Load data if we're expanding the section
-      if (showLightningSection.value) {
-        loadMintQuotes();
-      }
-    };
 
     // Save settings to storage (only AI settings, receive address is auto-saved)
     const saveSettings = () => {
@@ -601,21 +335,6 @@ export default {
       showNotification('Onboarding reset! Reload the page to see welcome screens again.', 'success');
     };
     
-    // Clear all settings
-    const clearSettings = () => {
-      clearAiSettings();
-      saveReceiveAddress(''); // Clear receive address
-      onboardingService.reset(); // Also reset onboarding
-      settings.value = {
-        completionsUrl: 'https://api.ppq.ai/chat/completions',
-        apiKey: '',
-        model: 'gpt-4.1-mini',
-        receiveAddress: ''
-      };
-      // Reset validation state
-      receiveAddressValidation.value = { isValid: false, type: '', error: '' };
-    };
-    
     // Format transaction ID for display
     const formatTransactionId = (txId) => {
       if (!txId) return 'Unknown';
@@ -627,18 +346,6 @@ export default {
       }
       // If not in expected format, return shortened ID
       return txId.length > 12 ? `${txId.substring(0, 12)}...` : txId;
-    };
-    
-    // Format date for display
-    const formatDate = (timestamp) => {
-      if (!timestamp) return '';
-      const date = new Date(timestamp);
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-    };
-    
-    // Format satoshi amount for display
-    const formatSats = (amount) => {
-      return `${Number(amount).toLocaleString()} sats`;
     };
     
     // Debug logging functions
@@ -720,45 +427,13 @@ export default {
     
     
     
-    const formatMintUrl = (mintUrl) => {
-      if (!mintUrl) return 'Unknown';
-      // Extract domain from URL
-      try {
-        const url = new URL(mintUrl);
-        return url.hostname;
-      } catch {
-        // If not a valid URL, just show a shortened version
-        return mintUrl.length > 30 ? `${mintUrl.substring(0, 30)}...` : mintUrl;
-      }
-    };
 
     return {
       appVersion,
-      mintQuotes,
-      recoveryStatuses,
-      loadMintQuotes,
-      confirmDeleteMintQuote,
-      copyMintQuoteInvoice,
-      showMintQuoteConfirmation,
-      cancelMintQuoteDeletion,
-      deletePendingMintQuote,
       handleReceiveAddressValidation,
       receiveAddressValidation,
-      formatSats,
-      showLightningSection,
-      toggleLightningSection,
       settings,
       saveSettings,
-      clearSettings,
-      formatDate,
-      
-      // Lightning payment recovery functionality
-      showLightningRecoveryConfirmation,
-      cancelLightningRecovery,
-      showRecoveryConfirmationModal,
-      pendingRecoveryId,
-      confirmRecoveryPayment,
-      mintQuoteRecoveryService,
       
       // Debug console properties and methods
       debugEnabled,
@@ -774,10 +449,7 @@ export default {
       checkForUpdates,
       
       // Onboarding management
-      resetOnboarding,
-      
-      // Utility methods
-      formatMintUrl
+      resetOnboarding
     };
   }
 }
