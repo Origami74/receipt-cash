@@ -193,8 +193,10 @@ export default {
     };
 
     const initializeCamera = async () => {
+      // Don't request permission here - that's handled by requestCameraPermission()
+      // This function should only be called when permission is already granted
       if (!hasPermission.value) {
-        await requestCameraPermission();
+        console.warn('initializeCamera called without permission');
         return;
       }
 
