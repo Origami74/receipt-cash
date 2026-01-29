@@ -1,8 +1,8 @@
 # Guest Welcome Flow - UX Improvement Plan
 
 **Date**: 2026-01-29
-**Status**: Steps 1-5 Complete ✅ - Steps 6-7 Remaining
-**Priority**: HIGH - Critical UX issue
+**Status**: ✅ COMPLETE - All 7 Steps Implemented
+**Priority**: HIGH - Critical UX issue (RESOLVED)
 
 ## Problem Statement
 
@@ -267,30 +267,39 @@ const handleGuestWelcomeComplete = () => {
 
 ---
 
-### Step 6: Integrate Experimental Warning
+### Step 6: Integrate Experimental Warning ✅ COMPLETE
 
-**Option A**: Add as 4th screen to welcome flows
-- Host welcome gets 4th screen about experimental status
-- Guest welcome gets 4th screen about experimental status
+**Implemented**: Option A - 4th screen in both welcome flows
 
-**Option B**: Show after welcome flows complete
-- Small banner at top of app after onboarding
-- Less intrusive than modal
-
-**Recommendation**: Option B - Less overwhelming, more contextual
+**Changes Made**:
+- ✅ Added 4th screen to [`WelcomeOnboarding.vue`](../../src/components/onboarding/WelcomeOnboarding.vue)
+- ✅ Added 4th screen to [`GuestWelcomeOnboarding.vue`](../../src/components/onboarding/GuestWelcomeOnboarding.vue)
+- ✅ Deleted `src/components/ExperimentalModal.vue` completely
+- ✅ Removed all imports and references from App.vue
+- ✅ Smart screen count (3 if terms accepted, 4 if not)
+- ✅ Toggle switch for terms acceptance
+- ✅ Contextual titles: "Before You Start" (host) / "Before You Pay" (guest)
+- ✅ Color-coded warning boxes (🧪 orange, 💸 red, 🔐 blue)
+- ✅ "Get Started" button on screen 3 when terms already accepted
 
 ---
 
-### Step 7: Fix Notification Access Request
+### Step 7: Fix Notification Access Request ✅ COMPLETE
 
-**File**: `src/App.vue` or relevant notification service
+**Implemented**: Notification permission tip in ReceiptView
 
-**Current**: Requests notification access immediately on app load
-
-**New**: 
-- Only request for hosts (on home page)
-- Request after host welcome flow completes
-- Don't request for guests at all
+**Changes Made**:
+- ✅ Added notification permission tip to [`ReceiptView.vue`](../../src/views/ReceiptView.vue)
+- ✅ Shows when host creates receipt and clicks "Share"
+- ✅ Perfect placement: before sharing tip
+- ✅ Only for owned receipts (hosts)
+- ✅ Only if permission not already granted
+- ✅ Primary action: "Enable Notifications"
+- ✅ Secondary action: "Maybe Later"
+- ✅ Clear messaging: "No ads, just payment alerts"
+- ✅ Fixed bug: Uses `receiptModel.isOwnedReceipt` for reliable ownership check
+- ✅ Watcher ensures sharing tip shows after notification tip dismissed
+- ✅ Guests never see notification request
 
 ---
 
@@ -436,9 +445,11 @@ const handleGuestWelcomeComplete = () => {
 3. ✅ **Restrict host welcome** - Fix wrong audience issue
 4. ✅ **Integrate in PaymentView** - Show guest welcome
 5. ✅ **Remove redundant tip** - Clean up duplicate
-6. 📋 **Integrate experimental warning** - Remaining (Step 6)
-7. 📋 **Fix notification access timing** - Remaining (Step 7)
+6. ✅ **Integrate experimental warning** - Added as 4th screen to both flows
+7. ✅ **Fix notification access timing** - Moved to ReceiptView, hosts only
 8. ✅ **Update all old method references** - Fixed all `hasSeenWelcome()` and `completeWelcome()` calls
+9. ✅ **Delete ExperimentalModal** - Completely removed from codebase
+10. ✅ **Add computed import** - Fixed missing import in both welcome components
 
 ---
 
@@ -486,17 +497,10 @@ const handleGuestWelcomeComplete = () => {
 - Fixed tab bar visibility logic
 - Updated image prompts to remove transparency language
 
-### 📋 Remaining Steps
+### ✅ All Steps Complete!
 
-**Step 6: Integrate Experimental Warning**
-- Current: Shows immediately on app load for all users
-- Target: Show after welcome flows complete, or integrate contextually
-- File: [`src/components/ExperimentalModal.vue`](../../src/components/ExperimentalModal.vue)
-
-**Step 7: Fix Notification Access Timing**
-- Current: Requested in [`src/views/PaymentConfirmationView.vue`](../../src/views/PaymentConfirmationView.vue)
-- Target: Only request for hosts, after host welcome completes
-- Don't request for guests at all
+**Step 6: Experimental Warning** - ✅ Integrated as 4th screen
+**Step 7: Notification Access** - ✅ Fixed timing and audience
 
 ---
 

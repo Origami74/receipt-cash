@@ -451,11 +451,15 @@ This document tracks the progress of implementing the onboarding flow for Receip
   - No more overlapping pop-ups
   - Clean, focused experience for each user type
 
-**Phase 4 (Polish & Images)**: 📋 Pending
-- 📋 Generate guest welcome images (3 images needed)
-- 📋 Integrate experimental warning contextually
-- 📋 Fix notification access timing (hosts only, after welcome)
-- 📋 User testing and feedback collection
+**Phase 4 (Experimental Warning Integration)**: ✅ COMPLETE
+- ✅ Added 4th screen to host welcome flow with terms acceptance
+- ✅ Added 4th screen to guest welcome flow with terms acceptance
+- ✅ Removed standalone ExperimentalModal component completely
+- ✅ Smart screen count (3 screens if terms accepted, 4 if not)
+- ✅ Toggle switch for terms acceptance
+- ✅ Contextual messaging for host vs guest
+- ✅ Color-coded warning boxes (experimental, no refunds, responsibility)
+- ✅ "Get Started" button on screen 3 when terms already accepted
 
 **Phase 5 (Advanced Features)**: ⏳ Not started
 
@@ -463,18 +467,33 @@ This document tracks the progress of implementing the onboarding flow for Receip
 
 ## Recent Changes (2026-01-29)
 
+### Experimental Warning Integration ✅
+- ✅ **Removed** `src/components/ExperimentalModal.vue` completely
+- ✅ **Removed** all imports and references from App.vue
+- ✅ **Added** 4th screen to both welcome flows:
+  - Host: "Before You Start" with experimental warning
+  - Guest: "Before You Pay" with experimental warning
+- ✅ **Features**:
+  - Toggle switch for terms acceptance (not checkbox)
+  - Smart screen count (3 if accepted, 4 if not)
+  - Color-coded warning boxes (🧪 orange, 💸 red, 🔐 blue)
+  - Disabled "Get Started" button until terms accepted
+  - "Get Started" appears on screen 3 if terms already accepted
+
 ### Notification Permission Tip ✅
-- ✅ Added notification permission tip to [`HomeView.vue`](../../src/views/HomeView.vue)
-  - Shows after host welcome completes
-  - Only for hosts on home page
+- ✅ **Moved** from HomeView.vue to [`ReceiptView.vue`](../../src/views/ReceiptView.vue)
+  - Shows when host creates receipt and clicks "Share"
+  - Perfect placement: before sharing tip
+  - Only for owned receipts (hosts)
   - Only if permission not already granted
   - Primary action: Requests permission
-  - Secondary action: Dismisses without requesting
+  - Secondary action: "Maybe Later" dismisses without requesting
   - Clear messaging: "No ads, just payment alerts"
+  - **Fixed bug**: Uses `receiptModel.isOwnedReceipt` for reliable ownership check
   
 - ✅ Added `hasSeenNotificationTip` to onboarding state
 - ✅ Integrated with existing ContextualTip component
-- ✅ Sequential flow: host welcome → notification tip → camera tip
+- ✅ Watcher ensures sharing tip shows after notification tip dismissed
 
 ### Guest Welcome Flow Implementation ✅
 - ✅ Created [`GuestWelcomeOnboarding.vue`](../../src/components/onboarding/GuestWelcomeOnboarding.vue)
