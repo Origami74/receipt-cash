@@ -113,27 +113,8 @@ export default {
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
     
-    // Onboarding: Notification and camera tips
-    const showNotificationTip = ref(false);
+    // Onboarding: Camera tip only (notification tip is in ReceiptView)
     const showCameraTip = ref(false);
-    
-    // Handle notification permission request
-    const handleEnableNotifications = async () => {
-      showNotificationTip.value = false;
-      onboardingService.markTipSeen('NotificationTip');
-      
-      // Request notification permission
-      if ('Notification' in window && Notification.permission === 'default') {
-        try {
-          const permission = await Notification.requestPermission();
-          if (permission === 'granted') {
-            showNotification('Notifications enabled! You\'ll be notified when payments arrive.', 'success');
-          }
-        } catch (error) {
-          console.error('Error requesting notification permission:', error);
-        }
-      }
-    };
     
     const requestCameraPermission = async () => {
       try {
@@ -463,14 +444,12 @@ export default {
       isProcessing,
       cameraInitializing,
       showCameraTip,
-      showNotificationTip,
       toggleFlash,
       captureReceipt,
       handleToggleActivity,
       handleQrCodeResult,
       handleFileSelected,
-      requestCameraPermission,
-      handleEnableNotifications
+      requestCameraPermission
     };
   }
 };

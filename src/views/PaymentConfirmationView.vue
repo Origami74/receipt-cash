@@ -387,10 +387,8 @@ export default {
       loadSettlementData();
       subscribeToConfirmation();
       
-      // Request notification permission if not already granted
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+      // Don't auto-request notification permission here
+      // Guests don't need notifications, and hosts get prompted in ReceiptView
     });
     
     onUnmounted(() => {

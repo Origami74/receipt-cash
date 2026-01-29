@@ -74,15 +74,6 @@ tabLockService.acquireLock().then(lockAcquired => {
     
     console.log('✅ App mounted successfully');
     
-    // Request notification permission after a short delay (better UX)
-    setTimeout(async () => {
-      const hasPermission = await paymentNotificationService.requestPermission();
-      if (hasPermission) {
-        console.log('🔔 Notification permission granted');
-      } else {
-        console.log('🔔 Notification permission denied or not supported');
-      }
-    }, 2000); // Wait 2 seconds after app loads
     })
     .catch(error => {
       console.error('❌ Failed to initialize Coco:', error);
