@@ -28,7 +28,7 @@
       <ContextualTip
         :show="showSharingTip"
         tip-name="SharingTip"
-        image="/onboard/screen-7-shared-explanation.png"
+        image="/onboard/tips/06-sharing.png"
         title="Share Your Receipt"
         description="Share this QR code with your friends so they can select their items and pay their share."
         :bullets="['They scan the QR code', 'Select their items', 'Pay their share', 'You get reimbursed!']"
@@ -40,7 +40,7 @@
       <ContextualTip
         :show="showFirstPaymentCelebration"
         tip-name="FirstPaymentCelebration"
-        image="/onboard/screen-10-payment-received.png"
+        image="/onboard/tips/first-payment-alt.png"
         title="🎉 Payment Received!"
         description="Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer."
         :bullets="['Developer fee deducted', 'Your portion ready', 'Funds in your wallet', 'More payments processed automatically']"

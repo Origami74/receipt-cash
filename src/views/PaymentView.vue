@@ -18,7 +18,7 @@
     <ContextualTip
       :show="showItemSelectionTip"
       tip-name="ItemSelectionTip"
-      image="/onboard/screen-5-review.png"
+      image="/onboard/tips/09-item-selection.png"
       title="Select Your Items"
       description="Tap the + button next to each item you had. You can adjust quantities as needed."
       :bullets="[
@@ -33,7 +33,7 @@
     <ContextualTip
       :show="showPaymentMethodTip"
       tip-name="PaymentMethodTip"
-      image="/onboard/onboard-placeholder.png"
+      image="/onboard/tips/10-payment-method.png"
       title="Choose Payment Method"
       description="Select how you want to pay. Both methods go directly to the host."
       :bullets="[
@@ -48,7 +48,7 @@
     <ContextualTip
       :show="showPaymentSuccessCelebration"
       tip-name="PaymentSuccessCelebration"
-      image="/onboard/screen-10-payment-received.png"
+      image="/onboard/tips/11-payment-success.png"
       title="Payment Sent!"
       description="Great! Your payment has been sent. The host will process it and you'll be all set."
       :bullets="[

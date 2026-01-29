@@ -27,7 +27,7 @@
 - Text: Dark gray (#1F2937)
 
 **Technical Specs:**
-- Resolution: 800x1200 (vertical)
+- Resolution: 2:3 (horizontal
 - Format: PNG with transparency
 - Style: Vector illustration / flat design
 - No text in images (text added separately in UI)
@@ -80,3 +80,5 @@ Payment notification illustration. A phone screen showing a clean notification b
 - Maintain visual quality
 - Consider WebP format for modern browsers
 - Provide PNG fallback for compatibility
+
+reference image attached

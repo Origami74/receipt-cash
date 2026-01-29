@@ -4,9 +4,9 @@
     <ContextualTip
       :show="showPayoutTip"
       tip-name="PayoutTip"
-      image="/onboard/screen-6-payment-address.png"
+      image="/onboard/tips/04-payout-address.png"
       title="Where to Send Money"
-      description="Enter your Lightning address or Cashu payment request to receive payments when friends pay their share."
+      description="Configure the wallet to forward incoming payments to."
       :bullets="['Lightning address (user@domain.com)', 'Or Cashu payment request', 'Funds sent automatically', 'You can change this later']"
       primary-button-text="Got it!"
       @dismiss="showPayoutTip = false"
@@ -16,7 +16,7 @@
     <ContextualTip
       :show="showDeveloperSplitTip"
       tip-name="DeveloperSplitTip"
-      image="/onboard/onboard-placeholder.png"
+      image="/onboard/tips/05-developer-split.png"
       title="Keep This Tool Alive"
       description="Set your contribution to help maintain Receipt.Cash. Default is 2.1%, adjust to any amount."
       :bullets="['Helps keep the app running', 'Adjustable from 0-100%', 'Change anytime']"

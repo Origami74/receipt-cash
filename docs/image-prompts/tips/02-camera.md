@@ -27,7 +27,7 @@
 - Text: Dark gray (#1F2937)
 
 **Technical Specs:**
-- Resolution: 800x1200 (vertical)
+- Resolution: 2:3 (horizontal
 - Format: PNG with transparency
 - Style: Vector illustration / flat design
 - No text in images (text added separately in UI)
@@ -61,3 +61,6 @@ Receipt scanning illustration. A phone camera pointed at a paper receipt on a ta
 - Orange and green tones
 - Easy, intuitive feeling
 - Professional appearance
+
+
+reference image attached

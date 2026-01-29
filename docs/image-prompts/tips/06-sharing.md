@@ -1,5 +1,31 @@
 # Contextual Tip: Sharing Explanation
 
+## Style Guidelines
+
+**Overall Style:**
+- Modern, clean, minimalist
+- Flat design with subtle gradients
+- Warm, friendly color palette (orange, purple, green)
+- Rounded shapes and soft edges
+- Professional yet approachable
+- Mobile-first (horizontal orientation)
+- High contrast for accessibility
+
+**Color Palette:**
+- Primary: Bitcoin orange (#F7931A)
+- Secondary: Nostr purple (#6B4C9A)
+- Accent: Success green (#10B981)
+- Background: Light gray/white (#F9FAFB)
+- Text: Dark gray (#1F2937)
+
+**Technical Specs:**
+- Resolution: 2:3 (horizontal
+- Format: PNG with transparency
+- Style: Vector illustration / flat design
+- No text in images (text added separately in UI)
+
+---
+
 ## Context
 
 **When Shown**: First time QR code is displayed (after receipt creation)
@@ -11,7 +37,7 @@
 ## Primary Prompt
 
 ```
-Modern flat illustration, vertical mobile format. A large QR code in the center with multiple phones around it scanning/pointing at it. Arrows showing the flow: QR code → friends scan → select items → pay → host receives. Happy people icons around the QR code. Orange and green color palette with subtle glow effects from the QR code. Clean minimalist design, conveying easy sharing and automatic payment collection. No text, high contrast, vector-style artwork. --style flat --ar 2:3
+Modern flat illustration, horizontal mobile format. A large QR code in the center with multiple phones around it scanning/pointing at it. Arrows showing the flow: QR code → friends scan → select items → pay → host receives. Happy people icons around the QR code. Orange and green color palette with subtle glow effects from the QR code. Clean minimalist design, conveying easy sharing and automatic payment collection. No text, high contrast, vector-style artwork. --style flat --ar 2:3
 ```
 
 ---
@@ -19,7 +45,7 @@ Modern flat illustration, vertical mobile format. A large QR code in the center 
 ## Alternative Prompt
 
 ```
-Receipt sharing flow illustration. A central QR code with radiating lines connecting to multiple friend avatars. Each friend has a small phone icon showing they're scanning. Money symbols flowing back to a central wallet/host icon. Orange and green gradients creating a sense of connection and payment flow. Modern flat design, vertical orientation, conveying "share once, collect from everyone". No text, professional quality. --style flat --ar 2:3
+Receipt sharing flow illustration. A central QR code with radiating lines connecting to multiple friend avatars. Each friend has a small phone icon showing they're scanning. Money symbols flowing back to a central wallet/host icon. Orange and green gradients creating a sense of connection and payment flow. Modern flat design, horizontal orientation, conveying "share once, collect from everyone". No text, professional quality. --style flat --ar 2:3
 ```
 
 ---
@@ -34,3 +60,5 @@ Receipt sharing flow illustration. A central QR code with radiating lines connec
 - Orange and green tones
 - Connection/network feeling
 - Easy, automatic process
+
+reference image attached

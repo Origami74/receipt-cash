@@ -1,5 +1,31 @@
 # Contextual Tip: Payout Address
 
+## Style Guidelines
+
+**Overall Style:**
+- Modern, clean, minimalist
+- Flat design with subtle gradients
+- Warm, friendly color palette (orange, purple, green)
+- Rounded shapes and soft edges
+- Professional yet approachable
+- Mobile-first (vertical orientation)
+- High contrast for accessibility
+
+**Color Palette:**
+- Primary: Bitcoin orange (#F7931A)
+- Secondary: Nostr purple (#6B4C9A)
+- Accent: Success green (#10B981)
+- Background: Light gray/white (#F9FAFB)
+- Text: Dark gray (#1F2937)
+
+**Technical Specs:**
+- Resolution: 2:3 (horizontal
+- Format: PNG with transparency
+- Style: Vector illustration / flat design
+- No text in images (text added separately in UI)
+
+---
+
 ## Context
 
 **When Shown**: First time on payment setup screen OR when user focuses on address input
@@ -34,3 +60,5 @@ Dual payment destination illustration. A form with two options: Lightning addres
 - Orange (Lightning) and green (Cashu) color coding
 - Flexible choice feeling
 - Clear, simple design
+
+reference image attached

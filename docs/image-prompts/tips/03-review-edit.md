@@ -1,5 +1,31 @@
 # Contextual Tip: Review & Edit
 
+## Style Guidelines
+
+**Overall Style:**
+- Modern, clean, minimalist
+- Flat design with subtle gradients
+- Warm, friendly color palette (orange, purple, green)
+- Rounded shapes and soft edges
+- Professional yet approachable
+- Mobile-first (vertical orientation)
+- High contrast for accessibility
+
+**Color Palette:**
+- Primary: Bitcoin orange (#F7931A)
+- Secondary: Nostr purple (#6B4C9A)
+- Accent: Success green (#10B981)
+- Background: Light gray/white (#F9FAFB)
+- Text: Dark gray (#1F2937)
+
+**Technical Specs:**
+- Resolution: 2:3 (horizontal)
+- Format: PNG with transparency
+- Style: Vector illustration / flat design
+- No text in images (text added separately in UI)
+
+---
+
 ## Context
 
 **When Shown**: After AI extraction completes (first time)
@@ -34,3 +60,5 @@ Receipt editing illustration. A smartphone screen showing a list of receipt item
 - Orange highlights (editing)
 - Clean, organized layout
 - Easy editing feeling
+
+reference image attached

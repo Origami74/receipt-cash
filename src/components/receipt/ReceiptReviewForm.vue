@@ -4,7 +4,7 @@
     <ContextualTip
       :show="showReviewTip"
       tip-name="ReviewTip"
-      image="/onboard/screen-5-review.png"
+      image="/onboard/tips/03-review-edit.png"
       title="Items Extracted!"
       description="Review and edit the extracted items if needed, then continue to set up payment."
       :bullets="['Tap any item to edit', 'Add or remove items', 'Adjust quantities and prices', 'Everything looks good? Continue!']"
