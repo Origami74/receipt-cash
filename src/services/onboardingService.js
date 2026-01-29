@@ -26,6 +26,9 @@ const DEFAULT_STATE = {
   hasReceivedFirstPayment: false,
   hasSeenPendingReminder: false,
   
+  // Notifications
+  hasSeenNotificationTip: false,
+  
   // Features
   hasSeenFeeTooltip: false,
   hasSeenCurrencyTooltip: false,

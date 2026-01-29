@@ -6,6 +6,23 @@
       :decryption-key="decryptionKey"
     />
     <template v-else>
+      <!-- Notification Permission Tip (hosts only, after welcome) -->
+      <ContextualTip
+        :show="showNotificationTip"
+        tip-name="NotificationTip"
+        icon="🔔"
+        title="Stay Updated on Payments"
+        description="Enable notifications to know when friends pay their share. No ads, just payment alerts!"
+        :bullets="[
+          'Get notified when payments arrive',
+          'No spam or advertisements',
+        ]"
+        primary-button-text="Enable Notifications"
+        secondary-button-text="Maybe Later"
+        @primary-action="handleEnableNotifications"
+        @dismiss="showNotificationTip = false"
+      />
+      
       <!-- Camera Tip (first time) -->
       <ContextualTip
         :show="showCameraTip"
@@ -113,8 +130,27 @@ export default {
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
     
-    // Onboarding: Camera tip
+    // Onboarding: Notification and camera tips
+    const showNotificationTip = ref(false);
     const showCameraTip = ref(false);
+    
+    // Handle notification permission request
+    const handleEnableNotifications = async () => {
+      showNotificationTip.value = false;
+      onboardingService.markTipSeen('NotificationTip');
+      
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            showNotification('Notifications enabled! You\'ll be notified when payments arrive.', 'success');
+          }
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+        }
+      }
+    };
     
     const requestCameraPermission = async () => {
       try {
@@ -322,8 +358,19 @@ export default {
         await requestCameraPermission();
       }
       
-      // Show camera tip if first time and welcome is complete
+      // Show notification tip if first time and welcome is complete
       if (!receiptId.value &&
+          onboardingService.hasSeenHostWelcome() &&
+          !onboardingService.hasSeen('NotificationTip') &&
+          'Notification' in window &&
+          Notification.permission === 'default') {
+        // Show notification tip first, before camera tip
+        setTimeout(() => {
+          showNotificationTip.value = true;
+        }, 500);
+      }
+      // Show camera tip after notification tip (or if notification already handled)
+      else if (!receiptId.value &&
           onboardingService.hasSeenHostWelcome() &&
           !onboardingService.hasSeen('CameraTip')) {
         // Delay to let camera initialize first
@@ -442,12 +489,14 @@ export default {
       isProcessing,
       cameraInitializing,
       showCameraTip,
+      showNotificationTip,
       toggleFlash,
       captureReceipt,
       handleToggleActivity,
       handleQrCodeResult,
       handleFileSelected,
-      requestCameraPermission
+      requestCameraPermission,
+      handleEnableNotifications
     };
   }
 };

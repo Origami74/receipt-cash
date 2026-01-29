@@ -1,7 +1,7 @@
 # Onboarding Implementation Status
 
 **Last Updated**: 2026-01-29
-**Status**: Phase 3 Complete - Guest Welcome Flow Implemented ✅
+**Status**: Phase 3 Complete + Notification Permission Tip ✅
 
 ## Overview
 
@@ -72,6 +72,9 @@ This document tracks the progress of implementing the onboarding flow for Receip
 1. ✅ Bottom menu bar showing through onboarding - Fixed with conditional rendering
 2. ✅ Images too small - Increased to 60vh max height
 3. ✅ "Get Started" button not clickable - Fixed z-index layering
+4. ✅ Tab bar not appearing after guest onboarding - Fixed visibility logic
+5. ✅ Host welcome showing on payment pages - Restricted to home page only
+6. ✅ All old method references updated (8 files)
 
 ### ✅ Phase 2: Contextual Tips (COMPLETE - 7 of 7)
 
@@ -167,12 +170,13 @@ This document tracks the progress of implementing the onboarding flow for Receip
 **Features Implemented**:
 - ✅ Reusable ContextualTip component
 - ✅ State tracking via onboardingService
-- ✅ Sequential tip flow (review → payout → sharing)
-- ✅ Proper z-index layering (z-50)
+- ✅ Sequential tip flow (notification → camera → review → payout → sharing)
+- ✅ Proper z-index layering (z-100)
 - ✅ Smooth animations and transitions
 - ✅ Click-outside-to-dismiss
 - ✅ Responsive design
 - ✅ Icon and bullet point support
+- ✅ Primary and secondary action buttons
 
 ### ✅ Phase 3: Guest Onboarding (COMPLETE - Refactored)
 
@@ -425,12 +429,13 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - State persistence
 - Reset functionality
 
-**Phase 2 (Contextual Tips)**: ✅ 100% Complete (7 of 7 tips)
+**Phase 2 (Contextual Tips)**: ✅ 100% Complete (8 of 8 tips)
 - ✅ Reusable ContextualTip component
+- ✅ Notification permission tip (hosts only, after welcome)
 - ✅ Camera tip
 - ✅ Review & edit tip
 - ✅ Payout address tip
-- ✅ Developer split tip (NEW)
+- ✅ Developer split tip
 - ✅ Sharing explanation tip
 - ✅ First payment celebration
 - ✅ Processing reminder (critical)
@@ -457,6 +462,19 @@ This document tracks the progress of implementing the onboarding flow for Receip
 ---
 
 ## Recent Changes (2026-01-29)
+
+### Notification Permission Tip ✅
+- ✅ Added notification permission tip to [`HomeView.vue`](../../src/views/HomeView.vue)
+  - Shows after host welcome completes
+  - Only for hosts on home page
+  - Only if permission not already granted
+  - Primary action: Requests permission
+  - Secondary action: Dismisses without requesting
+  - Clear messaging: "No ads, just payment alerts"
+  
+- ✅ Added `hasSeenNotificationTip` to onboarding state
+- ✅ Integrated with existing ContextualTip component
+- ✅ Sequential flow: host welcome → notification tip → camera tip
 
 ### Guest Welcome Flow Implementation ✅
 - ✅ Created [`GuestWelcomeOnboarding.vue`](../../src/components/onboarding/GuestWelcomeOnboarding.vue)

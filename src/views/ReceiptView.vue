@@ -7,6 +7,23 @@
     retryButtonText="Try Again"
     @retry="fetchReceipt"
   >
+      <!-- Notification Permission Tip (hosts only, before sharing tip) -->
+      <ContextualTip
+        :show="showNotificationTip"
+        tip-name="NotificationTip"
+        icon="🔔"
+        title="Stay Updated on Payments"
+        description="Enable notifications to know when friends pay their share. No ads, just payment alerts!"
+        :bullets="[
+          'Get notified when payments arrive',
+          'No spam or advertisements',
+        ]"
+        primary-button-text="Enable Notifications"
+        secondary-button-text="Maybe Later"
+        @primary-action="handleEnableNotifications"
+        @dismiss="showNotificationTip = false"
+      />
+      
       <!-- Sharing Explanation Tip (first time QR is shown) -->
       <ContextualTip
         :show="showSharingTip"
@@ -171,10 +188,29 @@ export default {
     const shareQRComponent = ref(null);
     const error = ref(null);
     const errorDetails = ref(null);
+    const showNotificationTip = ref(false);
     const showSharingTip = ref(false);
     const showFirstPaymentCelebration = ref(false);
     const showProcessingReminder = ref(false);
     const previousConfirmedCount = ref(0);
+    
+    // Handle notification permission request
+    const handleEnableNotifications = async () => {
+      showNotificationTip.value = false;
+      onboardingService.markTipSeen('NotificationTip');
+      
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            showNotification('Notifications enabled! You\'ll be notified when payments arrive.', 'success');
+          }
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+        }
+      }
+    };
 
     // Function to navigate back
     const goBack = () => {
@@ -234,8 +270,23 @@ export default {
         }
       });
       
-      // Show sharing tip if first time
-      if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('SharingTip')) {
+      // Use receiptModel.isOwnedReceipt instead of computed property for more reliable check
+      const isOwned = receiptModel.value?.isOwnedReceipt || false;
+      
+      // Show notification tip first (if needed), then sharing tip
+      if (isOwned &&
+          onboardingService.hasSeenHostWelcome() &&
+          !onboardingService.hasSeen('NotificationTip') &&
+          'Notification' in window &&
+          Notification.permission === 'default') {
+        setTimeout(() => {
+          showNotificationTip.value = true;
+        }, 500);
+      }
+      // Show sharing tip if first time (after notification tip or if notification already handled)
+      else if (isOwned &&
+               onboardingService.hasSeenHostWelcome() &&
+               !onboardingService.hasSeen('SharingTip')) {
         setTimeout(() => {
           showSharingTip.value = true;
         }, 500);
@@ -264,6 +315,20 @@ export default {
       // The subscription will automatically retry when component remounts
       window.location.reload();
     };
+
+    // Watch for notification tip dismissal to show sharing tip
+    watch(showNotificationTip, (isShowing) => {
+      if (!isShowing &&
+          isOwnedReceipt.value &&
+          onboardingService.hasSeen('NotificationTip') &&
+          !onboardingService.hasSeen('SharingTip') &&
+          showShareQR.value) {
+        // Show sharing tip after notification tip is dismissed
+        setTimeout(() => {
+          showSharingTip.value = true;
+        }, 300);
+      }
+    });
 
     // Component lifecycle
     onMounted(async () => {
@@ -353,6 +418,7 @@ export default {
       currentBtcPrice,
       showShareQR,
       shareQRComponent,
+      showNotificationTip,
       showSharingTip,
       showFirstPaymentCelebration,
       showProcessingReminder,
@@ -363,6 +429,7 @@ export default {
       toFiat,
       handleShare,
       handlePay,
+      handleEnableNotifications,
       fetchReceipt,
       receiptLink,
       receiptDate,
