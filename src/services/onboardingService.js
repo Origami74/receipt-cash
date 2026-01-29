@@ -39,6 +39,7 @@ const DEFAULT_STATE = {
   hasPaidFirstReceipt: false,
   hasSeenItemSelectionTip: false,
   hasSeenPaymentMethodTip: false,
+  hasSeenPaymentSuccessCelebration: false,
   hasSeenLightningExplanation: false,
   hasSeenCashuExplanation: false,
   

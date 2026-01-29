@@ -45,21 +45,7 @@
       @dismiss="showPaymentMethodTip = false"
     />
 
-    <ContextualTip
-      :show="showPaymentSuccessCelebration"
-      tip-name="PaymentSuccessCelebration"
-      image="/onboard/tips/11-payment-success.png"
-      title="Payment Sent!"
-      description="Great! Your payment has been sent. The host will process it and you'll be all set."
-      :bullets="[
-        'Payment submitted successfully',
-        'Host will confirm receipt',
-        'You can close the app now',
-        'Check back later for confirmation'
-      ]"
-      primary-button-text="Awesome!"
-      @dismiss="showPaymentSuccessCelebration = false"
-    />
+    <!-- Payment success celebration moved to PaymentConfirmationView -->
 
     <ReceiptHeader
       :show-back-button="true"
@@ -251,7 +237,6 @@ export default {
     const showGuestWelcome = ref(false);
     const showItemSelectionTip = ref(false);
     const showPaymentMethodTip = ref(false);
-    const showPaymentSuccessCelebration = ref(false);
 
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
@@ -785,16 +770,7 @@ export default {
       }
     });
 
-    // Watch for payment success to show celebration
-    watch(paymentSuccess, (isSuccess) => {
-      if (isSuccess &&
-          !onboardingService.state.hasPaidFirstReceipt &&
-          !showPaymentSuccessCelebration.value) {
-        setTimeout(() => {
-          showPaymentSuccessCelebration.value = true;
-        }, 500);
-      }
-    });
+    // Payment success celebration moved to PaymentConfirmationView
 
     onUnmounted(() => {
       // Clean up subscriptions

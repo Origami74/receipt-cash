@@ -1,5 +1,22 @@
 <template>
   <div class="h-full flex flex-col bg-gray-50">
+    <!-- Payment Success Celebration Tip -->
+    <ContextualTip
+      :show="showPaymentSuccessCelebration"
+      tip-name="PaymentSuccessCelebration"
+      image="/onboard/tips/11-payment-success.png"
+      title="Payment Sent!"
+      description="Great! Your payment has been sent. The host will process it and you'll be all set."
+      :bullets="[
+        'Payment submitted successfully',
+        'Host will confirm receipt',
+        'You can close the app now',
+        'Check back later for confirmation'
+      ]"
+      primary-button-text="Awesome!"
+      @dismiss="showPaymentSuccessCelebration = false"
+    />
+    
     <!-- Cashu Payment Request Modal (if user wants to see it again) -->
     <CashuPaymentModal
       :show="showCashuModal"
@@ -180,11 +197,14 @@ import { settlementConfirmation$ } from '../services/paymentStatusService';
 import { settlementModel } from '../services/nostr/receipt';
 import { getGuestPayment } from '../services/guestPaymentStorageService';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
+import ContextualTip from '../components/onboarding/ContextualTip.vue';
+import { onboardingService } from '../services/onboardingService';
 
 export default {
   name: 'PaymentConfirmationView',
   components: {
-    CashuPaymentModal
+    CashuPaymentModal,
+    ContextualTip
   },
   setup() {
     const route = useRoute();
@@ -205,6 +225,7 @@ export default {
     const loading = ref(true);
     const error = ref(null);
     const guestPaymentData = ref(null);
+    const showPaymentSuccessCelebration = ref(false);
     let confirmationSubscription = null;
     let settlementSubscription = null;
     
@@ -230,7 +251,7 @@ export default {
     const statusImage = computed(() => {
       switch (status.value) {
         case 'pending': return '/onboard/onboard-placeholder.png';
-        case 'confirmed': return '/onboard/screen-10-payment-received.png';
+        case 'confirmed': return '/onboard/tips/11-payment-success.png';
         case 'failed': return '/onboard/onboard-placeholder.png';
         default: return '/onboard/onboard-placeholder.png';
       }
@@ -387,6 +408,14 @@ export default {
       loadSettlementData();
       subscribeToConfirmation();
       
+      // Show payment success celebration for first-time guests
+      if (!onboardingService.state.hasPaidFirstReceipt) {
+        setTimeout(() => {
+          showPaymentSuccessCelebration.value = true;
+          onboardingService.markFirstReceiptPaid();
+        }, 1000); // Show after 1 second to let page load
+      }
+      
       // Don't auto-request notification permission here
       // Guests don't need notifications, and hosts get prompted in ReceiptView
     });
@@ -418,6 +447,7 @@ export default {
       paymentMethodLabel,
       cashuPaymentRequest,
       showCashuModal,
+      showPaymentSuccessCelebration,
       loading,
       error,
       formatSats,
