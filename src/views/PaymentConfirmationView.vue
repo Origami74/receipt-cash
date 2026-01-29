@@ -64,11 +64,13 @@
       <div class="flex-1 overflow-y-auto p-4">
       <!-- Success Illustration -->
       <div class="flex justify-center my-8">
-        <img 
-          :src="statusImage" 
-          alt="Payment status"
-          class="w-64 h-64 object-contain"
-        />
+        <div :class="imageBorderClass">
+          <img
+            :src="statusImage"
+            alt="Payment status"
+            class="w-full max-w-md h-auto max-h-[50vh] object-contain"
+          />
+        </div>
       </div>
 
       <!-- Amount Paid -->
@@ -84,9 +86,9 @@
       <!-- Status Card -->
       <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
         <div class="flex items-start">
-          <div 
+          <div
             class="w-3 h-3 rounded-full mt-1 mr-3 flex-shrink-0"
-            :class="statusColor"
+            :class="[statusColor, status === 'pending' ? 'animate-pulse' : '']"
           ></div>
           <div class="flex-1">
             <div class="font-medium text-gray-900 mb-1">
@@ -250,10 +252,10 @@ export default {
     
     const statusImage = computed(() => {
       switch (status.value) {
-        case 'pending': return '/onboard/onboard-placeholder.png';
+        case 'pending': return '/onboard/tips/12-payment-pending.png';
         case 'confirmed': return '/onboard/tips/11-payment-success.png';
-        case 'failed': return '/onboard/onboard-placeholder.png';
-        default: return '/onboard/onboard-placeholder.png';
+        case 'failed': return '/onboard/tips/13-payment-failed.png';
+        default: return '/onboard/tips/13-payment-failed.png';
       }
     });
     
@@ -294,6 +296,20 @@ export default {
     
     const paymentMethodLabel = computed(() => {
       return paymentMethod.value === 'lightning' ? 'Lightning' : 'Cashu';
+    });
+    
+    const imageBorderClass = computed(() => {
+      const baseClasses = 'rounded-2xl p-1 inline-block';
+      switch (status.value) {
+        case 'pending':
+          return `${baseClasses} border-4 border-orange-400 shadow-lg shadow-orange-400/50 border-pulse`;
+        case 'confirmed':
+          return `${baseClasses} border-4 border-green-400 shadow-lg shadow-green-400/50`;
+        case 'failed':
+          return `${baseClasses} border-4 border-red-400 shadow-lg shadow-red-400/50`;
+        default:
+          return `${baseClasses} border-4 border-orange-400 shadow-lg shadow-orange-400/50`;
+      }
     });
     
     // Methods
@@ -365,8 +381,10 @@ export default {
         next: (confirmation) => {
           status.value = 'confirmed';
           
-          // Show browser notification if supported
-          if ('Notification' in window && Notification.permission === 'granted') {
+          // Show browser notification ONLY if app is in background (document hidden)
+          if ('Notification' in window &&
+              Notification.permission === 'granted' &&
+              document.hidden) {
             new Notification('Payment Confirmed!', {
               body: 'Your payment has been confirmed by the host.',
               icon: '/receipt-cash-logo.png'
@@ -440,6 +458,7 @@ export default {
       statusColor,
       statusLabel,
       statusMessage,
+      imageBorderClass,
       paymentAmount,
       paidItems,
       paymentMethod,
@@ -463,5 +482,23 @@ export default {
 </script>
 
 <style scoped>
-/* Add any component-specific styles here */
+@keyframes border-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(251, 146, 60, 0.3),
+      0 0 40px rgba(251, 146, 60, 0.15),
+      0 10px 15px -3px rgba(251, 146, 60, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 35px rgba(254, 215, 170, 0.9),
+      0 0 70px rgba(254, 215, 170, 0.6),
+      0 0 100px rgba(254, 215, 170, 0.3),
+      0 10px 15px -3px rgba(254, 215, 170, 0.4);
+  }
+}
+
+.border-pulse {
+  animation: border-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 </style>
