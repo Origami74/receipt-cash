@@ -32,7 +32,6 @@
       </div>
       <button
         @click="$emit('request-permission')"
-        @touchend.prevent="$emit('request-permission')"
         class="px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-lg text-white font-semibold transition-colors shadow-lg touch-manipulation"
         style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
       >
