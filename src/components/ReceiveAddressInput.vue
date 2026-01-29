@@ -82,6 +82,7 @@ export default {
     const validationResult = ref({ isValid: true, type: '', error: '' });
     const isVerifying = ref(false);
     const isInitialLoad = ref(true);
+    const lastValidatedValue = ref('');
     let verificationTimeout = null;
     
     // Load saved address on mount - always from storage
@@ -96,6 +97,9 @@ export default {
     });
     
     const validateAddress = async (address) => {
+      // Update last validated value
+      lastValidatedValue.value = address;
+      
       // Clear any pending verification
       if (verificationTimeout) {
         clearTimeout(verificationTimeout);
@@ -188,7 +192,11 @@ export default {
     };
     
     const handleChange = (event) => {
-      validateAddress(event.target.value);
+      // Only validate if value actually changed (avoid re-validation on blur)
+      if (event.target.value !== lastValidatedValue.value) {
+        lastValidatedValue.value = event.target.value;
+        validateAddress(event.target.value);
+      }
     };
     
     // Computed properties for styling
