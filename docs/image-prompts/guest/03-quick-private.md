@@ -29,33 +29,30 @@
 ## Primary Prompt
 
 ```
-Modern flat illustration, vertical mobile format. A lightning bolt icon merged with a privacy shield, with payment symbols (coins, sats) flowing through it securely. The shield has a soft purple glow, the lightning bolt has an orange glow. Subtle encryption symbols or lock icons around the shield. Clean minimalist design, purple and orange color palette, conveying speed, security, and privacy. No text, high contrast, vector-style artwork. --style flat --ar 2:3
-```
-
----
-
-## Alternative Prompt
-
-```
-Speed and privacy illustration. A smartphone with a lightning bolt on the screen, surrounded by a protective shield. Payment symbols flowing from the phone to a recipient icon, all protected by the shield. Purple and orange gradients creating a sense of security and speed. Modern flat design, clean composition, vertical orientation, conveying "fast and private". No text, professional quality. --style flat --ar 2:3
+Modern flat illustration, vertical mobile format. A guest (viewer perspective) and a host standing together inside a protective shield bubble, connected by a secure payment line. The guest is in the foreground (representing the viewer), the host is across from them, both looking confident and secure. Between them, Bitcoin (₿) and ecash/nut symbols flow along the secure connection line, with a lightning bolt showing speed. Outside the shield, other group members are shown faded/subtle in the background (less relevant). Purple and orange color palette with subtle glow from the shield. Clean minimalist design, conveying "direct private payment between you and the host, fast and secure". No text, high contrast, vector-style artwork. --style flat --ar 2:3
 ```
 
 ---
 
 ## Key Elements
 
-- Lightning bolt (speed)
-- Shield (privacy/security)
-- Payment symbols flowing securely
-- Purple/orange glow
-- Encryption/lock symbols (subtle)
-- Fast and private feeling
-- Trustworthy appearance
+- Guest in foreground (viewer perspective)
+- Host across from guest (direct connection)
+- Both inside protective shield bubble
+- Secure payment line connecting them
+- Bitcoin (₿) and ecash/nut symbols flowing
+- Lightning bolt (speed indicator)
+- Other group members faded outside/background
+- Purple glow from shield
+- Orange glow from payment flow
+- Direct one-to-one transaction focus
+- "Just you and the host" feeling
+- Fast and private payment
+- Secure, protected connection
+- Purple and orange color scheme
+- Confident, secure expressions
+- Empowering, in-control feeling
 
 ---
 
-## Output File
-
-**Location**: `public/onboard/guest/03-quick-private.png`
-**Format**: PNG with transparency
-**Size**: 800x1200 pixels (2:3 aspect ratio)
+reference image attached

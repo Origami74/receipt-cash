@@ -18,7 +18,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🎉 You're Invited!
+            You're Invited!
           </h1>
           <p class="text-lg text-gray-600">
             Someone shared a receipt with you.<br/>Let's split the bill fairly!
@@ -55,7 +55,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🧮 We Do The Math
+            We Do The Math
           </h1>
           <p class="text-lg text-gray-600">
             No calculating. No conversion rates.<br/>Just select what you had and pay.

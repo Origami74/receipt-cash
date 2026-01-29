@@ -267,10 +267,7 @@ export default {
       onboardingService.markTipSeen('PaymentMethodTip');
     };
 
-    const dismissPaymentSuccessCelebration = () => {
-      showPaymentSuccessCelebration.value = false;
-      onboardingService.markFirstReceiptPaid();
-    };
+    // Payment success celebration moved to PaymentConfirmationView
 
     // Computed properties from receiptModel
     const receiptAuthorPubkey = computed(() => receiptModel.value?.receiptModel?.event?.pubkey || '');
@@ -825,8 +822,7 @@ export default {
       showGuestWelcome,
       handleGuestWelcomeComplete,
       showItemSelectionTip,
-      showPaymentMethodTip,
-      showPaymentSuccessCelebration
+      showPaymentMethodTip
     };
   }
 };

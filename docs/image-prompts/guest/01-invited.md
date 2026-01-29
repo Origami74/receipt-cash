@@ -29,32 +29,32 @@
 ## Primary Prompt
 
 ```
-Modern flat illustration, vertical mobile format. A person happily looking at their smartphone showing a receipt invitation notification. The phone screen has a warm orange glow with a receipt icon and invitation symbol. Floating around the phone are friendly icons: fork and knife, checkmark, payment symbols. The person has a pleased, welcoming expression. Warm orange and green color palette, clean minimalist design, soft rounded shapes, professional yet approachable style. No text, high contrast, vector-style artwork. --style flat --ar 2:3
-```
-
----
-
-## Alternative Prompt
-
-```
-Welcoming invitation scene. A smartphone in the center displaying a glowing receipt with an invitation badge. Around it, floating friendly icons: utensils, checkmark, coins. Soft orange and green gradients creating a warm, inviting atmosphere. Modern flat illustration, clean composition, vertical orientation, conveying "you're welcome here" feeling. No text, professional quality. --style flat --ar 2:3
+Modern flat illustration, vertical mobile format, engaging perspective. A friendly person facing the viewer directly, holding up a glowing smartphone toward the camera/viewer as if presenting it to you. The phone screen shows a digital receipt with an invitation badge, radiating warm orange light. The person has both hands presenting the phone forward, with a warm welcoming smile and excited expression, making direct eye contact with the viewer. Around the phone, floating celebratory elements: confetti, sparkles, fork and knife icons, payment symbols, all moving toward the viewer. The composition has depth - the person and phone are in the foreground reaching out, background elements fade slightly. Creates a feeling of "here, this is for you!" or "you're invited to join us!". Warm orange and green color palette, clean minimalist design, soft rounded shapes, generous and inviting atmosphere. No text, high contrast, vector-style artwork. --style flat --ar 2:3
 ```
 
 ---
 
 ## Key Elements
 
-- Smartphone with receipt invitation
-- Warm, welcoming glow (orange)
-- Friendly icons (utensils, checkmark, payment)
-- Happy, welcoming feeling
-- Orange/green color scheme
-- Person with pleased expression (optional)
+- Person facing viewer directly (eye contact)
+- Both hands presenting phone toward viewer
+- Phone held up/forward (offering gesture)
+- Glowing digital receipt on screen
+- Invitation badge radiating orange light
+- Warm, welcoming smile
+- Excited, generous expression
+- Floating elements moving toward viewer
+- Confetti and sparkles (celebration)
+- Fork, knife, payment icons
+- Depth composition (foreground/background)
+- "Here, this is for you!" feeling
+- "You're invited to join!" atmosphere
+- Engaging, direct presentation
+- Orange and green color scheme
+- Soft rounded shapes
+- Generous, inviting, welcoming
+- Professional yet warm and friendly
 
 ---
 
-## Output File
-
-**Location**: `public/onboard/guest/01-invited.png`
-**Format**: PNG with transparency
-**Size**: 800x1200 pixels (2:3 aspect ratio)
+reference image attached
