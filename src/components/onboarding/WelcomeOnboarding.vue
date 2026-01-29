@@ -241,7 +241,7 @@ export default {
     const totalScreens = computed(() => onboardingService.hasAcceptedTerms() ? 3 : 4);
     const maxScreen = computed(() => totalScreens.value - 1);
 
-    // Auto-advance after 5 seconds (optional)
+    // Auto-advance after 10 seconds of inactivity
     const startAutoAdvance = () => {
       if (autoAdvanceTimer.value) {
         clearTimeout(autoAdvanceTimer.value);
@@ -252,7 +252,7 @@ export default {
           currentScreen.value++;
           startAutoAdvance();
         }
-      }, 5000);
+      }, 10000); // 10 seconds instead of 5
     };
 
     // Touch/swipe handlers
@@ -297,6 +297,8 @@ export default {
       if (currentScreen.value < maxScreen.value) {
         currentScreen.value++;
       }
+      // Restart auto-advance timer after manual navigation
+      startAutoAdvance();
     };
 
     const completeOnboarding = () => {
