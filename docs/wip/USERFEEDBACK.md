@@ -6,6 +6,8 @@ This document contains prioritized user feedback and feature requests for the Re
 - "Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer.", the 'split between' sounds like a massive chunk is split. change it to imply that only a small / user selected cut goes to the developer.
 - Use routstr and use user wallet funds to pay for processing
     - ppq as fallback
+- Inconsistent branding, SugarDaddy.Cash / Receipt.Cash - clarify this
+- Support other languages
 
 ## Priority 90-100 (Critical - Core Flow Blockers)
 
