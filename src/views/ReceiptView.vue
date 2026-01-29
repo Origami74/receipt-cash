@@ -318,8 +318,11 @@ export default {
 
     // Watch for notification tip dismissal to show sharing tip
     watch(showNotificationTip, (isShowing) => {
+      // Use receiptModel.isOwnedReceipt for reliable ownership check
+      const isOwned = receiptModel.value?.isOwnedReceipt || false;
+      
       if (!isShowing &&
-          isOwnedReceipt.value &&
+          isOwned &&
           onboardingService.hasSeen('NotificationTip') &&
           !onboardingService.hasSeen('SharingTip') &&
           showShareQR.value) {

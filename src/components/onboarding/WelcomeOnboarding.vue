@@ -178,8 +178,9 @@
       </div>
     </div>
 
-    <!-- Skip button (top right) -->
+    <!-- Skip button (top right) - only shown if terms already accepted -->
     <button
+      v-if="onboardingService.hasAcceptedTerms()"
       @click="skipOnboarding"
       class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 font-medium px-4 py-2 z-10"
     >
@@ -290,9 +291,12 @@ export default {
     };
 
     const skipOnboarding = () => {
-      // Skipping still requires terms acceptance
-      onboardingService.completeHostWelcome(false);
-      emit('skip');
+      // Skip only works on screens 1-3
+      // If terms already accepted, complete with terms
+      // Otherwise, complete without terms (user skipped before seeing T&C)
+      const termsAccepted = onboardingService.hasAcceptedTerms();
+      onboardingService.completeHostWelcome(termsAccepted);
+      emit('complete');
     };
 
     const handleImageError = (e) => {
