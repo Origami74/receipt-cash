@@ -1,7 +1,7 @@
 # Onboarding Implementation Status
 
 **Last Updated**: 2026-01-28
-**Status**: Phase 2 Complete (6 of 6 tips) - Ready for Testing
+**Status**: Phase 2 Complete (7 of 7 tips) - UX Issue Identified, Guest Welcome Flow Needed
 
 ## Overview
 
@@ -403,14 +403,71 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ✅ First payment celebration
 - ✅ Processing reminder (critical)
 
-**Phase 3 (Guest Onboarding)**: ✅ Complete (4 of 4 tips)
-- ✅ Guest welcome tip
+**Phase 3 (Guest Onboarding)**: ⚠️ Needs Refactoring - UX Issue Identified
+- ✅ Guest welcome tip (will be replaced)
 - ✅ Item selection tip
 - ✅ Payment method tip
 - ✅ Payment success celebration
-- 📋 Payment confirmation page (planned - see [`guest-payment-confirmation-plan.md`](guest-payment-confirmation-plan.md))
+- 🚨 **CRITICAL UX ISSUE**: Guests get 4 pop-ups when opening payment link
+  - Notification access (wrong audience)
+  - Host welcome flow (wrong audience)
+  - Experimental warning (not contextual)
+  - Guest welcome tip (redundant)
+- 📋 **Solution**: Create separate guest welcome flow (see [`guest-welcome-flow-plan.md`](guest-welcome-flow-plan.md))
 
-**Phase 4 (Advanced Features)**: ⏳ Not started
+**Phase 4 (UX Improvements)**: 🔄 In Progress
+- 📋 Create guest welcome flow (3 screens) - See plan
+- 📋 Restrict host welcome to home page only
+- 📋 Integrate experimental warning into onboarding
+- 📋 Remove redundant guest welcome tip
+- 📋 Fix notification access timing (hosts only, after welcome)
+
+**Phase 5 (Advanced Features)**: ⏳ Not started
+
+---
+
+## Recent Changes (2026-01-28)
+
+### Phase 2 Completion
+- ✅ Added developer split tip (7th tip)
+- ✅ Fixed lightning address auto-save and preload
+- ✅ Optimized receipt publishing (10-20x faster)
+- ✅ Added auto-mark-seen to ContextualTip component
+- ✅ Cleaned up all tip event handlers
+- ✅ Fixed z-index issues (increased to 100)
+
+### UX Issue Discovered
+- 🚨 Guests get 4 pop-ups when opening payment link
+- 📋 Created plan for guest welcome flow (see [`guest-welcome-flow-plan.md`](guest-welcome-flow-plan.md))
+- 📋 Need to separate host and guest onboarding experiences
+
+---
+
+## Recent Changes (2026-01-28)
+
+### Phase 2 Completion ✅
+- ✅ Added developer split tip (7th tip)
+- ✅ Fixed lightning address auto-save and preload
+- ✅ Optimized receipt publishing (10-20x faster, parallel execution)
+- ✅ Added auto-mark-seen to ContextualTip component
+- ✅ Cleaned up all tip event handlers (removed 6+ custom handlers)
+- ✅ Fixed z-index issues (increased to 100)
+- ✅ Simplified ReceiveAddressInput (removed complex watchers)
+
+### UX Issue Discovered 🚨
+- 🚨 Guests get 4 simultaneous pop-ups when opening payment link
+- 📋 Created comprehensive plan: [`guest-welcome-flow-plan.md`](guest-welcome-flow-plan.md)
+- 📋 Created image prompts: [`docs/image-prompts/guest/`](../image-prompts/guest/)
+  - `01-invited.md` - You're Invited screen
+  - `02-math.md` - We Do The Math screen
+  - `03-quick-private.md` - Quick & Private screen
+- 📋 Need to separate host and guest onboarding experiences
+
+### Technical Improvements
+- **Performance**: Receipt publishing now returns in ~500ms-1s (was 5-10+ seconds)
+- **Code Quality**: Removed 6+ custom event handlers, consistent patterns
+- **Component Design**: ContextualTip and ReceiveAddressInput are now self-contained
+- **State Management**: Auto-mark-seen reduces boilerplate
 
 ---
 
