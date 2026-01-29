@@ -25,6 +25,13 @@
           </p>
         </div>
         
+        <button
+          @click="nextScreen"
+          class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20 mb-4"
+        >
+          Next →
+        </button>
+        
         <div class="flex items-center space-x-2 mb-4">
           <div
             v-for="i in totalScreens"
@@ -54,6 +61,13 @@
             Create a digital receipt, share it,<br/>and get paid automatically
           </p>
         </div>
+        
+        <button
+          @click="nextScreen"
+          class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20 mb-4"
+        >
+          Next →
+        </button>
         
         <div class="flex items-center space-x-2 mb-4">
           <div
@@ -85,16 +99,24 @@
           </p>
         </div>
         
+        <!-- Show "Next" button if there's a 4th screen (T&C), otherwise show "Get Started" -->
+        <button
+          v-if="!onboardingService.hasAcceptedTerms()"
+          @click="nextScreen"
+          class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20 mb-4"
+        >
+          Next →
+        </button>
         
         <button
-          v-if="onboardingService.hasAcceptedTerms()"
+          v-else
           @click="completeOnboarding"
-          class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20"
+          class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20 mb-4"
         >
           Get Started →
         </button>
         
-        <div class="flex items-center space-x-2 mt-4">
+        <div class="flex items-center space-x-2">
           <div
             v-for="i in totalScreens"
             :key="i"
