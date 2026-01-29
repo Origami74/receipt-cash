@@ -10,9 +10,6 @@
     <!-- Tab blocked overlay -->
     <TabBlockedOverlay v-if="isTabBlocked" />
     
-    <!-- Experimental warning banner -->
-    <ExperimentalModal />
-    
     <!-- Global notification component -->
     <Notification
       v-if="notification"
@@ -56,7 +53,6 @@ import { useRoute } from 'vue-router';
 import { showNotification, useNotification } from './services/notificationService';
 import { onboardingService } from './services/onboardingService';
 import Notification from './components/Notification.vue';
-import ExperimentalModal from './components/ExperimentalModal.vue';
 import ReportModal from './components/ReportModal.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
@@ -71,7 +67,6 @@ export default {
   name: 'App',
   components: {
     Notification,
-    ExperimentalModal,
     ReportModal,
     BottomTabBar,
     SettingsMenu,

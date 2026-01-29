@@ -12,6 +12,8 @@ const DEFAULT_STATE = {
   hasSeenGuestWelcome: false,     // Guest welcome flow (pay receipts)
   hostWelcomeCompletedAt: null,
   guestWelcomeCompletedAt: null,
+  hasAcceptedTerms: false,        // User accepted experimental warning & terms
+  termsAcceptedAt: null,
   
   // Receipt creation
   hasCreatedFirstReceipt: false,
@@ -102,21 +104,36 @@ class OnboardingService {
   /**
    * Mark host welcome screens as completed
    */
-  completeHostWelcome() {
+  completeHostWelcome(hasAcceptedTerms = false) {
     this.state.hasSeenHostWelcome = true;
     this.state.hostWelcomeCompletedAt = Date.now();
+    if (hasAcceptedTerms) {
+      this.state.hasAcceptedTerms = true;
+      this.state.termsAcceptedAt = Date.now();
+    }
     this.saveState();
-    console.log('✅ Host welcome onboarding completed');
+    console.log('✅ Host welcome onboarding completed', { hasAcceptedTerms });
   }
 
   /**
    * Mark guest welcome screens as completed
    */
-  completeGuestWelcome() {
+  completeGuestWelcome(hasAcceptedTerms = false) {
     this.state.hasSeenGuestWelcome = true;
     this.state.guestWelcomeCompletedAt = Date.now();
+    if (hasAcceptedTerms) {
+      this.state.hasAcceptedTerms = true;
+      this.state.termsAcceptedAt = Date.now();
+    }
     this.saveState();
-    console.log('✅ Guest welcome onboarding completed');
+    console.log('✅ Guest welcome onboarding completed', { hasAcceptedTerms });
+  }
+
+  /**
+   * Check if user has accepted terms
+   */
+  hasAcceptedTerms() {
+    return this.state.hasAcceptedTerms;
   }
 
   /**

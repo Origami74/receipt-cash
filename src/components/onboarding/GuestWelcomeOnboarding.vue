@@ -26,8 +26,8 @@
         </div>
         
         <div class="flex items-center space-x-2 mb-4">
-          <div 
-            v-for="i in 3" 
+          <div
+            v-for="i in totalScreens"
             :key="i"
             class="h-2 rounded-full transition-all"
             :class="currentScreen === i - 1 ? 'w-8 bg-orange-500' : 'w-2 bg-gray-300'"
@@ -56,8 +56,8 @@
         </div>
         
         <div class="flex items-center space-x-2 mb-4">
-          <div 
-            v-for="i in 3" 
+          <div
+            v-for="i in totalScreens"
             :key="i"
             class="h-2 rounded-full transition-all"
             :class="currentScreen === i - 1 ? 'w-8 bg-orange-500' : 'w-2 bg-gray-300'"
@@ -85,7 +85,9 @@
           </p>
         </div>
         
+        
         <button
+          v-if="onboardingService.hasAcceptedTerms()"
           @click="completeOnboarding"
           class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20"
         >
@@ -93,8 +95,81 @@
         </button>
         
         <div class="flex items-center space-x-2 mt-4">
-          <div 
-            v-for="i in 3" 
+          <div
+            v-for="i in totalScreens"
+            :key="i"
+            class="h-2 rounded-full transition-all"
+            :class="currentScreen === i - 1 ? 'w-8 bg-orange-500' : 'w-2 bg-gray-300'"
+          />
+        </div>
+      </div>
+
+      <!-- Screen 4: Terms & Experimental Warning (only if not already accepted) -->
+      <div v-if="!onboardingService.hasAcceptedTerms()" class="min-w-full h-full flex flex-col items-center justify-center p-8">
+        <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md space-y-5">
+          <!-- Icon -->
+          <div class="text-6xl">⚠️</div>
+          
+          <h1 class="text-2xl font-bold text-gray-900 text-center">
+            Before You Pay
+          </h1>
+          
+          <div class="space-y-3 text-sm text-gray-700 w-full">
+            <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <p class="font-semibold text-orange-900 mb-2">🧪 Experimental Software</p>
+              <p class="text-orange-800">
+                Receipt.Cash is in active development. Features may change, and bugs may occur.
+              </p>
+            </div>
+            
+            <div class="bg-red-50 rounded-lg p-4 border border-red-200">
+              <p class="font-semibold text-red-900 mb-2">💸 No Refunds</p>
+              <p class="text-red-800">
+                Payments are final. Only send money you can afford to lose. Test with small amounts first.
+              </p>
+            </div>
+            
+            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p class="font-semibold text-blue-900 mb-2">🔐 Your Responsibility</p>
+              <p class="text-blue-800">
+                You control your keys and funds. Keep your device secure and back up your data.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Toggle Switch for Terms Acceptance -->
+          <div class="w-full pt-2">
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <div class="relative mt-0.5">
+                <input
+                  v-model="hasAcceptedTerms"
+                  type="checkbox"
+                  class="sr-only peer"
+                />
+                <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-orange-500 transition-colors"></div>
+                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+              </div>
+              <span class="text-sm text-gray-700 select-none leading-relaxed">
+                I understand the risks and accept full responsibility for using this experimental service
+              </span>
+            </label>
+          </div>
+        </div>
+        
+        <button
+          @click="completeOnboarding"
+          :disabled="!hasAcceptedTerms"
+          class="w-full max-w-sm font-semibold py-4 px-8 rounded-lg transition-all shadow-lg relative z-20"
+          :class="hasAcceptedTerms
+            ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'"
+        >
+          {{ hasAcceptedTerms ? 'Let\'s Go! →' : 'Accept Terms to Continue' }}
+        </button>
+        
+        <div class="flex items-center space-x-2 mt-4">
+          <div
+            v-for="i in totalScreens"
             :key="i"
             class="h-2 rounded-full transition-all"
             :class="currentScreen === i - 1 ? 'w-8 bg-orange-500' : 'w-2 bg-gray-300'"
@@ -125,7 +200,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onboardingService } from '../../services/onboardingService';
 
 export default {
@@ -137,6 +212,11 @@ export default {
     const touchEndX = ref(0);
     const isDragging = ref(false);
     const autoAdvanceTimer = ref(null);
+    const hasAcceptedTerms = ref(false);
+    
+    // Total screens depends on whether terms are already accepted
+    const totalScreens = computed(() => onboardingService.hasAcceptedTerms() ? 3 : 4);
+    const maxScreen = computed(() => totalScreens.value - 1);
 
     // Auto-advance after 5 seconds (optional)
     const startAutoAdvance = () => {
@@ -145,7 +225,7 @@ export default {
       }
       
       autoAdvanceTimer.value = setTimeout(() => {
-        if (currentScreen.value < 2) {
+        if (currentScreen.value < maxScreen.value) {
           currentScreen.value++;
           startAutoAdvance();
         }
@@ -176,7 +256,7 @@ export default {
       const threshold = 50; // Minimum swipe distance
 
       if (Math.abs(diff) > threshold) {
-        if (diff > 0 && currentScreen.value < 2) {
+        if (diff > 0 && currentScreen.value < maxScreen.value) {
           // Swipe left - next screen
           currentScreen.value++;
         } else if (diff < 0 && currentScreen.value > 0) {
@@ -190,13 +270,28 @@ export default {
       touchEndX.value = 0;
     };
 
+    const nextScreen = () => {
+      if (currentScreen.value < maxScreen.value) {
+        currentScreen.value++;
+      }
+    };
+
     const completeOnboarding = () => {
-      onboardingService.completeGuestWelcome();
+      // If terms already accepted, just complete
+      if (onboardingService.hasAcceptedTerms()) {
+        onboardingService.completeGuestWelcome(true);
+        emit('complete');
+        return;
+      }
+      // Otherwise, require terms acceptance
+      if (!hasAcceptedTerms.value) return;
+      onboardingService.completeGuestWelcome(hasAcceptedTerms.value);
       emit('complete');
     };
 
     const skipOnboarding = () => {
-      onboardingService.completeGuestWelcome();
+      // Skipping still requires terms acceptance
+      onboardingService.completeGuestWelcome(false);
       emit('skip');
     };
 
@@ -222,9 +317,13 @@ export default {
 
     return {
       currentScreen,
+      totalScreens,
+      hasAcceptedTerms,
+      onboardingService,
       handleTouchStart,
       handleTouchMove,
       handleTouchEnd,
+      nextScreen,
       completeOnboarding,
       skipOnboarding,
       handleImageError
