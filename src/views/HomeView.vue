@@ -109,6 +109,7 @@ export default {
     const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
     const cameraInitializing = ref(false);
+    const isRequestingCameraPermission = ref(false); // Guard flag to prevent concurrent requests
     
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
@@ -117,7 +118,14 @@ export default {
     const showCameraTip = ref(false);
     
     const requestCameraPermission = async () => {
+      // Prevent concurrent permission requests
+      if (isRequestingCameraPermission.value) {
+        console.log('⚠️ Camera permission request already in progress, skipping duplicate');
+        return;
+      }
+      
       try {
+        isRequestingCameraPermission.value = true;
         cameraInitializing.value = true;
         console.log('Requesting camera permission...');
         
@@ -153,6 +161,8 @@ export default {
         
         hasPermission.value = false;
         cameraInitializing.value = false;
+      } finally {
+        isRequestingCameraPermission.value = false;
       }
     };
 
