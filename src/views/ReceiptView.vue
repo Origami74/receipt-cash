@@ -52,7 +52,7 @@
       <ContextualTip
         :show="showProcessingReminder"
         tip-name="ProcessingReminder"
-        image="/onboard/screen-8-your-phone-processes.png"
+        image="/onboard/tips/08-processing-reminder.png"
         title="💡 Your Phone Processes Payments"
         description="Important: Your phone needs to be online to process incoming payments. Keep the app open or return regularly to process pending payments. You can view what's being processed in the Activity tab."
         :bullets="['Your phone is the payment processor', 'Keep app open when expecting payments', 'Return regularly to process', 'Payments queue until you return']"

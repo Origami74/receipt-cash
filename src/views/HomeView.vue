@@ -10,10 +10,10 @@
       <ContextualTip
         :show="showCameraTip"
         tip-name="CameraTip"
-        image="/onboard/screen-4-photo-manual.png"
-        title="Create Receipt"
+        image="/onboard/tips/02-camera.png"
+        title="Capture Receipt"
         description="Take a clear photo of your receipt - our AI will extract items automatically!"
-        :bullets="['Point camera at receipt', 'Ensure good lighting', 'Tap capture button', 'Or upload from gallery']"
+        :bullets="['Point camera at receipt', 'Ensure good lighting', 'Tap capture button']"
         primary-button-text="Got it!"
         @dismiss="showCameraTip = false"
       />
