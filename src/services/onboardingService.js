@@ -7,9 +7,11 @@ const ONBOARDING_STATE_KEY = 'receipt-cash-onboarding-state';
 
 // Default onboarding state
 const DEFAULT_STATE = {
-  // Welcome screens
-  hasSeenWelcome: false,
-  welcomeCompletedAt: null,
+  // Welcome screens - separate tracking for host and guest
+  hasSeenHostWelcome: false,      // Host welcome flow (create receipts)
+  hasSeenGuestWelcome: false,     // Guest welcome flow (pay receipts)
+  hostWelcomeCompletedAt: null,
+  guestWelcomeCompletedAt: null,
   
   // Receipt creation
   hasCreatedFirstReceipt: false,
@@ -30,7 +32,6 @@ const DEFAULT_STATE = {
   
   // Guest flow
   hasPaidFirstReceipt: false,
-  hasSeenGuestWelcomeTip: false,
   hasSeenItemSelectionTip: false,
   hasSeenPaymentMethodTip: false,
   hasSeenLightningExplanation: false,
@@ -82,20 +83,37 @@ class OnboardingService {
   }
 
   /**
-   * Check if user has seen welcome screens
+   * Check if user has seen host welcome screens
    */
-  hasSeenWelcome() {
-    return this.state.hasSeenWelcome;
+  hasSeenHostWelcome() {
+    return this.state.hasSeenHostWelcome;
   }
 
   /**
-   * Mark welcome screens as completed
+   * Check if user has seen guest welcome screens
    */
-  completeWelcome() {
-    this.state.hasSeenWelcome = true;
-    this.state.welcomeCompletedAt = Date.now();
+  hasSeenGuestWelcome() {
+    return this.state.hasSeenGuestWelcome;
+  }
+
+  /**
+   * Mark host welcome screens as completed
+   */
+  completeHostWelcome() {
+    this.state.hasSeenHostWelcome = true;
+    this.state.hostWelcomeCompletedAt = Date.now();
     this.saveState();
-    console.log('✅ Welcome onboarding completed');
+    console.log('✅ Host welcome onboarding completed');
+  }
+
+  /**
+   * Mark guest welcome screens as completed
+   */
+  completeGuestWelcome() {
+    this.state.hasSeenGuestWelcome = true;
+    this.state.guestWelcomeCompletedAt = Date.now();
+    this.saveState();
+    console.log('✅ Guest welcome onboarding completed');
   }
 
   /**

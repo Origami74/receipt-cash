@@ -324,7 +324,7 @@ export default {
       
       // Show camera tip if first time and welcome is complete
       if (!receiptId.value &&
-          onboardingService.hasSeenWelcome() &&
+          onboardingService.hasSeenHostWelcome() &&
           !onboardingService.hasSeen('CameraTip')) {
         // Delay to let camera initialize first
         setTimeout(() => {

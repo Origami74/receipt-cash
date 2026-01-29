@@ -26,15 +26,19 @@
 
 ---
 
-## Image Prompt
+## Primary Prompt
 
-Modern flat illustration, vertical mobile format. A lightning bolt icon merged with a privacy shield, with payment symbols (coins, sats) flowing through it securely. The shield has a soft purple glow, the lightning bolt has an orange glow. Subtle encryption symbols or lock icons around the shield. Clean minimalist design, purple and orange color palette, conveying speed, security, and privacy. No text, transparent background, high contrast, vector-style artwork.
+```
+Modern flat illustration, vertical mobile format. A lightning bolt icon merged with a privacy shield, with payment symbols (coins, sats) flowing through it securely. The shield has a soft purple glow, the lightning bolt has an orange glow. Subtle encryption symbols or lock icons around the shield. Clean minimalist design, purple and orange color palette, conveying speed, security, and privacy. No text, high contrast, vector-style artwork. --style flat --ar 2:3
+```
 
 ---
 
 ## Alternative Prompt
 
-Speed and privacy illustration. A smartphone with a lightning bolt on the screen, surrounded by a protective shield. Payment symbols flowing from the phone to a recipient icon, all protected by the shield. Purple and orange gradients creating a sense of security and speed. Modern flat design, clean composition, vertical orientation, conveying "fast and private". No text, professional quality.
+```
+Speed and privacy illustration. A smartphone with a lightning bolt on the screen, surrounded by a protective shield. Payment symbols flowing from the phone to a recipient icon, all protected by the shield. Purple and orange gradients creating a sense of security and speed. Modern flat design, clean composition, vertical orientation, conveying "fast and private". No text, professional quality. --style flat --ar 2:3
+```
 
 ---
 
@@ -50,14 +54,8 @@ Speed and privacy illustration. A smartphone with a lightning bolt on the screen
 
 ---
 
-## Negative Prompts
-
-text, words, letters, numbers, realistic photography, 3D render, complex gradients, shadows, complex details, cluttered composition, dark colors, low contrast, blurry, distorted, ugly, low quality, watermark, signature
-
----
-
 ## Output File
 
 **Location**: `public/onboard/guest/03-quick-private.png`
 **Format**: PNG with transparency
-**Size**: 800x1200 pixels
+**Size**: 800x1200 pixels (2:3 aspect ratio)

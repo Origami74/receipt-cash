@@ -1,7 +1,7 @@
 # Onboarding Implementation Status
 
-**Last Updated**: 2026-01-28
-**Status**: Phase 2 Complete (7 of 7 tips) - UX Issue Identified, Guest Welcome Flow Needed
+**Last Updated**: 2026-01-29
+**Status**: Phase 3 Complete - Guest Welcome Flow Implemented ✅
 
 ## Overview
 
@@ -174,11 +174,11 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ✅ Responsive design
 - ✅ Icon and bullet point support
 
-### ✅ Phase 3: Guest Onboarding (COMPLETE)
+### ✅ Phase 3: Guest Onboarding (COMPLETE - Refactored)
 
 **Goal**: Guide guests through the payment process when they open a receipt link.
 
-**Status**: Fully implemented - 4 of 4 tips complete
+**Status**: Fully implemented with separate welcome flow - UX issue resolved ✅
 
 **Components Modified**:
 - [`src/services/onboardingService.js`](../../src/services/onboardingService.js) - Added guest state flags
@@ -194,18 +194,32 @@ This document tracks the progress of implementing the onboarding flow for Receip
   - Sequential tip flow with proper timing
   - Real-time status updates via watchers
 
-**Implemented Tips**:
+**Implemented Components**:
 
-1. ✅ **Guest Welcome Tip** (Receipt opened)
+1. ✅ **Guest Welcome Flow** (3-screen onboarding)
+   - Component: [`src/components/onboarding/GuestWelcomeOnboarding.vue`](../../src/components/onboarding/GuestWelcomeOnboarding.vue)
    - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
-   - Trigger: First time opening a shared receipt
-   - Timing: 1 second after page loads
-   - Image: `/onboard/onboard-placeholder.png`
-   - Title: "You're Invited!"
-   - Description: "Someone shared a receipt with you. Select the items you had and pay your share."
-   - State key: `GuestWelcomeTip`
+   - Trigger: First time opening a payment link (`/pay/...`)
+   - Timing: Immediately on page load
+   - State key: `hasSeenGuestWelcome`
+   
+   **Screen 1: You're Invited!**
+   - Image: `/onboard/guest-welcome-1-invited.png`
+   - Title: "🎉 You're Invited!"
+   - Description: "Someone shared a receipt with you. Let's split the bill fairly!"
+   
+   **Screen 2: We Do The Math**
+   - Image: `/onboard/guest-welcome-2-math.png`
+   - Title: "🧮 We Do The Math"
+   - Description: "No calculating. No conversion rates. Just select what you had and pay."
+   
+   **Screen 3: Quick & Private**
+   - Image: `/onboard/guest-welcome-3-quick-private.png`
+   - Title: "⚡️ Quick & Private"
+   - Description: "Pay your share in seconds. Private, secure, and direct to the host."
+   - Action: "Let's Go! →" button
 
-2. ✅ **Item Selection Tip** (After welcome dismissed)
+2. ✅ **Item Selection Tip** (After welcome flow completed)
    - Location: [`src/views/PaymentView.vue`](../../src/views/PaymentView.vue)
    - Trigger: After welcome tip dismissed
    - Timing: 300ms after welcome tip
@@ -233,26 +247,44 @@ This document tracks the progress of implementing the onboarding flow for Receip
    - State key: `FirstPaymentCelebration`
    - Special: Marks `hasPaidFirstReceipt` in onboarding state
 
-**Bug Fixes**:
-- ✅ Fixed host payment celebration to only show for owned receipts
-  - Added `isOwnedReceipt` computed property in [`src/views/ReceiptView.vue`](../../src/views/ReceiptView.vue)
-  - Imported `ownedReceiptsStorageManager` to verify ownership
-  - Guests no longer see host's payment celebration
+**Implementation Details**:
+- ✅ Separate welcome flows for hosts and guests
+  - Host welcome: Only shows on home page (`/`)
+  - Guest welcome: Only shows on payment pages (`/pay/...`)
+  - No more overlapping or redundant pop-ups
+  
+- ✅ Updated onboarding service
+  - Added `hasSeenHostWelcome` and `hasSeenGuestWelcome` state
+  - Added `completeHostWelcome()` and `completeGuestWelcome()` methods
+  - Removed deprecated `hasSeenGuestWelcomeTip` (replaced by full welcome flow)
+  
+- ✅ Fixed UX issues
+  - Removed redundant "You're Invited" contextual tip
+  - Guest welcome flow replaces single tip with 3-screen onboarding
+  - Host welcome restricted to home page only
+  - No more 4 simultaneous pop-ups for guests
 
 **Features Implemented**:
-- ✅ Professional images instead of emoji icons
+- ✅ Swipeable 3-screen welcome flow for guests
+- ✅ Auto-advance after 5 seconds (optional)
+- ✅ Skip button functionality
+- ✅ Progress indicators (animated dots)
 - ✅ Sequential tip flow (welcome → item selection → payment method → success)
 - ✅ Proper timing delays between tips
 - ✅ State persistence via onboardingService
 - ✅ Watchers for real-time tip triggering
-- ✅ One tip at a time (no conflicts)
+- ✅ One onboarding element at a time (no conflicts)
+- ✅ Separate state tracking for host and guest flows
 
-**Future Enhancement**:
-- 📋 Payment Confirmation Page - See [`docs/wip/guest-payment-confirmation-plan.md`](guest-payment-confirmation-plan.md)
-  - Route: `/receipt/:receiptEventId/:decryptionKey/confirmation/:settlementEventId`
-  - Clear "you're done" page like Tikkie/Venmo
-  - Real-time status updates (pending → confirmed)
-  - Payment details summary
+**Images Needed** (Placeholders currently used):
+- 📋 `/onboard/guest-welcome-1-invited.png` - Person receiving invitation
+- 📋 `/onboard/guest-welcome-2-math.png` - Calculator with automatic conversion
+- 📋 `/onboard/guest-welcome-3-quick-private.png` - Lightning bolt with privacy shield
+
+**Image Prompts Available**:
+- See [`docs/image-prompts/guest/01-invited.md`](../image-prompts/guest/01-invited.md)
+- See [`docs/image-prompts/guest/02-math.md`](../image-prompts/guest/02-math.md)
+- See [`docs/image-prompts/guest/03-quick-private.md`](../image-prompts/guest/03-quick-private.md)
 
 ### 🔄 Phase 4: Advanced Features (PLANNED)
 
@@ -403,30 +435,63 @@ This document tracks the progress of implementing the onboarding flow for Receip
 - ✅ First payment celebration
 - ✅ Processing reminder (critical)
 
-**Phase 3 (Guest Onboarding)**: ⚠️ Needs Refactoring - UX Issue Identified
-- ✅ Guest welcome tip (will be replaced)
+**Phase 3 (Guest Onboarding)**: ✅ Complete - UX Issue Resolved
+- ✅ Guest welcome flow (3 screens, swipeable)
 - ✅ Item selection tip
 - ✅ Payment method tip
 - ✅ Payment success celebration
-- 🚨 **CRITICAL UX ISSUE**: Guests get 4 pop-ups when opening payment link
-  - Notification access (wrong audience)
-  - Host welcome flow (wrong audience)
-  - Experimental warning (not contextual)
-  - Guest welcome tip (redundant)
-- 📋 **Solution**: Create separate guest welcome flow (see [`guest-welcome-flow-plan.md`](guest-welcome-flow-plan.md))
+- ✅ **UX ISSUE RESOLVED**: Separate welcome flows for hosts and guests
+  - Host welcome: Only on home page (`/`)
+  - Guest welcome: Only on payment pages (`/pay/...`)
+  - No more overlapping pop-ups
+  - Clean, focused experience for each user type
 
-**Phase 4 (UX Improvements)**: 🔄 In Progress
-- 📋 Create guest welcome flow (3 screens) - See plan
-- 📋 Restrict host welcome to home page only
-- 📋 Integrate experimental warning into onboarding
-- 📋 Remove redundant guest welcome tip
+**Phase 4 (Polish & Images)**: 📋 Pending
+- 📋 Generate guest welcome images (3 images needed)
+- 📋 Integrate experimental warning contextually
 - 📋 Fix notification access timing (hosts only, after welcome)
+- 📋 User testing and feedback collection
 
 **Phase 5 (Advanced Features)**: ⏳ Not started
 
 ---
 
-## Recent Changes (2026-01-28)
+## Recent Changes (2026-01-29)
+
+### Guest Welcome Flow Implementation ✅
+- ✅ Created [`GuestWelcomeOnboarding.vue`](../../src/components/onboarding/GuestWelcomeOnboarding.vue)
+  - 3-screen swipeable onboarding flow
+  - Auto-advance, skip button, progress indicators
+  - Guest-specific content and messaging
+  
+- ✅ Updated [`onboardingService.js`](../../src/services/onboardingService.js)
+  - Added `hasSeenHostWelcome` and `hasSeenGuestWelcome` state
+  - Added `completeHostWelcome()` and `completeGuestWelcome()` methods
+  - Removed deprecated `hasSeenGuestWelcomeTip`
+  - Clean slate approach (no migration needed)
+  
+- ✅ Updated [`App.vue`](../../src/App.vue)
+  - Restricted host welcome to home page only (`/`)
+  - Added `isHomePage` computed property
+  - Renamed `showWelcomeOnboarding` to `showHostWelcome`
+  - Fixed tab bar visibility during onboarding
+  
+- ✅ Updated [`PaymentView.vue`](../../src/views/PaymentView.vue)
+  - Integrated `GuestWelcomeOnboarding` component
+  - Removed redundant "You're Invited" contextual tip
+  - Updated onboarding logic to use `hasSeenGuestWelcome()`
+  - Sequential flow: welcome → item selection → payment method → success
+
+### UX Improvements
+- ✅ **Problem Solved**: Guests no longer get 4 simultaneous pop-ups
+- ✅ **Before**: Notification + Host Welcome + Experimental + Guest Tip
+- ✅ **After**: Clean 3-screen guest welcome flow (skippable)
+- ✅ Host and guest experiences are now properly separated
+- ✅ Each user type sees only relevant onboarding content
+
+---
+
+## Previous Changes (2026-01-28)
 
 ### Phase 2 Completion
 - ✅ Added developer split tip (7th tip)
@@ -474,4 +539,4 @@ This document tracks the progress of implementing the onboarding flow for Receip
 **Contributors**: Roo (AI Assistant)
 **Project**: Receipt.Cash
 **Repository**: receipt-cash
-**Last Updated**: 2026-01-28
+**Last Updated**: 2026-01-29

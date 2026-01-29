@@ -7,23 +7,14 @@
     retryButtonText="Try Again"
     @retry="fetchReceipt"
   >
-    <!-- Guest Onboarding Tips -->
-    <ContextualTip
-      :show="showGuestWelcomeTip"
-      tip-name="GuestWelcomeTip"
-      image="/onboard/onboard-placeholder.png"
-      title="You're Invited!"
-      description="Someone shared a receipt with you. Select the items you had and pay your share."
-      :bullets="[
-        'Select items you ordered',
-        'Choose payment method',
-        'Pay your share',
-        'Done! Host gets reimbursed'
-      ]"
-      primary-button-text="Got it!"
-      @dismiss="showGuestWelcomeTip = false"
+    <!-- Guest Welcome Onboarding (shows first on payment page) -->
+    <GuestWelcomeOnboarding
+      v-if="showGuestWelcome"
+      @complete="handleGuestWelcomeComplete"
+      @skip="handleGuestWelcomeComplete"
     />
 
+    <!-- Guest Onboarding Tips -->
     <ContextualTip
       :show="showItemSelectionTip"
       tip-name="ItemSelectionTip"
@@ -176,6 +167,7 @@ import LightningPaymentModal from '../components/LightningPaymentModal.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import ContextualTip from '../components/onboarding/ContextualTip.vue';
+import GuestWelcomeOnboarding from '../components/onboarding/GuestWelcomeOnboarding.vue';
 import { showNotification, useNotification } from '../services/notificationService';
 import { onboardingService } from '../services/onboardingService';
 import { convertFromSats } from '../utils/pricingUtils';
@@ -206,7 +198,8 @@ export default {
     LightningPaymentModal,
     LoadingErrorWrapper,
     SettingsMenu,
-    ContextualTip
+    ContextualTip,
+    GuestWelcomeOnboarding
   },
   props: {
     eventId: {
@@ -255,7 +248,7 @@ export default {
     let confirmationSubscription = null;
 
     // Guest onboarding state
-    const showGuestWelcomeTip = ref(false);
+    const showGuestWelcome = ref(false);
     const showItemSelectionTip = ref(false);
     const showPaymentMethodTip = ref(false);
     const showPaymentSuccessCelebration = ref(false);
@@ -267,11 +260,11 @@ export default {
     const loading = computed(() => receiptModel.value === null);
 
     // Guest onboarding methods
-    const dismissGuestWelcomeTip = () => {
-      showGuestWelcomeTip.value = false;
-      onboardingService.markTipSeen('GuestWelcomeTip');
+    const handleGuestWelcomeComplete = () => {
+      showGuestWelcome.value = false;
+      onboardingService.completeGuestWelcome();
       
-      // Show item selection tip after welcome tip is dismissed
+      // Show item selection tip after welcome flow is completed
       if (!onboardingService.hasSeen('ItemSelectionTip')) {
         setTimeout(() => {
           showItemSelectionTip.value = true;
@@ -773,11 +766,9 @@ export default {
     onMounted(() => {
       fetchReceipt();
       
-      // Show guest welcome tip on first visit
-      if (!onboardingService.hasSeen('GuestWelcomeTip')) {
-        setTimeout(() => {
-          showGuestWelcomeTip.value = true;
-        }, 1000);
+      // Show guest welcome flow on first visit
+      if (!onboardingService.hasSeenGuestWelcome()) {
+        showGuestWelcome.value = true;
       }
     });
 
@@ -787,7 +778,7 @@ export default {
           !onboardingService.hasSeen('PaymentMethodTip') &&
           !showPaymentMethodTip.value &&
           !showItemSelectionTip.value &&
-          !showGuestWelcomeTip.value) {
+          !showGuestWelcome.value) {
         setTimeout(() => {
           showPaymentMethodTip.value = true;
         }, 500);
@@ -855,7 +846,8 @@ export default {
       navigateToConfirmation,
       fetchReceipt,
       // Guest onboarding
-      showGuestWelcomeTip,
+      showGuestWelcome,
+      handleGuestWelcomeComplete,
       showItemSelectionTip,
       showPaymentMethodTip,
       showPaymentSuccessCelebration

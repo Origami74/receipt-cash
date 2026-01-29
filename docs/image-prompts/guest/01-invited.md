@@ -26,15 +26,19 @@
 
 ---
 
-## Image Prompt
+## Primary Prompt
 
-Modern flat illustration, vertical mobile format. A person happily looking at their smartphone showing a receipt invitation notification. The phone screen has a warm orange glow with a receipt icon and invitation symbol. Floating around the phone are friendly icons: fork and knife, checkmark, payment symbols. The person has a pleased, welcoming expression. Warm orange and green color palette, clean minimalist design, soft rounded shapes, professional yet approachable style. No text, transparent background, high contrast, vector-style artwork.
+```
+Modern flat illustration, vertical mobile format. A person happily looking at their smartphone showing a receipt invitation notification. The phone screen has a warm orange glow with a receipt icon and invitation symbol. Floating around the phone are friendly icons: fork and knife, checkmark, payment symbols. The person has a pleased, welcoming expression. Warm orange and green color palette, clean minimalist design, soft rounded shapes, professional yet approachable style. No text, high contrast, vector-style artwork. --style flat --ar 2:3
+```
 
 ---
 
 ## Alternative Prompt
 
-Welcoming invitation scene. A smartphone in the center displaying a glowing receipt with an invitation badge. Around it, floating friendly icons: utensils, checkmark, coins. Soft orange and green gradients creating a warm, inviting atmosphere. Modern flat illustration, clean composition, vertical orientation, conveying "you're welcome here" feeling. No text, high contrast, professional quality.
+```
+Welcoming invitation scene. A smartphone in the center displaying a glowing receipt with an invitation badge. Around it, floating friendly icons: utensils, checkmark, coins. Soft orange and green gradients creating a warm, inviting atmosphere. Modern flat illustration, clean composition, vertical orientation, conveying "you're welcome here" feeling. No text, professional quality. --style flat --ar 2:3
+```
 
 ---
 
@@ -49,14 +53,8 @@ Welcoming invitation scene. A smartphone in the center displaying a glowing rece
 
 ---
 
-## Negative Prompts
-
-text, words, letters, numbers, realistic photography, 3D render, complex gradients, shadows, complex details, cluttered composition, dark colors, low contrast, blurry, distorted, ugly, low quality, watermark, signature
-
----
-
 ## Output File
 
 **Location**: `public/onboard/guest/01-invited.png`
 **Format**: PNG with transparency
-**Size**: 800x1200 pixels
+**Size**: 800x1200 pixels (2:3 aspect ratio)

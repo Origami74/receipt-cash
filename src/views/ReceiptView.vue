@@ -235,7 +235,7 @@ export default {
       });
       
       // Show sharing tip if first time
-      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('SharingTip')) {
+      if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('SharingTip')) {
         setTimeout(() => {
           showSharingTip.value = true;
         }, 500);
@@ -293,7 +293,7 @@ export default {
           if (currentConfirmedCount > previousConfirmedCount.value && isOwnedReceipt.value) {
             // New payment confirmed on OUR receipt!
             if (!onboardingService.state.hasReceivedFirstPayment &&
-                onboardingService.hasSeenWelcome()) {
+                onboardingService.hasSeenHostWelcome()) {
               // Show celebration for first payment
               setTimeout(() => {
                 showFirstPaymentCelebration.value = true;
@@ -307,7 +307,7 @@ export default {
           if (hasPendingPayments &&
               isOwnedReceipt.value &&
               !onboardingService.hasSeen('ProcessingReminder') &&
-              onboardingService.hasSeenWelcome()) {
+              onboardingService.hasSeenHostWelcome()) {
             // Show processing reminder after a delay
             setTimeout(() => {
               showProcessingReminder.value = true;

@@ -1,10 +1,10 @@
 <template>
   <div class="h-full flex flex-col">
-    <!-- Welcome Onboarding (shows first, blocks everything) -->
+    <!-- Host Welcome Onboarding (shows first on home page only) -->
     <WelcomeOnboarding
-      v-if="showWelcomeOnboarding"
-      @complete="handleWelcomeComplete"
-      @skip="handleWelcomeComplete"
+      v-if="showHostWelcome && isHomePage"
+      @complete="handleHostWelcomeComplete"
+      @skip="handleHostWelcomeComplete"
     />
     
     <!-- Tab blocked overlay -->
@@ -41,9 +41,9 @@
       @close="isSettingsOpen = false"
     />
     
-    <!-- Bottom Tab Bar - hidden on home/camera view and during onboarding -->
+    <!-- Bottom Tab Bar - hidden on home/camera view -->
     <BottomTabBar
-      v-if="shouldShowTabBar && !showWelcomeOnboarding"
+      v-if="shouldShowTabBar"
       @toggle-monitor="handleToggleMonitor"
       @toggle-settings="handleToggleSettings"
     />
@@ -85,11 +85,21 @@ export default {
     const currentErrorMessage = ref('');
     const isSettingsOpen = ref(false);
     const isTabBlocked = ref(false);
-    const showWelcomeOnboarding = ref(false);
+    const showHostWelcome = ref(false);
     
-    // Hide tab bar on home/camera view
+    // Check if current route is home page
+    const isHomePage = computed(() => {
+      return route.path === '/';
+    });
+    
+    // Hide tab bar on home/camera view or during host onboarding
     const shouldShowTabBar = computed(() => {
-      return route.path !== '/';
+      // Don't show on home page
+      if (route.path === '/') return false;
+      // Don't show during host onboarding (only relevant on home page anyway)
+      if (showHostWelcome.value && isHomePage.value) return false;
+      // Show on all other pages
+      return true;
     });
     
     // Set up callback for if we get blocked later (can happen if another tab takes over)
@@ -97,9 +107,10 @@ export default {
       isTabBlocked.value = true;
     });
     
-    // Handle welcome onboarding completion
-    const handleWelcomeComplete = () => {
-      showWelcomeOnboarding.value = false;
+    // Handle host welcome onboarding completion
+    const handleHostWelcomeComplete = () => {
+      showHostWelcome.value = false;
+      onboardingService.completeHostWelcome();
       showNotification('Welcome to Receipt.Cash! 🎉', 'success');
     };
     
@@ -111,9 +122,9 @@ export default {
         return;
       }
       
-      // Check if user needs to see welcome screens
-      if (!onboardingService.hasSeenWelcome()) {
-        showWelcomeOnboarding.value = true;
+      // Check if user needs to see host welcome screens (only on home page)
+      if (!onboardingService.hasSeenHostWelcome() && isHomePage.value) {
+        showHostWelcome.value = true;
       }
       
       // Check for version updates
@@ -173,8 +184,9 @@ export default {
       handleToggleMonitor,
       handleToggleSettings,
       isSettingsOpen,
-      showWelcomeOnboarding,
-      handleWelcomeComplete
+      showHostWelcome,
+      isHomePage,
+      handleHostWelcomeComplete
     };
   }
 }

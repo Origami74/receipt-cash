@@ -358,7 +358,7 @@ export default {
       }
       
       // Show review tip if first time
-      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('ReviewTip')) {
+      if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('ReviewTip')) {
         setTimeout(() => {
           showReviewTip.value = true;
         }, 500);

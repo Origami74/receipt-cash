@@ -5,12 +5,12 @@
       class="h-full flex transition-transform duration-300 ease-out"
       :style="{ transform: `translateX(-${currentScreen * 100}%)` }"
     >
-      <!-- Screen 1: The Problem -->
+      <!-- Screen 1: You're Invited! -->
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/screen-1-the-problem.png"
-            alt="Split bill frustration"
+            src="/onboard/guest/01-invited-alt.png"
+            alt="You're invited to pay"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
           />
@@ -18,10 +18,10 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🍽️ Split bills<br/>without the hassle
+            🎉 You're Invited!
           </h1>
           <p class="text-lg text-gray-600">
-            "I paid the bill, now I need to<br/>collect from 4 friends..."
+            Someone shared a receipt with you.<br/>Let's split the bill fairly!
           </p>
         </div>
         
@@ -35,12 +35,12 @@
         </div>
       </div>
 
-      <!-- Screen 2: The Solution -->
+      <!-- Screen 2: We Do The Math -->
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/screen-2-the-solution.png"
-            alt="Easy payment flow"
+            src="/onboard/guest/02-math.png"
+            alt="Automatic calculations"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
           />
@@ -48,10 +48,10 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            ✨ Receipt.Cash<br/>makes it simple
+            🧮 We Do The Math
           </h1>
           <p class="text-lg text-gray-600">
-            Create a digital receipt, share it,<br/>and get paid automatically
+            No calculating. No conversion rates.<br/>Just select what you had and pay.
           </p>
         </div>
         
@@ -65,12 +65,12 @@
         </div>
       </div>
 
-      <!-- Screen 3: Privacy & Control -->
+      <!-- Screen 3: Quick & Private -->
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/screen-3-privacy-control.png"
-            alt="Privacy and security"
+            src="/onboard/guest/03-privacy-control.png"
+            alt="Fast and private payments"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
           />
@@ -78,10 +78,10 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🔒 Your data,<br/>your control
+            ⚡️ Quick & Private
           </h1>
           <p class="text-lg text-gray-600">
-            No central server. Private payments.<br/>You're in charge.
+            Pay your share in seconds. Private,<br/>secure, and direct to the host.
           </p>
         </div>
         
@@ -89,7 +89,7 @@
           @click="completeOnboarding"
           class="w-full max-w-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors shadow-lg relative z-20"
         >
-          Get Started →
+          Let's Go! →
         </button>
         
         <div class="flex items-center space-x-2 mt-4">
@@ -129,7 +129,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { onboardingService } from '../../services/onboardingService';
 
 export default {
-  name: 'WelcomeOnboarding',
+  name: 'GuestWelcomeOnboarding',
   emits: ['complete', 'skip'],
   setup(props, { emit }) {
     const currentScreen = ref(0);
@@ -191,17 +191,17 @@ export default {
     };
 
     const completeOnboarding = () => {
-      onboardingService.completeHostWelcome();
+      onboardingService.completeGuestWelcome();
       emit('complete');
     };
 
     const skipOnboarding = () => {
-      onboardingService.completeHostWelcome();
+      onboardingService.completeGuestWelcome();
       emit('skip');
     };
 
     const handleImageError = (e) => {
-      console.warn('Onboarding image failed to load:', e.target.src);
+      console.warn('Guest onboarding image failed to load:', e.target.src);
       // Fallback: show emoji instead
       e.target.style.display = 'none';
     };
@@ -211,7 +211,7 @@ export default {
       startAutoAdvance();
       
       // Log onboarding start
-      console.log('👋 Welcome onboarding started');
+      console.log('🎉 Guest welcome onboarding started');
     });
 
     onUnmounted(() => {

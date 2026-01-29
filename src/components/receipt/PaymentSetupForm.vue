@@ -216,7 +216,7 @@ export default {
       }
       
       // Show payout tip if first time
-      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('PayoutTip')) {
+      if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('PayoutTip')) {
         setTimeout(() => {
           showPayoutTip.value = true;
         }, 500);
@@ -228,7 +228,7 @@ export default {
       // When payout tip is dismissed (goes from true to false)
       if (oldValue === true && newValue === false) {
         // Show developer split tip after payout tip is dismissed
-        if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('DeveloperSplitTip')) {
+        if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('DeveloperSplitTip')) {
           setTimeout(() => {
             showDeveloperSplitTip.value = true;
           }, 300);
@@ -252,7 +252,7 @@ export default {
     };
     
     const handleAddressFocus = () => {
-      if (onboardingService.hasSeenWelcome() && !onboardingService.hasSeen('PayoutTip')) {
+      if (onboardingService.hasSeenHostWelcome() && !onboardingService.hasSeen('PayoutTip')) {
         showPayoutTip.value = true;
       }
     };

@@ -26,15 +26,19 @@
 
 ---
 
-## Image Prompt
+## Primary Prompt
 
-Modern flat illustration, vertical mobile format. A stylized calculator with a magic wand or sparkle effect, showing automatic calculation. Currency symbols (€, $, ₿) flowing into the calculator and sats (₿) flowing out, with green checkmarks along the path. The calculator has a friendly, helpful appearance with a soft orange glow. Clean minimalist design, orange and green color palette, conveying automation and ease. No text, transparent background, high contrast, vector-style artwork.
+```
+Modern flat illustration, vertical mobile format. A stylized calculator with a magic wand or sparkle effect, showing automatic calculation. Currency symbols (€, $, ₿) flowing into the calculator and sats (₿) flowing out, with green checkmarks along the path. The calculator has a friendly, helpful appearance with a soft orange glow. Clean minimalist design, orange and green color palette, conveying automation and ease. No text, high contrast, vector-style artwork. --style flat --ar 2:3
+```
 
 ---
 
 ## Alternative Prompt
 
-Automatic calculation illustration. A smartphone showing a receipt with items, and a floating calculator overlay with sparkle effects. Currency conversion symbols (€ → ₿ → sats) flowing smoothly with green checkmarks at each step. The calculator has gears or automation symbols suggesting "we handle this for you". Modern flat design, orange and green tones, vertical orientation, conveying effortless calculation. No text, professional quality.
+```
+Automatic calculation illustration. A smartphone showing a receipt with items, and a floating calculator overlay with sparkle effects. Currency conversion symbols (€ → ₿ → sats) flowing smoothly with green checkmarks at each step. The calculator has gears or automation symbols suggesting "we handle this for you". Modern flat design, orange and green tones, vertical orientation, conveying effortless calculation. No text, professional quality. --style flat --ar 2:3
+```
 
 ---
 
@@ -50,14 +54,8 @@ Automatic calculation illustration. A smartphone showing a receipt with items, a
 
 ---
 
-## Negative Prompts
-
-text, words, letters, numbers, realistic photography, 3D render, complex gradients, shadows, complex details, cluttered composition, dark colors, low contrast, blurry, distorted, ugly, low quality, watermark, signature
-
----
-
 ## Output File
 
 **Location**: `public/onboard/guest/02-math.png`
 **Format**: PNG with transparency
-**Size**: 800x1200 pixels
+**Size**: 800x1200 pixels (2:3 aspect ratio)

@@ -142,9 +142,10 @@ completeHostWelcome() { /* ... */ }
 completeGuestWelcome() { /* ... */ }
 ```
 
-**Migration**: 
-- Map old `hasSeenWelcome` to `hasSeenHostWelcome` for existing users
-- Increment version to 2
+**No Migration Needed**:
+- Starting fresh - old `hasSeenWelcome` is simply replaced
+- No version increment needed
+- Simpler, cleaner implementation
 
 ---
 
@@ -334,24 +335,11 @@ const handleGuestWelcomeComplete = () => {
   hostWelcomeCompletedAt: null,
   guestWelcomeCompletedAt: null,
   // ...
-  version: 2  // Increment for migration
+  version: 1  // No version change needed
 }
 ```
 
----
-
-## Migration Strategy
-
-**Version 1 → Version 2**:
-```javascript
-// In onboardingService.js loadState()
-if (parsed.version === 1) {
-  // Migrate old hasSeenWelcome to hasSeenHostWelcome
-  parsed.hasSeenHostWelcome = parsed.hasSeenWelcome || false;
-  parsed.hasSeenGuestWelcome = false;
-  parsed.version = 2;
-}
-```
+**Note**: No migration strategy needed - we're starting fresh with the new state structure.
 
 ---
 
@@ -460,7 +448,7 @@ if (parsed.version === 1) {
 - Guest welcome should be shorter/simpler (guests just want to pay)
 - Both flows should be skippable
 - State should be tracked separately
-- Migration should be seamless for existing users
+- No migration needed - clean slate approach
 
 ---
 
