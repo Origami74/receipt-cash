@@ -9,7 +9,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/screen-1-the-problem.png"
+            src="/onboard/host/01-the-problem.png"
             alt="Split bill frustration"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -18,7 +18,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🍽️ Split bills<br/>without the hassle
+            Split bills<br/>without the hassle
           </h1>
           <p class="text-lg text-gray-600">
             "I paid the bill, now I need to<br/>collect from 4 friends..."
@@ -46,7 +46,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/screen-2-the-solution.png"
+            src="/onboard/host/02-the-solution-alt.png"
             alt="Easy payment flow"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -55,7 +55,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            ✨ Receipt.Cash<br/>makes it simple
+            Receipt.Cash<br/>makes it simple
           </h1>
           <p class="text-lg text-gray-600">
             Create a digital receipt, share it,<br/>and get paid automatically
@@ -83,7 +83,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/guest/03-privacy-control.png"
+            src="/onboard/host/03-privacy-control.png"
             alt="Privacy and security"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -92,7 +92,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            🔒 Your data,<br/>your control
+            Your data,<br/>your control
           </h1>
           <p class="text-lg text-gray-600">
             No central server. Private payments.<br/>You're in charge.

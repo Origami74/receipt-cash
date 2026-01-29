@@ -8,6 +8,9 @@ This document contains prioritized user feedback and feature requests for the Re
     - ppq as fallback
 - Inconsistent branding, SugarDaddy.Cash / Receipt.Cash - clarify this
 - Support other languages
+- Deduplicate if the same item + price combo occurs multiple times
+- split added tax and tips, evaluate the flow. multiple possible ways to do it. Differs per country too (tax included?)
+- Add translations
 
 ## Priority 90-100 (Critical - Core Flow Blockers)
 
@@ -16,7 +19,7 @@ This document contains prioritized user feedback and feature requests for the Re
 **Impact**: Production deployment issue affecting live users  
 **Reason**: Affects monetization and user experience on the live platform - developer fee distribution is broken
 
-## Priority 70-89 (High - Core Experience Improvements)
+## Priority 70-89 (High - Core Experience Improvements)n
 
 ### Priority 85 - Payer can immediately get some starting balance with one payment
 **Status**: Open
