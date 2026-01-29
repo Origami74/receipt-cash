@@ -16,11 +16,6 @@ This document contains prioritized user feedback and feature requests for the Re
 
 ## Priority 70-89 (High - Core Experience Improvements)
 
-### Priority 88 - Onboarding flow for new users
-**Status**: Open
-**Impact**: Critical for user adoption and reducing confusion
-**Reason**: New users need guided walkthroughs to understand the app. Two flows needed: 1) Payer onboarding when opening receipt link (step-by-step with images explaining payment process), 2) Creator onboarding on home screen (step-by-step explaining receipt scanning and creation). Bite-sized, visual guidance is essential for reducing abandonment
-
 ### Priority 85 - Payer can immediately get some starting balance with one payment
 **Status**: Open
 **Impact**: Reduces onboarding friction significantly
@@ -29,14 +24,6 @@ This document contains prioritized user feedback and feature requests for the Re
 
 
 ## Priority 50-69 (Medium - User Experience Enhancements)
-
-
-
-
-### Priority 62 - Add silent background audio player
-**Status**: Open
-**Impact**: WebSocket connection stability on mobile
-**Reason**: Prevents websockets from being terminated when user navigates away from app, especially important on mobile browsers
 
 ### Priority 65 - Add comments / name
 **Status**: Open  
@@ -61,11 +48,6 @@ This document contains prioritized user feedback and feature requests for the Re
 **Reason**: Shows detailed cost breakdown but requires significant backend changes and data migration. Important for accuracy but not blocking current functionality
 
 ## Priority 20-29 (Low - Nice-to-Have)
-
-### Priority 30 - Add silent background audio player for websocket persistence
-**Status**: Open
-**Impact**: Technical enhancement for mobile browser websocket reliability
-**Reason**: Prevents websockets from closing when user navigates away from app on mobile browsers. Important for real-time payment notifications but requires careful implementation to avoid user annoyance
 
 ### Priority 25 - Bolt12 not supported - check request
 **Status**: Open
