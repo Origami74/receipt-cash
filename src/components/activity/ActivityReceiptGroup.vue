@@ -103,8 +103,8 @@
           </div>
           
           <!-- No payments message -->
-          <div v-else class="text-gray-500 text-sm text-center py-4">
-            No payments yet
+          <div v-else class="text-gray-400 text-sm text-center py-4">
+            No settlements received for this receipt
           </div>
         </div>
       </div>
@@ -223,10 +223,6 @@ export default {
 
     const errorMessage = computed(() => {
       if (receiptStatus.value === 'error') {
-        const settlements = allSettlements.value;
-        if (settlements.length === 0) {
-          return 'No settlements received for this receipt';
-        }
         return 'Unknown error occurred';
       }
       return '';
@@ -252,10 +248,8 @@ export default {
       const unconfirmed = props.receiptModel.unConfirmedSettlements || [];
       
       if (payments.length === 0) {
-        // No payments - check age of receipt
-        const receiptAge = Date.now() - (props.receiptModel.receiptModel?.event?.created_at || 0) * 1000;
-        const isOld = receiptAge > 24 * 60 * 60 * 1000; // Older than 24 hours
-        return isOld ? 'error' : 'pending';
+        // No payments yet - this is normal, just waiting
+        return 'pending';
       }
 
       // If there are unconfirmed settlements, still awaiting payments
@@ -310,6 +304,9 @@ export default {
       // TODO: Implement actual error reporting
     };
 
+    // Expose receipt status for parent components
+    const exposedStatus = computed(() => receiptStatus.value);
+    
     return {
       paymentRefs,
       isExpanded,
@@ -328,7 +325,9 @@ export default {
       copyEventId,
       formatTime,
       reportError,
-      formatSats
+      formatSats,
+      // Expose for parent access
+      exposedStatus
     };
   }
 };

@@ -55,7 +55,9 @@
         <div v-else class="space-y-4">
           <ActivityReceiptGroup
             v-for="model in sortedReceiptModels"
+            :key="model.receiptModel?.event?.id"
             :receiptModel="model"
+            :ref="el => { if (el) receiptGroupRefs[model.receiptModel?.event?.id] = el }"
           />
         </div>
       </div>
@@ -90,6 +92,7 @@ export default {
     const loading = ref(true);
     const error = ref(null);
     const subscriptions = ref([]);
+    const receiptGroupRefs = ref({}); // Track ActivityReceiptGroup component refs
 
     const goBack = () => {
       router.push('/');
@@ -161,31 +164,24 @@ export default {
       });
     });
 
-    // Computed values for summary cards based on settlement status
+    // Computed values for summary cards based on component-exposed statuses
     const receiptsCount = computed(() => sortedReceiptModels.value.length);
     
     const handlingCount = computed(() => {
+      // Count receipts where the component reports 'processing' status
       return sortedReceiptModels.value.filter(model => {
-        const hasUnconfirmed = (model.unConfirmedSettlements || []).length > 0;
-        const hasConfirmedWithoutPayouts = (model.confirmedSettlements || []).some(settlement => {
-          // Check if settlement has corresponding payouts
-          const payouts = model.receiptModel?.payouts || [];
-          return !payouts.some(payout => {
-            const payoutSettlementRefs = (payout.tags || []).filter(tag => tag[0] === 'e');
-            return payoutSettlementRefs.some(tag => tag[1] === settlement.id);
-          });
-        });
-        return hasUnconfirmed || hasConfirmedWithoutPayouts;
+        const eventId = model.receiptModel?.event?.id;
+        const componentRef = receiptGroupRefs.value[eventId];
+        return componentRef?.exposedStatus === 'processing';
       }).length;
     });
     
     const errorsCount = computed(() => {
-      // For now, consider receipts with no settlements as potential errors if they're old enough
+      // Count receipts where the component reports 'error' status
       return sortedReceiptModels.value.filter(model => {
-        const settlements = (model.confirmedSettlements || []).concat(model.unConfirmedSettlements || []);
-        const receiptAge = Date.now() - (model.receiptModel?.event?.created_at || 0) * 1000;
-        const isOld = receiptAge > 24 * 60 * 60 * 1000; // Older than 24 hours
-        return settlements.length === 0 && isOld;
+        const eventId = model.receiptModel?.event?.id;
+        const componentRef = receiptGroupRefs.value[eventId];
+        return componentRef?.exposedStatus === 'error';
       }).length;
     });
 
@@ -216,6 +212,7 @@ export default {
       loading,
       error,
       sortedReceiptModels,
+      receiptGroupRefs,
       receiptsCount,
       handlingCount,
       errorsCount,
