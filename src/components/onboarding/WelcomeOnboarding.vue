@@ -126,78 +126,21 @@
         </div>
       </div>
 
-      <!-- Screen 4: Terms & Experimental Warning (only if not already accepted) -->
-      <div v-if="!onboardingService.hasAcceptedTerms()" class="min-w-full h-full flex flex-col items-center justify-center p-8">
-        <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md space-y-5">
-          <!-- Icon -->
-          <div class="text-6xl">⚠️</div>
-          
-          <h1 class="text-2xl font-bold text-gray-900 text-center">
-            Before You Start
-          </h1>
-          
-          <div class="space-y-3 text-sm text-gray-700 w-full">
-            <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
-              <p class="font-semibold text-orange-900 mb-2">🧪 Experimental Software</p>
-              <p class="text-orange-800">
-                Receipt.Cash is in active development. Features may change, and bugs may occur.
-              </p>
-            </div>
-            
-            <div class="bg-red-50 rounded-lg p-4 border border-red-200">
-              <p class="font-semibold text-red-900 mb-2">💸 No Refunds</p>
-              <p class="text-red-800">
-                Payments are final. Only send money you can afford to lose. Test with small amounts first.
-              </p>
-            </div>
-            
-            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <p class="font-semibold text-blue-900 mb-2">🔐 Your Responsibility</p>
-              <p class="text-blue-800">
-                You control your keys and funds. Keep your device secure and back up your data.
-              </p>
-            </div>
-          </div>
-          
-          <!-- Toggle Switch for Terms Acceptance -->
-          <div class="w-full pt-2">
-            <label class="flex items-start space-x-3 cursor-pointer">
-              <div class="relative mt-0.5">
-                <input
-                  v-model="hasAcceptedTerms"
-                  type="checkbox"
-                  class="sr-only peer"
-                />
-                <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-orange-500 transition-colors"></div>
-                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
-              </div>
-              <span class="text-sm text-gray-700 select-none leading-relaxed">
-                I understand the risks and accept full responsibility for using this experimental service
-              </span>
-            </label>
-          </div>
-        </div>
-        
-        <button
-          @click="completeOnboarding"
-          :disabled="!hasAcceptedTerms"
-          class="w-full max-w-sm font-semibold py-4 px-8 rounded-lg transition-all shadow-lg relative z-20"
-          :class="hasAcceptedTerms
-            ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
-            : 'bg-gray-300 text-gray-500 cursor-not-allowed'"
-        >
-          {{ hasAcceptedTerms ? 'Get Started →' : 'Accept Terms to Continue' }}
-        </button>
-        
-        <div class="flex items-center space-x-2 mt-4">
-          <div
-            v-for="i in totalScreens"
-            :key="i"
-            class="h-2 rounded-full transition-all"
-            :class="currentScreen === i - 1 ? 'w-8 bg-orange-500' : 'w-2 bg-gray-300'"
-          />
-        </div>
-      </div>
+      <!-- Screen 4: Terms & Backup (shared component) -->
+      <TermsAndBackupScreen
+        v-if="!onboardingService.hasAcceptedTerms()"
+        title="Before You Start"
+        button-text="Get Started →"
+        :current-screen="currentScreen"
+        :total-screens="totalScreens"
+        v-model:has-accepted-terms="hasAcceptedTerms"
+        v-model:has-saved-seedphrase="hasSavedSeedphrase"
+        :can-proceed="canProceed"
+        :seedphrase-words="seedphraseWords"
+        :show-copy-success="showCopySuccess"
+        :copy-seedphrase="copySeedphrase"
+        @complete="completeOnboarding"
+      />
     </div>
 
     <!-- Skip button (top right) - only shown if terms already accepted -->
@@ -223,83 +166,42 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { onboardingService } from '../../services/onboardingService';
+import { onMounted, onUnmounted } from 'vue';
+import { useOnboardingFlow } from '../../composables/useOnboardingFlow';
+import TermsAndBackupScreen from './TermsAndBackupScreen.vue';
 
 export default {
   name: 'WelcomeOnboarding',
+  components: {
+    TermsAndBackupScreen
+  },
   emits: ['complete', 'skip'],
   setup(props, { emit }) {
-    const currentScreen = ref(0);
-    const touchStartX = ref(0);
-    const touchEndX = ref(0);
-    const isDragging = ref(false);
-    const autoAdvanceTimer = ref(null);
-    const hasAcceptedTerms = ref(false);
-    
-    // Total screens depends on whether terms are already accepted
-    const totalScreens = computed(() => onboardingService.hasAcceptedTerms() ? 3 : 4);
-    const maxScreen = computed(() => totalScreens.value - 1);
-
-    // Auto-advance after 10 seconds of inactivity
-    const startAutoAdvance = () => {
-      if (autoAdvanceTimer.value) {
-        clearTimeout(autoAdvanceTimer.value);
-      }
-      
-      autoAdvanceTimer.value = setTimeout(() => {
-        if (currentScreen.value < maxScreen.value) {
-          currentScreen.value++;
-          startAutoAdvance();
-        }
-      }, 10000); // 10 seconds instead of 5
-    };
-
-    // Touch/swipe handlers
-    const handleTouchStart = (e) => {
-      touchStartX.value = e.touches?.[0]?.clientX || e.clientX;
-      isDragging.value = true;
-      
-      // Stop auto-advance when user interacts
-      if (autoAdvanceTimer.value) {
-        clearTimeout(autoAdvanceTimer.value);
-        autoAdvanceTimer.value = null;
-      }
-    };
-
-    const handleTouchMove = (e) => {
-      if (!isDragging.value) return;
-      touchEndX.value = e.touches?.[0]?.clientX || e.clientX;
-    };
-
-    const handleTouchEnd = () => {
-      if (!isDragging.value) return;
-      
-      const diff = touchStartX.value - touchEndX.value;
-      const threshold = 50; // Minimum swipe distance
-
-      if (Math.abs(diff) > threshold) {
-        if (diff > 0 && currentScreen.value < maxScreen.value) {
-          // Swipe left - next screen
-          currentScreen.value++;
-        } else if (diff < 0 && currentScreen.value > 0) {
-          // Swipe right - previous screen
-          currentScreen.value--;
-        }
-      }
-
-      isDragging.value = false;
-      touchStartX.value = 0;
-      touchEndX.value = 0;
-    };
-
-    const nextScreen = () => {
-      if (currentScreen.value < maxScreen.value) {
-        currentScreen.value++;
-      }
-      // Restart auto-advance timer after manual navigation
-      startAutoAdvance();
-    };
+    // Use shared onboarding flow logic
+    const {
+      currentScreen,
+      totalScreens,
+      hasAcceptedTerms,
+      hasSavedSeedphrase,
+      seedphrase,
+      seedphraseWords,
+      showCopySuccess,
+      showPasswordManagerSuccess,
+      sliderPosition,
+      sliderProgress,
+      canProceed,
+      handleTouchStart,
+      handleTouchMove,
+      handleTouchEnd,
+      nextScreen,
+      copySeedphrase,
+      saveToPasswordManager,
+      startSlide,
+      handleImageError,
+      initializeOnboarding,
+      cleanupOnboarding,
+      onboardingService
+    } = useOnboardingFlow();
 
     const completeOnboarding = () => {
       // If terms already accepted, just complete
@@ -308,8 +210,8 @@ export default {
         emit('complete');
         return;
       }
-      // Otherwise, require terms acceptance
-      if (!hasAcceptedTerms.value) return;
+      // Otherwise, require terms acceptance AND slider confirmation
+      if (!canProceed.value) return;
       onboardingService.completeHostWelcome(hasAcceptedTerms.value);
       emit('complete');
     };
@@ -323,30 +225,25 @@ export default {
       emit('complete');
     };
 
-    const handleImageError = (e) => {
-      console.warn('Onboarding image failed to load:', e.target.src);
-      // Fallback: show emoji instead
-      e.target.style.display = 'none';
-    };
-
     onMounted(() => {
-      // Start auto-advance
-      startAutoAdvance();
-      
-      // Log onboarding start
-      console.log('👋 Welcome onboarding started');
+      initializeOnboarding('👋 Welcome onboarding started');
     });
 
     onUnmounted(() => {
-      if (autoAdvanceTimer.value) {
-        clearTimeout(autoAdvanceTimer.value);
-      }
+      cleanupOnboarding();
     });
 
     return {
       currentScreen,
       totalScreens,
       hasAcceptedTerms,
+      hasSavedSeedphrase,
+      seedphraseWords,
+      showCopySuccess,
+      showPasswordManagerSuccess,
+      sliderPosition,
+      sliderProgress,
+      canProceed,
       onboardingService,
       handleTouchStart,
       handleTouchMove,
@@ -354,6 +251,9 @@ export default {
       nextScreen,
       completeOnboarding,
       skipOnboarding,
+      copySeedphrase,
+      saveToPasswordManager,
+      startSlide,
       handleImageError
     };
   }
