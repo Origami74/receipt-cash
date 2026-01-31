@@ -138,14 +138,14 @@ export default {
     },
     
     getShareText() {
-      const amount = this.receiptAmount || 0;
+      const amount = this.receiptAmount || '0';
       const title = this.receiptTitle || 'the receipt';
       const url = this.receiptLink;
       const currencySymbol = this.currency ? getCurrencySymbol(this.currency) : '';
       
       return `Hey sugar! 💅
 
-I just spent [${currencySymbol}][${amount}] at ${title} and I'm feeling a little... broke.
+I just spent ${amount} at ${title} and I'm feeling a little... broke.
 
 Would you help me out? Pretty please? 🥺
 

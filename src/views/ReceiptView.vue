@@ -113,7 +113,7 @@
           ref="shareQRComponent"
           :receiptLink="receiptLink"
           :receiptTitle="receiptModel?.title"
-          :receiptAmount="receiptModel?.total"
+          :receiptAmount="toFiat(receiptModel?.total)"
           :currency="receiptModel?.currency"
         />
       </div>
