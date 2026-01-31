@@ -112,6 +112,9 @@
           v-if="showShareQR"
           ref="shareQRComponent"
           :receiptLink="receiptLink"
+          :receiptTitle="receiptModel?.title"
+          :receiptAmount="receiptModel?.total"
+          :currency="receiptModel?.currency"
         />
       </div>
 

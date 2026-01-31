@@ -63,6 +63,7 @@
 
 <script>
 import QRCodeVue from 'qrcode.vue';
+import { getCurrencySymbol } from '../utils/currencyUtils';
 
 export default {
   name: 'ReceiptShareQR',
@@ -73,6 +74,18 @@ export default {
     receiptLink: {
       type: String,
       required: true
+    },
+    receiptTitle: {
+      type: String,
+      default: ''
+    },
+    receiptAmount: {
+      type: Number,
+      default: 0
+    },
+    currency: {
+      type: String,
+      default: ''
     }
   },
   data() {
@@ -124,17 +137,38 @@ export default {
       }
     },
     
+    getShareText() {
+      const amount = this.receiptAmount || 0;
+      const title = this.receiptTitle || 'the receipt';
+      const url = this.receiptLink;
+      const currencySymbol = this.currency ? getCurrencySymbol(this.currency) : '';
+      
+      return `Hey sugar! 💅
+
+I just spent [${currencySymbol}][${amount}] at ${title} and I'm feeling a little... broke.
+
+Would you help me out? Pretty please? 🥺
+
+You can pay your share here: ${url}`;
+    },
+    
     async openShareMenu() {
       try {
+        const shareText = this.getShareText();
+        
         if (navigator.share) {
           await navigator.share({
-            title: 'Receipt Payment',
-            text: 'Scan this QR code to view the receipt and make your payment',
-            url: this.receiptLink
+            title: 'Help me out? 💅🥺',
+            text: shareText
           });
         } else {
           // Fallback for browsers that don't support Web Share API
-          this.copyLink();
+          // Copy the formatted text instead of just the link
+          await navigator.clipboard.writeText(shareText);
+          this.copyButtonText = 'Copied message!';
+          setTimeout(() => {
+            this.copyButtonText = 'Copy Link';
+          }, 2000);
         }
       } catch (error) {
         console.error('Error sharing:', error);
