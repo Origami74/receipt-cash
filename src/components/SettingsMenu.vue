@@ -98,6 +98,9 @@
                   <option value="gpt-5-mini">gpt-5-mini</option>
                   <option value="gpt-5-codex">gpt-5-codex</option>
                   <option value="gpt-5">gpt-5</option>
+                  <option value="openai/gpt-5-image">openai/gpt-5-images</option>
+                  <option value="openai/gpt-5-chat">openai/gpt-5-chat</option>
+                  <option value="openai/gpt-5-image-mini">openai/gpt-5-image-mini</option>
                 </select>
               </div>
             </div>
