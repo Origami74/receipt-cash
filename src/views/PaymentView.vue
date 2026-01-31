@@ -172,6 +172,7 @@ import { createPaymentRequest } from '../utils/cashuUtils';
 import { fullReceiptModel } from '../services/nostr/receipt';
 import { saveGuestPayment } from '../services/guestPaymentStorageService';
 import { settlementConfirmation$ } from '../services/paymentStatusService';
+import { isSettlementFullyPaidOut } from '../composables/useSettlementPayoutStatus.ts';
 
 export default {
   name: 'PaymentView',
@@ -405,15 +406,27 @@ export default {
     const updateItemSettlementQuantities = () => {
       if (!receiptModel.value) return;
 
+      // Get the actual receipt event ID
+      const receiptEventId = receiptModel.value?.receiptModel?.event?.id ||
+                            receiptModel.value?.eventId ||
+                            receiptModel.value?.event?.id;
+
       items.value.forEach(item => {
         let confirmedQuantity = 0;
+        let distributedQuantity = 0;
         let unconfirmedQuantity = 0;
 
         // Calculate from confirmed settlements
         receiptModel.value.confirmedSettlements?.forEach(settlement => {
+          const settlementEventId = settlement.event?.id || settlement.id;
           settlement.items?.forEach(settledItem => {
             if (settledItem.name === item.name && settledItem.price === item.price) {
               confirmedQuantity += settledItem.selectedQuantity || settledItem.quantity;
+              
+              // Check if this settlement is fully paid out using accounting service
+              if (settlementEventId && receiptEventId && isSettlementFullyPaidOut(receiptEventId, settlementEventId)) {
+                distributedQuantity += settledItem.selectedQuantity || settledItem.quantity;
+              }
             }
           });
         });
@@ -428,7 +441,10 @@ export default {
         });
 
         item.confirmedQuantity = confirmedQuantity;
+        item.distributedQuantity = distributedQuantity;
         item.unconfirmedQuantity = unconfirmedQuantity;
+        // Mark as settled if fully distributed
+        item.settled = distributedQuantity >= item.quantity;
       });
     };
 

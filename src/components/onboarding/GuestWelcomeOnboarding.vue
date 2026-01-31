@@ -225,8 +225,8 @@ const completeOnboarding = () => {
     return; // Don't allow completion without accepting terms and confirming backup
   }
   
-  onboardingService.completeGuestWelcome();
-  onboardingService.acceptTerms();
+  // Pass hasAcceptedTerms flag to completeGuestWelcome (matches host onboarding pattern)
+  onboardingService.completeGuestWelcome(hasAcceptedTerms.value);
   emit('complete');
 };
 

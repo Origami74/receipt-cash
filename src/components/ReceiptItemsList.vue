@@ -57,6 +57,7 @@
 import { computed, ref, onMounted, watch } from 'vue';
 import { formatSats, toFiat } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
+import { isSettlementFullyPaidOut } from '../composables/useSettlementPayoutStatus.ts';
 
 export default {
   name: 'ReceiptItemsList',
@@ -91,6 +92,7 @@ export default {
 
     // Compute items with settlement amounts and percentages
     const itemsWithSettlements = computed(() => {
+      // DEBUG: console.log('🧾 ReceiptItemsList: computing items');
       if (!props.receiptModel?.items) return [];
       
       return props.receiptModel.items.map(item => {
@@ -109,7 +111,13 @@ export default {
                   confirmedQuantity += settledItem.selectedQuantity;
                   
                   // If this settlement is fully paid out, add to distributed quantity
-                  if (settlement.fullyPaidOut === true) {
+                  // Uses accounting service instead of nostr-based fullyPaidOut flag
+                  const settlementEventId = settlement.event?.id || settlement.id;
+                  // receiptModel has nested structure: receiptModel.receiptModel.event.id
+                  const receiptEventId = props.receiptModel?.receiptModel?.event?.id ||
+                                        props.receiptModel?.eventId ||
+                                        props.receiptModel?.event?.id;
+                  if (settlementEventId && receiptEventId && isSettlementFullyPaidOut(receiptEventId, settlementEventId)) {
                     distributedQuantity += settledItem.selectedQuantity;
                   }
                 }

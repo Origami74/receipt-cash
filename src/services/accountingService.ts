@@ -128,12 +128,19 @@ export class AccountingService {
     reserve.remainingReserve = reserve.totalIncoming - reserve.devPaidOut - reserve.payerPaidOut - reserve.totalFees;
 
     // Update status
+    const totalPaidOut = reserve.devPaidOut + reserve.payerPaidOut + reserve.totalFees;
+    const remainingPercentage = reserve.totalIncoming > 0 ? (reserve.remainingReserve / reserve.totalIncoming) * 100 : 100;
+    
     if (reserve.remainingReserve < 0) {
       reserve.status = 'overspent';
       console.warn(`⚠️ Reserve overspent: ${reserve.remainingReserve} sats`);
     } else if (reserve.remainingReserve === 0 || reserve.remainingReserve < 10) {
       reserve.status = 'complete';
       console.log(`✅ Reserve complete, dust: ${reserve.remainingReserve} sats`);
+    } else if (remainingPercentage <= 10) {
+      // Consider complete if less than 10% remains (handles dust/fees)
+      reserve.status = 'complete';
+      console.log(`✅ Reserve complete via 10% threshold (${remainingPercentage.toFixed(1)}% remaining)`);
     } else if (reserve.devPaidOut > 0 || reserve.payerPaidOut > 0) {
       reserve.status = 'partial';
     }

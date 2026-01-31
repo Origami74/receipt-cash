@@ -65,6 +65,7 @@ import { formatDate } from '../utils/dateUtils';
 import { fullReceiptModel } from '../services/nostr/receipt.js';
 import { decryptAndParseReceipt } from '../utils/receiptUtils.js';
 import { decryptAndParseSettlement } from '../utils/settlementUtils.js';
+import { isSettlementFullyPaidOut } from '../composables/useSettlementPayoutStatus.ts';
 
 export default {
   name: 'ReceiptItem',
@@ -90,9 +91,18 @@ export default {
     });
 
     // Calculate distributed amount (settlements that are fully paid out)
-    const distributedAmount = computed(() => {      
+    // Uses accounting service instead of nostr-based fullyPaidOut flag
+    const distributedAmount = computed(() => {
+      // Get the actual receipt event ID from the loaded receipt data
+      const actualReceiptEventId = receiptEvent.value?.id || receiptEventId;
+      
       const distributed = confirmedSettlements.value
-        .filter(settlement => settlement.fullyPaidOut === true)
+        .filter(settlement => {
+          // Use accounting service to check if settlement is fully paid out
+          const settlementEventId = settlement.event?.id || settlement.id;
+          if (!settlementEventId || !actualReceiptEventId) return false;
+          return isSettlementFullyPaidOut(actualReceiptEventId, settlementEventId);
+        })
         .reduce((total, settlement) => {
           return total + (settlement.total || 0);
         }, 0);
@@ -168,7 +178,7 @@ export default {
         receiptEvent.value = fullReceipt.receiptModel.event
         decryptedContent.value = decryptAndParseReceipt(fullReceipt.receiptModel.event, sharedEncryptionKey)
         
-        // Use confirmed settlements from fullReceiptModel which includes fullyPaidOut boolean
+        // Use confirmed settlements from fullReceiptModel
         confirmedSettlements.value = fullReceipt.confirmedSettlements || [];
       })
     });
