@@ -44,7 +44,7 @@
               (<span :class="itemWithSettlements.confirmedQuantity > itemWithSettlements.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ itemWithSettlements.confirmedQuantity }}</span>/{{ itemWithSettlements.quantity }})
             </span>
             × {{ formatSats(itemWithSettlements.price) }} sats
-            <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span><span v-if="itemWithSettlements.pendingQuantity > 0 && itemWithSettlements.isOwnedReceipt" class="text-orange-600"> + {{ itemWithSettlements.pendingQuantity }} pending payment</span>
+            <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span>
           </div>
         </div>
         </div>
@@ -99,7 +99,6 @@ export default {
         const totalAmount = item.price * item.quantity;
         let confirmedQuantity = 0;
         let distributedQuantity = 0;
-        let pendingQuantity = 0;
 
         // Go through confirmed settlements and sum up confirmed quantities for this item
         if (props.receiptModel.confirmedSettlements) {
@@ -126,24 +125,9 @@ export default {
           });
         }
 
-        // Go through unconfirmed settlements for pending quantities
-        if (props.receiptModel.unConfirmedSettlements) {
-          props.receiptModel.unConfirmedSettlements.forEach(settlement => {
-            // Use the settlement's items array to find matching items
-            if (settlement.items) {
-              settlement.items.forEach(settledItem => {
-                if (settledItem.name === item.name && settledItem.price === item.price) {
-                  pendingQuantity += settledItem.selectedQuantity;
-                }
-              });
-            }
-          });
-        }
-
         // Calculate percentages based on quantities
         const collectedPercent = item.quantity > 0 ? Math.min(Math.round((confirmedQuantity / item.quantity) * 100), 100) : 0;
         const distributedPercent = item.quantity > 0 ? Math.min(Math.ceil((distributedQuantity / item.quantity) * 100), 100) : 0;
-        const pendingPercent = item.quantity > 0 ? Math.min(Math.round((pendingQuantity / item.quantity) * 100), 100) : 0;
 
         // Determine color based on ownership and payout status
         const isOwnedReceipt = props.receiptModel?.isOwnedReceipt || false;
@@ -158,10 +142,8 @@ export default {
           ...item,
           confirmedQuantity,
           distributedQuantity,
-          pendingQuantity,
           collectedPercent,
           distributedPercent,
-          pendingPercent,
           collectedColor,
           isOwnedReceipt
         };
