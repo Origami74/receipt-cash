@@ -1,513 +1,333 @@
-# Watertight Accounting: Final Implementation Plan
+# Watertight Accounting: Parallel Execution with prepareSend
 
 ## Executive Summary
 
-After investigating the coco library, we discovered that **send operations already expose fee information** via the `PreparedData.fee` field. This simplifies our accounting significantly.
+By using coco's `prepareSend` to pre-calculate fees, we can adjust payout amounts to fit exactly within allocated splits. This enables **parallel execution** of dev and payer payouts while maintaining perfect accounting.
 
-## Key Discovery: Coco Exposes Send Fees! ✅
+## Key Innovation: prepareSend for Fee-Aware Amount Adjustment
 
 ```typescript
-// From coco's SendOperation interface
-interface PreparedData {
-  needsSwap: boolean;    // Whether swap is needed
-  fee: number;           // ✅ THE FEE IS HERE!
-  inputAmount: number;   // Total input proofs
-  inputProofSecrets: string[];
+// Use prepareSend to check fee BEFORE sending
+let amountToSend = allocatedAmount; // e.g., 49 sats
+let preparedSend = await coco.wallet.prepareSend(mintUrl, amountToSend);
+
+// Adjust down until amount + fee fits within allocation
+while (amountToSend + preparedSend.fee > allocatedAmount) {
+  amountToSend--;
+  preparedSend = await coco.wallet.prepareSend(mintUrl, amountToSend);
 }
+
+// Now send with adjusted amount
+const sendResult = await coco.wallet.send(mintUrl, amountToSend);
+// sendResult.fee should match preparedSend.fee
 ```
 
-**What this means**:
-- For **sends**: Use `sendResult.fee` directly (no balance differential needed!)
-- For **receives**: Use balance differential (coco doesn't expose receive fees)
+## Complete Flow with Parallel Execution
 
-## Critical Issues to Fix
-
-### Issue 1: Split Calculation Creates Deficit ⚠️
-
-**Problem**: We split the NOMINAL amount instead of ACTUAL received amount.
-
-```
-Guest sends: 1000 sats nominal
-Host receives: 998 sats actual (2 sat swap fee)
-Current split: 50 dev + 950 payer = 1000 ❌ DEFICIT!
-Correct split: 49 dev + 949 payer = 998 ✅
-```
-
-**Fix**: Record and split the ACTUAL received amount.
-
-### Issue 2: Concurrent Operations ⚠️
-
-**Problem**: No locking, operations can corrupt balance tracking.
-
-**Fix**: Add operation lock service to serialize operations per mint.
-
-### Issue 3: Not Using Coco's Fee Information
-
-**Problem**: We're ignoring the fee information coco provides.
-
-**Fix**: Use `sendResult.fee` for all send operations.
-
-## Complete Flow with Accurate Accounting
-
-### 1. Guest Payment → Host Receives
+### 1. Guest Payment → Host Receives (998 sats actual)
 
 ```javascript
 // cashuPaymentCollector.js
-async _handleGiftWrappedEvent(giftWrappedEvent, signer) {
-  const cashuDM = parseCashuDm(rumor);
-  const nominalAmount = sumProofs(cashuDM.proofs); // 1000 sats
-  
-  // Lock to prevent concurrent receives
-  await operationLockService.withLock(cashuDM.mintUrl, async () => {
-    // Get balance BEFORE (for receive, coco doesn't expose fee)
-    const balanceBefore = await cocoService.getBalance(cashuDM.mintUrl);
-    
-    // Receive tokens
-    const token = getEncodedToken({
-      mint: cashuDM.mintUrl,
-      proofs: cashuDM.proofs
-    });
-    await coco.wallet.receive(token);
-    
-    // Get balance AFTER
-    const balanceAfter = await cocoService.getBalance(cashuDM.mintUrl);
-    
-    // Calculate ACTUAL increase
-    const actualIncoming = balanceAfter - balanceBefore; // 998 sats
-    const receiveFee = nominalAmount - actualIncoming;   // 2 sats
-    
-    console.log(`💰 Received ${actualIncoming} sats (nominal: ${nominalAmount}, fee: ${receiveFee})`);
-    
-    // ✅ Record ACTUAL amount (this is what we'll split!)
-    accountingService.recordIncoming(
-      this.receipt.eventId,
-      cashuDM.settlementId,
-      actualIncoming, // 998 sats, not 1000!
-      cashuDM.mintUrl
-    );
-    
-    await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId);
-  });
-}
+const balanceBefore = await cocoService.getBalance(mintUrl);
+await coco.wallet.receive(token);
+const balanceAfter = await cocoService.getBalance(mintUrl);
+
+const actualIncoming = balanceAfter - balanceBefore; // 998 sats
+
+accountingService.recordIncoming(
+  receiptEventId,
+  settlementEventId,
+  actualIncoming, // 998 sats
+  mintUrl
+);
 ```
 
-### 2. Split Calculation (Automatic)
+### 2. Split Calculation (49 dev + 949 payer = 998)
 
 ```javascript
 // incomingPaymentSplitter.js
-async _calculateSplits(record, devSplitPercentage) {
-  const totalAmount = record.amount; // 998 sats (ACTUAL received)
-  
-  // Split the ACTUAL amount
-  const devAmount = Math.floor((totalAmount * devSplitPercentage) / 100); // 49 sats
-  const payerAmount = totalAmount - devAmount; // 949 sats
-  
-  console.log(`📊 Split amounts: ${devAmount} sats dev, ${payerAmount} sats payer`);
-  
-  // Create reserve with ACTUAL amounts
-  accountingService.createReserve(
-    record.receiptEventId,
-    record.settlementEventId,
-    totalAmount, // 998 sats
-    devSplitPercentage,
-    record.mintUrl
-  );
-  
-  // Record splits
-  accountingService.recordDevSplit(
-    record.receiptEventId,
-    record.settlementEventId,
-    devAmount, // 49 sats
-    devSplitPercentage,
-    record.mintUrl
-  );
-  
-  accountingService.recordPayerSplit(
-    record.receiptEventId,
-    record.settlementEventId,
-    payerAmount, // 949 sats
-    100 - devSplitPercentage,
-    record.mintUrl
-  );
-}
+const devAmount = Math.floor((998 * 5) / 100); // 49 sats
+const payerAmount = 998 - devAmount; // 949 sats
+
+accountingService.recordDevSplit(receiptEventId, settlementEventId, devAmount, 5, mintUrl);
+accountingService.recordPayerSplit(receiptEventId, settlementEventId, payerAmount, 95, mintUrl);
 ```
 
-**Result**: No deficit! 49 + 949 = 998 ✅
-
-### 3. Dev Payout
+### 3. Dev Payout (Parallel - Fits in 49 sats)
 
 ```javascript
 // devPayoutManager.js
 async _processDevSplit(devSplit) {
   await operationLockService.withLock(devSplit.mintUrl, async () => {
-    // Check if already paid
-    const records = accountingService.getSettlementAccounting(
-      devSplit.receiptEventId,
-      devSplit.settlementEventId
-    );
-    
-    if (records.some(r => r.type === 'dev_payout')) {
-      return; // Already paid
-    }
-    
     const coco = cocoService.getCoco();
     
-    // ✅ Send - coco returns fee information!
-    const sendResult = await coco.wallet.send(
-      devSplit.mintUrl,
-      devSplit.amount // 49 sats
-    );
+    // ✅ Use prepareSend to find amount that fits
+    let amountToSend = devSplit.amount; // Start with 49
+    let preparedSend = await coco.wallet.prepareSend(devSplit.mintUrl, amountToSend);
     
-    console.log(`📤 Sent ${devSplit.amount} sats (fee: ${sendResult.fee}, needsSwap: ${sendResult.needsSwap})`);
+    // Adjust down until it fits
+    while (amountToSend + preparedSend.fee > devSplit.amount && amountToSend > 0) {
+      amountToSend--;
+      preparedSend = await coco.wallet.prepareSend(devSplit.mintUrl, amountToSend);
+    }
+    
+    if (amountToSend <= 0) {
+      console.error(`❌ Cannot fit dev payout in ${devSplit.amount} sats`);
+      return;
+    }
+    
+    console.log(`📊 Dev: ${amountToSend} + ${preparedSend.fee} fee = ${amountToSend + preparedSend.fee} (allocated: ${devSplit.amount})`);
+    
+    // Send with adjusted amount
+    const sendResult = await coco.wallet.send(devSplit.mintUrl, amountToSend);
+    
+    // ✅ Handle change if actual cost < allocated
+    const actualCost = amountToSend + sendResult.fee; // e.g., 45 + 3 = 48
+    const change = devSplit.amount - actualCost; // e.g., 49 - 48 = 1 sat
+    
+    if (change > 0) {
+      console.log(`💰 Dev payout change: ${change} sats (will stay in balance)`);
+      // Change stays in balance, no need to do anything
+      // It will be available for future operations
+    }
     
     // Store in safety buffer
-    const payoutId = `${devSplit.receiptEventId}-${devSplit.settlementEventId}-dev`;
     proofSafetyService.storePendingPayout({
-      id: payoutId,
-      receiptEventId: devSplit.receiptEventId,
-      settlementEventId: devSplit.settlementEventId,
-      type: 'dev',
+      id: `${devSplit.receiptEventId}-${devSplit.settlementEventId}-dev`,
       proofs: sendResult.proofs,
-      mintUrl: devSplit.mintUrl,
-      amount: devSplit.amount,
-      destination: DEV_CASHU_REQ,
-      createdAt: Date.now(),
-      status: 'pending'
+      amount: amountToSend,
+      // ... other fields
     });
     
     // Send via DM
-    await cashuDmSender.payCashuPaymentRequest(
-      DEV_CASHU_REQ,
-      sendResult.proofs,
-      devSplit.mintUrl
-    );
-    
+    await cashuDmSender.payCashuPaymentRequest(DEV_CASHU_REQ, sendResult.proofs, devSplit.mintUrl);
     proofSafetyService.markSent(payoutId);
     
-    // ✅ Record with coco's fee
+    // Record actual amounts
     accountingService.recordDevPayout(
       devSplit.receiptEventId,
       devSplit.settlementEventId,
-      devSplit.amount,        // 49 sats
-      sendResult.fee,         // e.g., 1 sat (from coco!)
+      amountToSend,      // 45 sats
+      sendResult.fee,    // 3 sats
       devSplit.mintUrl,
       'cashu'
     );
     
-    // ✅ Update reserve
+    // Update reserve
     accountingService.updateReserveAfterPayout(
       devSplit.receiptEventId,
       devSplit.settlementEventId,
       'dev',
-      devSplit.amount,        // 49 sats
-      sendResult.fee          // 1 sat
+      amountToSend,      // 45 sats
+      sendResult.fee     // 3 sats
     );
+    // Reserve: 998 - 45 - 3 = 950 sats remaining
   });
 }
 ```
 
-**Balance Impact**: 998 - 49 - 1 = 948 sats remaining ✅
-
-### 4. Payer Payout (Lightning)
+### 4. Payer Payout (Parallel - Fits in 949 sats)
 
 ```javascript
 // payerPayoutManager.js
 async _processPayerSplit(payerSplit) {
-  await operationLockService.withLock(payerSplit.mintUrl, async () {
-    // Validate address
+  await operationLockService.withLock(payerSplit.mintUrl, async () => {
+    const coco = cocoService.getCoco();
     const receiveAddress = getReceiveAddress();
     const validation = validateReceiveAddress(receiveAddress);
     
     if (validation.type === 'lightning') {
-      // Get quote for fee estimate
-      const coco = cocoService.getCoco();
+      // Get Lightning fee estimate
       const quote = await coco.quotes.createMeltQuote(payerSplit.mintUrl, invoice);
-      const estimatedFee = quote.fee_reserve; // e.g., 15 sats
+      const estimatedLnFee = quote.fee_reserve; // e.g., 13 sats
       
-      // Calculate safe amount based on reserve
-      const reserve = accountingService.getReserve(
-        payerSplit.receiptEventId,
-        payerSplit.settlementEventId
-      );
+      // ✅ Use prepareSend to find amount that fits (including LN fee)
+      let amountToSend = payerSplit.amount; // Start with 949
+      let preparedSend = await coco.wallet.prepareSend(payerSplit.mintUrl, amountToSend);
       
-      // Check if we have enough for the full payout + estimated fees
-      const totalNeeded = payerSplit.amount + estimatedFee; // 949 + 15 = 964
+      const maxIterations = 20;
+      let iterations = 0;
       
-      let amountToSend;
-      if (reserve.remainingReserve >= totalNeeded) {
-        // We have enough for full payout
-        amountToSend = payerSplit.amount; // 949 sats
-      } else {
-        // Not enough - reduce payout to fit within reserve
-        amountToSend = Math.max(0, reserve.remainingReserve - estimatedFee); // 948 - 15 = 933
+      // Adjust down until total cost fits
+      while (iterations < maxIterations) {
+        const totalCost = amountToSend + preparedSend.fee + estimatedLnFee;
         
-        if (amountToSend < payerSplit.amount) {
-          const shortfall = payerSplit.amount - amountToSend;
-          console.warn(`⚠️ Reducing payout from ${payerSplit.amount} to ${amountToSend} (shortfall: ${shortfall})`);
-          
-          // Record shortfall
-          accountingService.recordShortfall(
-            payerSplit.receiptEventId,
-            payerSplit.settlementEventId,
-            shortfall,
-            payerSplit.mintUrl,
-            'payer',
-            `Insufficient reserve for full payout + fees: need ${totalNeeded}, have ${reserve.remainingReserve}`
-          );
+        if (totalCost <= payerSplit.amount) {
+          break; // Fits!
         }
+        
+        amountToSend--;
+        if (amountToSend <= 0) {
+          console.error(`❌ Cannot fit payer payout in ${payerSplit.amount} sats`);
+          return;
+        }
+        
+        preparedSend = await coco.wallet.prepareSend(payerSplit.mintUrl, amountToSend);
+        iterations++;
       }
       
-      if (amountToSend <= 0) {
-        console.error(`❌ Cannot payout: insufficient reserve (${reserve.remainingReserve}) for fees (${estimatedFee})`);
-        return;
-      }
+      console.log(`📊 Payer: ${amountToSend} + ${preparedSend.fee} swap + ${estimatedLnFee} LN (est) = ${amountToSend + preparedSend.fee + estimatedLnFee} (allocated: ${payerSplit.amount})`);
       
-      // ✅ Send - coco returns fee information!
+      // Send with adjusted amount
       const sendResult = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
       
-      console.log(`📤 Sent ${amountToSend} sats for melt (swap fee: ${sendResult.fee})`);
-      
       // Store in safety buffer
-      const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
       proofSafetyService.storePendingPayout({
-        id: payoutId,
-        receiptEventId: payerSplit.receiptEventId,
-        settlementEventId: payerSplit.settlementEventId,
-        type: 'payer',
+        id: `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`,
         proofs: sendResult.proofs,
-        mintUrl: payerSplit.mintUrl,
         amount: amountToSend,
-        destination: receiveAddress,
-        createdAt: Date.now(),
-        status: 'pending'
+        // ... other fields
       });
       
       // Melt to Lightning
-      const sessionId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}`;
       const meltResult = await lightningMelter.melt(
         sendResult.proofs,
         receiveAddress,
         payerSplit.mintUrl,
-        { sessionId }
+        { sessionId: `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}` }
       );
       
-      const actualLnFee = meltResult.fees || 0; // e.g., 12 sats (actual)
-      const totalFees = sendResult.fee + actualLnFee; // 1 + 12 = 13 sats
+      const actualLnFee = meltResult.fees || 0; // e.g., 12 sats (may differ from estimate!)
+      const totalFees = sendResult.fee + actualLnFee; // e.g., 1 + 12 = 13 sats
       
-      console.log(`⚡ Melted ${amountToSend} sats (swap fee: ${sendResult.fee}, LN fee: ${actualLnFee})`);
+      // ✅ Handle change if actual cost < allocated
+      const actualCost = amountToSend + totalFees; // e.g., 935 + 13 = 948
+      const change = payerSplit.amount - actualCost; // e.g., 949 - 948 = 1 sat
+      
+      if (change > 0) {
+        console.log(`💰 Payer payout change: ${change} sats (will stay in balance)`);
+        // Change stays in balance automatically
+      }
       
       proofSafetyService.markSent(payoutId);
       
-      // ✅ Record with all fees
+      // Record actual amounts
       accountingService.recordPayerPayout(
         payerSplit.receiptEventId,
         payerSplit.settlementEventId,
-        amountToSend,           // 923 sats
-        totalFees,              // 13 sats (1 swap + 12 LN)
+        amountToSend,           // 935 sats
+        totalFees,              // 13 sats
         payerSplit.mintUrl,
         'lightning',
-        payerSplit.amount       // 949 sats (original)
+        payerSplit.amount       // 949 sats (original allocation)
       );
       
-      // ✅ Update reserve
+      // Update reserve
       accountingService.updateReserveAfterPayout(
         payerSplit.receiptEventId,
         payerSplit.settlementEventId,
         'payer',
-        amountToSend,           // 923 sats
+        amountToSend,           // 935 sats
         totalFees               // 13 sats
       );
+      // Reserve: 950 - 935 - 13 = 2 sats remaining (change from both payouts!)
     }
   });
 }
 ```
 
-**Final Accounting**:
+## Final Accounting with Change
+
 ```
 Incoming: 998 sats
-Dev payout: 49 sats + 1 swap fee = 50 sats total
-Payer payout: 933 sats + 1 swap fee + 12 LN fee = 946 sats total
-Total out: 996 sats
-Remaining: 2 sats (dust)
 
-Reserve tracking:
-- Start: 998 sats
-- After dev: 998 - 49 - 1 = 948 sats
-- After payer: 948 - 933 - 1 - 12 = 2 sats ✅
+Split allocation:
+- Dev: 49 sats
+- Payer: 949 sats
+Total: 998 sats ✅
+
+Dev payout (adjusted to fit):
+- Allocated: 49 sats
+- Amount sent: 45 sats
+- Swap fee: 3 sats
+- Total cost: 48 sats
+- Change: 1 sat (stays in balance)
+
+Payer payout (adjusted to fit):
+- Allocated: 949 sats
+- Amount sent: 935 sats
+- Swap fee: 1 sat
+- LN fee: 12 sats
+- Total cost: 948 sats
+- Change: 1 sat (stays in balance)
+
+Final balance:
+- Total out: 48 + 948 = 996 sats
+- Remaining: 998 - 996 = 2 sats ✅
+- This is change from both payouts (1 + 1 = 2 sats)
+- Available for future operations or can be swept to change jar
 ```
+
+## Key Benefits
+
+### 1. **Parallel Execution** ✅
+- Dev and payer payouts can run simultaneously
+- Each constrained to its allocated split
+- No waiting, faster payouts
+
+### 2. **Perfect Accounting** ✅
+- Each payout fits exactly within allocation
+- Change automatically stays in balance
+- No overspending possible
+
+### 3. **Change Handling** ✅
+- If actual cost < allocated, difference stays in balance
+- Example: Allocated 49, spent 48, 1 sat change
+- Change is available for future operations
+- Can be swept to change jar periodically
+
+### 4. **No Race Conditions** ✅
+- Operation lock prevents concurrent balance modifications
+- Each payout stays within its budget
+- Total: devAllocation + payerAllocation = actualIncoming
 
 ## Implementation Checklist
 
-### Phase 1: Critical Fixes (Week 1)
-
 - [ ] **Create `operationLockService.ts`**
   - Serialize operations per mint
-  - Prevent concurrent balance corruption
+  - Allow parallel payouts (they don't conflict)
 
-- [ ] **Fix `cashuPaymentCollector.js`** (lines 100-132)
-  - Add balance differential for receive
-  - Record ACTUAL incoming amount
-  - Wrap with operation lock
+- [ ] **Update `devPayoutManager.js`**
+  - Use `prepareSend` to check fees
+  - Adjust amount down until it fits
+  - Handle change (stays in balance)
+  - Record actual amounts
 
-- [ ] **Fix `lightningPaymentCollector.js`** (lines 233-278)
-  - Add balance differential for receive
-  - Record ACTUAL incoming amount
-  - Wrap with operation lock
+- [ ] **Update `payerPayoutManager.js`**
+  - Use `prepareSend` for swap fee
+  - Get melt quote for LN fee
+  - Adjust amount down until total fits
+  - Handle change (stays in balance)
+  - Record actual amounts
 
-- [ ] **Fix `devPayoutManager.js`** (line 118)
-  - Use `sendResult.fee` from coco
-  - Remove balance differential
-  - Wrap with operation lock
+- [ ] **Update `accountingService.ts`**
+  - Track change as part of reserve
+  - `remainingReserve` includes change from payouts
+  - Can be used for future operations
 
-- [ ] **Fix `payerPayoutManager.js`** (lines 183, 254)
-  - Use `sendResult.fee` from coco
-  - Track both swap fee and LN fee
-  - Wrap with operation lock
+## Change Management Strategy
 
-### Phase 2: Validation (Week 2)
+### Option 1: Leave in Balance (Recommended)
+- Change stays in balance automatically
+- Available for next payment's payouts
+- Accumulates over time
+- Periodically sweep to change jar when > threshold
 
-- [ ] **Add `canPayout()` to `accountingService.ts`**
-  - Check reserve has enough for amount + estimated fees
-  - Check actual balance has enough
-  - No arbitrary safety buffer - use actual fee estimates
+### Option 2: Immediate Change Jar
+- After each payout, check for change
+- If change > 0, send to change jar immediately
+- More operations, but cleaner accounting
 
-- [ ] **Use `canPayout()` in payout managers**
-  - Validate before attempting send
-  - Handle insufficient balance gracefully
-
-### Phase 3: Testing (Week 3)
-
-- [ ] Test: No deficit (splits match actual received)
-- [ ] Test: Concurrent operations don't corrupt balance
-- [ ] Test: All fees tracked accurately
-- [ ] Test: Reserve matches actual balance
-- [ ] Test: Lightning fee handling
-- [ ] Test: Insufficient balance handling
+### Recommended: Option 1
+- Simpler implementation
+- Fewer operations
+- Change naturally accumulates
+- Sweep when economical (e.g., > 100 sats)
 
 ## Success Criteria
 
-✅ **No deficits**: `devSplit + payerSplit = actualIncoming` (always)  
-✅ **No race conditions**: Operations serialized per mint  
-✅ **Accurate fees**: Use coco's fee for sends, balance differential for receives  
-✅ **No overspending**: Pre-flight checks prevent insufficient balance  
-✅ **Complete tracking**: Every sat accounted for in activity feed  
-
-## Key Insights
-
-1. **Coco already provides send fees** - we just need to use them!
-2. **Receive fees require balance differential** - coco doesn't expose them
-3. **Split the ACTUAL amount** - not the nominal amount
-4. **Lock operations per mint** - prevent concurrent corruption
-5. **Validate before payout** - check reserve has enough for amount + fees
-6. **No arbitrary buffers** - use actual fee estimates from melt quotes
-7. **Record shortfalls** - when we can't pay full amount, track the difference
-
-## Fee Handling Summary
-
-### For Receives (Guest → Host)
-- Coco doesn't expose receive fees
-- Use balance differential: `actualIncoming = balanceAfter - balanceBefore`
-- Split the ACTUAL amount, not nominal
-
-### For Sends (Host → Dev/Payer)
-- Coco exposes fees via `sendResult.fee`
-- Total balance decrease = `amount + sendResult.fee`
-- Record both amount and fee separately
-
-### For Lightning Melts
-- Get fee estimate from melt quote: `quote.fee_reserve`
-- Actual fee may differ: `meltResult.fees`
-- Total cost = `sendResult.fee + meltResult.fees`
-- If insufficient reserve, reduce payout amount and record shortfall
-
-### Reserve Calculation
-```
-remainingReserve = totalIncoming - devPaidOut - payerPaidOut - totalFees
-
-Where:
-- totalIncoming: ACTUAL received (after receive swap fees)
-- devPaidOut: amount sent to dev (not including fees)
-- payerPaidOut: amount sent to payer (not including fees)
-- totalFees: sum of all fees (dev swap + payer swap + payer LN)
-```
-
-### Payout Execution Order (Event-Based)
-
-**Critical**: Payouts must execute sequentially per settlement.
-
-**Event Flow**:
-```
-1. Guest payment arrives
-   ↓
-2. Record incoming (ACTUAL amount)
-   → Fires accountingService.records.itemAdded$ with 'incoming' record
-   ↓
-3. IncomingPaymentSplitter processes 'incoming' event
-   → Records 'dev_split' and 'payer_split'
-   → Fires itemAdded$ for both split records
-   ↓
-4. DevPayoutManager processes 'dev_split' event
-   → Executes dev payout (with operationLock)
-   → Records 'dev_payout'
-   → Fires itemAdded$ with 'dev_payout' record
-   ↓
-5. PayerPayoutManager processes 'payer_split' event
-   → Checks if 'dev_payout' exists
-   → If NO: returns early (waits for dev_payout event)
-   → If YES: proceeds with payer payout
-   ↓
-6. PayerPayoutManager ALSO subscribes to 'dev_payout' events
-   → When 'dev_payout' added, re-checks all pending 'payer_split' records
-   → Processes any that were waiting
-```
-
-**Implementation in PayerPayoutManager**:
-```javascript
-class PayerPayoutManager {
-  start() {
-    // Subscribe to payer_split records
-    const payerSplitSub = accountingService.records.itemAdded$.subscribe(
-      ({ item: record }) => {
-        if (record.type === 'payer_split') {
-          this._processPayerSplit(record);
-        }
-      }
-    );
-    
-    // ✅ NEW: Subscribe to dev_payout records
-    const devPayoutSub = accountingService.records.itemAdded$.subscribe(
-      ({ item: record }) => {
-        if (record.type === 'dev_payout') {
-          // Dev payout completed - check for pending payer splits
-          this._retryPendingPayerSplits(record.receiptEventId, record.settlementEventId);
-        }
-      }
-    );
-    
-    this.subscriptions.push(payerSplitSub, devPayoutSub);
-  }
-  
-  async _retryPendingPayerSplits(receiptEventId, settlementEventId) {
-    const records = accountingService.getSettlementAccounting(
-      receiptEventId,
-      settlementEventId
-    );
-    
-    const payerSplit = records.find(r => r.type === 'payer_split');
-    const payerPayoutExists = records.some(r => r.type === 'payer_payout');
-    
-    if (payerSplit && !payerPayoutExists) {
-      console.log(`🔄 Dev payout complete, now processing payer payout...`);
-      await this._processPayerSplit(payerSplit);
-    }
-  }
-}
-```
-
-**Why This Works**:
-- Fully event-based, no polling
-- Operation lock ensures only one operation per mint at a time
-- Payer payout naturally waits for dev payout via event subscription
-- If payer_split arrives before dev_payout completes, it returns early
-- When dev_payout event fires, it triggers retry of pending payer splits
-- Clean, reactive, no race conditions
+✅ **Parallel execution**: Dev and payer payouts run simultaneously  
+✅ **No deficits**: Each payout fits within allocated split  
+✅ **Change handled**: Difference stays in balance for future use  
+✅ **Perfect accounting**: Every sat tracked and accounted for  
+✅ **No race conditions**: Operation lock + budget constraints prevent conflicts  
