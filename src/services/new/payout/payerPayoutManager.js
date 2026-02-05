@@ -1,11 +1,12 @@
 import { validateReceiveAddress } from '../../../utils/receiveAddressValidationUtils.js';
 import { getReceiveAddress } from '../../storageService.js';
 import { cashuDmSender } from './cashuDmSender.js';
-import lightningMelter from './lightningMelter.js';
+import { lightningMelter } from './lightningMelter';
 import { cocoService } from '../../cocoService';
 import { accountingService } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
 import { backgroundAudioService } from '../../backgroundAudioService';
+import { operationLockService } from '../../operationLockService';
 
 /**
  * payer Payout Manager Service
@@ -121,19 +122,6 @@ class PayerPayoutManager {
         
         console.log(`✅ Address validated as type: ${validation.type}`);
 
-        // Get reserve to check available funds
-        const reserve = accountingService.getReserve(
-          payerSplit.receiptEventId,
-          payerSplit.settlementEventId
-        );
-        
-        if (!reserve) {
-          console.error('Cannot payout payer: reserve not found');
-          return;
-        }
-
-        console.log(`📊 Reserve status: ${reserve.remainingReserve} sats remaining`);
-
         // Get coco instance
         const coco = cocoService.getCoco();
         
@@ -141,134 +129,95 @@ class PayerPayoutManager {
         let fees = 0;
         let payoutType = 'cashu'; // Default to cashu
         
-        // Handle Lightning with fee protection
+        // Handle Lightning - NEW API: budget-based, fire-and-forget
         if (validation.type === 'lightning') {
           console.log(`⚡ Lightning payout requested`);
+          console.log(`💰 Budget: ${payerSplit.amount} sats`);
           
-          // For Lightning addresses, we need to resolve to invoice to check fees
-          // But we'll pass the original address to melt() which will resolve it again
-          let invoiceForQuote = receiveAddress;
-          if (receiveAddress.includes('@')) {
-            console.log(`🔍 Resolving Lightning Address for fee check: ${receiveAddress}`);
-            invoiceForQuote = await lightningMelter.requestInvoice(receiveAddress, payerSplit.amount);
-            console.log(`✅ Resolved to invoice: ${invoiceForQuote.substring(0, 50)}...`);
-          }
-          
-          // Create melt quote to check fee
-          const quote = await coco.quotes.createMeltQuote(payerSplit.mintUrl, invoiceForQuote);
-          const estimatedFee = quote.fee_reserve;
-          
-          console.log(`💸 Estimated Lightning fee: ${estimatedFee} sats`);
-          
-          // Calculate safe amount to send (protect reserve)
-          const maxAvailable = reserve.remainingReserve;
-          const safeAmount = Math.min(
-            payerSplit.amount,
-            maxAvailable - estimatedFee
-          );
-          
-          if (safeAmount <= 0) {
-            console.error(`❌ Insufficient reserve for Lightning fees (need ${estimatedFee}, have ${maxAvailable})`);
-            return;
-          }
-          
-          if (safeAmount < payerSplit.amount) {
-            console.warn(`⚠️ Reducing payout from ${payerSplit.amount} to ${safeAmount} sats due to fees`);
-          }
-          
-          amountToSend = safeAmount;
-          
-          // Send tokens using coco
-          let token;
-          try {
-            token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
-          } catch (error) {
-            // Handle insufficient balance - send what we can
-            if (error.message?.includes('Insufficient balance')) {
-              const currentBalance = await cocoService.getBalance(payerSplit.mintUrl);
-              console.warn(`⚠️ Insufficient balance: need ${amountToSend}, have ${currentBalance}`);
-              
-              if (currentBalance > 0) {
-                console.log(`💰 Sending available balance: ${currentBalance} sats`);
-                amountToSend = currentBalance;
-                token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
-                
-                // Record the shortfall
-                const shortfall = payerSplit.amount - amountToSend;
-                console.warn(`⚠️ Missing funds: ${shortfall} sats could not be paid`);
-                
-                // Record shortfall in accounting
-                accountingService.recordShortfall(
-                  payerSplit.receiptEventId,
-                  payerSplit.settlementEventId,
-                  shortfall,
-                  payerSplit.mintUrl,
-                  'payer',
-                  `Insufficient balance: needed ${payerSplit.amount}, had ${currentBalance}`
-                );
-              } else {
-                console.error(`❌ No balance available for payout`);
-                throw error;
-              }
-            } else {
-              throw error;
-            }
-          }
-          
-          // IMMEDIATELY store proofs in safety buffer
-          const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
-          proofSafetyService.storePendingPayout({
-            id: payoutId,
+          // NEW: Simply pass budget to melter, it handles everything
+          // Melter will acquire lock only when needed (prepareSend/executePreparedSend)
+          await lightningMelter.startMelt({
             receiptEventId: payerSplit.receiptEventId,
             settlementEventId: payerSplit.settlementEventId,
-            type: 'payer',
-            proofs: token.proofs,
-            mintUrl: payerSplit.mintUrl,
-            amount: amountToSend,
-            destination: receiveAddress, // Store original address/invoice
-            createdAt: Date.now(),
-            status: 'pending'
+            maxBudget: payerSplit.amount,
+            lightningAddress: receiveAddress,
+            mintUrl: payerSplit.mintUrl
           });
           
-          // Melt to Lightning - pass original receiveAddress (address or invoice)
-          // The melt function will handle Lightning address resolution internally
-          const sessionId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}`;
-          const meltResult = await lightningMelter.melt(
-            token.proofs,
-            receiveAddress, // Pass original address/invoice, not the resolved one
-            payerSplit.mintUrl,
-            { sessionId }
-          );
+          // Melter handles:
+          // - prepareSend + rollback to fit budget (with lock)
+          // - Getting proofs from Coco (with lock)
+          // - Storing in safety buffer
+          // - Melt rounds with retries
+          // - Recording in accounting
+          // - Updating reserves
           
-          fees = meltResult.fees || 0;
-          payoutType = 'lightning';
-          console.log(`⚡ Lightning melt complete: ${amountToSend} sats sent, ${fees} sats fees`);
+          console.log(`✅ Lightning melt initiated (async)`);
           
-          // Mark as sent in safety buffer
-          proofSafetyService.markSent(payoutId);
+          // Skip accounting - melter records it when done
+          return;
           
         } else if (validation.type === 'cashu') {
           console.log(`🥜 Cashu payout requested`);
           
-          // Cashu has no fees, send full amount
-          const token = await coco.wallet.send(payerSplit.mintUrl, amountToSend);
+          let token;
+          let payoutId;
           
-          // IMMEDIATELY store proofs in safety buffer
-          const payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
-          proofSafetyService.storePendingPayout({
-            id: payoutId,
-            receiptEventId: payerSplit.receiptEventId,
-            settlementEventId: payerSplit.settlementEventId,
-            type: 'payer',
-            proofs: token.proofs,
-            mintUrl: payerSplit.mintUrl,
-            amount: amountToSend,
-            destination: receiveAddress,
-            createdAt: Date.now(),
-            status: 'pending'
-          });
+          // Use operation lock ONLY for prepareSend/executePreparedSend
+          await operationLockService.withLock(payerSplit.mintUrl, async () => {
+            // ✅ Use prepareSend to find amount that fits within allocation
+            amountToSend = payerSplit.amount;
+            let preparedSend = await coco.send.prepareSend(payerSplit.mintUrl, amountToSend);
+            
+            const maxIterations = 20;
+            let iterations = 0;
+            
+            // Adjust down until amount + fee fits within allocation
+            while (amountToSend + preparedSend.fee > payerSplit.amount && amountToSend > 0 && iterations < maxIterations) {
+              // ✅ Rollback previous prepare before trying next amount
+              await coco.send.rollback(preparedSend.id);
+              
+              amountToSend--;
+              preparedSend = await coco.send.prepareSend(payerSplit.mintUrl, amountToSend);
+              iterations++;
+            }
+            
+            if (amountToSend <= 0) {
+              console.error(`❌ Cannot fit payer payout in ${payerSplit.amount} sats`);
+              return;
+            }
+            
+            const totalCost = amountToSend + preparedSend.fee;
+            console.log(`📊 Payer (Cashu): ${amountToSend} sats + ${preparedSend.fee} fee = ${totalCost} sats (allocated: ${payerSplit.amount})`);
+            
+            // ✅ Handle change if actual cost < allocated
+            const change = payerSplit.amount - totalCost;
+            if (change > 0) {
+              console.log(`💰 Payer payout change: ${change} sats (will stay in balance)`);
+            }
+            
+            // Execute the prepared send
+            token = await coco.send.executePreparedSend(preparedSend.id);
+            
+            // IMMEDIATELY store proofs in safety buffer
+            payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
+            proofSafetyService.storePendingPayout({
+              id: payoutId,
+              receiptEventId: payerSplit.receiptEventId,
+              settlementEventId: payerSplit.settlementEventId,
+              type: 'payer',
+              proofs: token.proofs,
+              mintUrl: payerSplit.mintUrl,
+              amount: amountToSend,
+              destination: receiveAddress,
+              createdAt: Date.now(),
+              status: 'pending'
+            });
+            
+            fees = preparedSend.fee;
+          }); // End of operation lock - release BEFORE sending DM
           
-          // Send via Cashu DM
+          // Send via Cashu DM (outside lock)
           await cashuDmSender.payCashuPaymentRequest(
             receiveAddress,
             token.proofs,
@@ -279,25 +228,26 @@ class PayerPayoutManager {
           proofSafetyService.markSent(payoutId);
           
           payoutType = 'cashu';
-          console.log(`🥜 Cashu payout complete: ${amountToSend} sats sent`);
+          const change = payerSplit.amount - (amountToSend + fees);
+          console.log(`🥜 Cashu payout complete: ${amountToSend} sats sent (change: ${change} sats)`);
           
         } else {
           console.error('Unknown address type for payer payout:', validation.type);
           return;
         }
         
-        // Record payout in accounting
+        // Record payout in accounting (only for Cashu - Lightning records itself)
         accountingService.recordPayerPayout(
           payerSplit.receiptEventId,
           payerSplit.settlementEventId,
           amountToSend,
           fees,
           payerSplit.mintUrl,
-          payoutType, // 'lightning' or 'cashu'
+          payoutType, // 'cashu' only (lightning handles its own)
           payerSplit.amount // original amount before fee adjustment
         );
         
-        // Update reserve
+        // Update reserve (only for Cashu - Lightning updates itself)
         accountingService.updateReserveAfterPayout(
           payerSplit.receiptEventId,
           payerSplit.settlementEventId,

@@ -1,13 +1,14 @@
 import { SimpleSigner } from 'applesauce-signers';
-import { sumProofs } from '../../../utils/cashuUtils.js';
 import { DEV_CASHU_REQ } from '../../nostr/constants.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
 import { cocoService } from '../../cocoService';
-import { accountingService } from '../../accountingService';
+import { accountingService, AccountingRecord } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
 import { backgroundAudioService } from '../../backgroundAudioService';
+import { operationLockService } from '../../operationLockService';
 import { Buffer } from 'buffer';
+import { Subscription } from 'rxjs';
 
 /**
  * Developer Payout Manager Service
@@ -16,12 +17,10 @@ import { Buffer } from 'buffer';
  * based on accumulated amounts and payout thresholds.
  */
 class DevPayoutManager {
-  constructor() {
-    this.isActive = false;
-    this.subscriptions = [];
-  }
+  private isActive: boolean = false;
+  private subscriptions: Subscription[] = [];
 
-  start() {
+  start(): void {
     if (this.isActive) {
       console.log('🔄 DevPayoutManager already running');
       return;
@@ -35,7 +34,7 @@ class DevPayoutManager {
 
     // Subscribe to new dev split records
     const devSplitSubscription = accountingService.records.itemAdded$.subscribe(
-      ({ item: record }) => {
+      ({ item: record }: { item: AccountingRecord }) => {
         if (record.type === 'dev_split') {
           console.log(`💼 New developer split: ${record.receiptEventId.slice(0, 8)}... (${record.amount} sats)`);
           this._processDevSplit(record);
@@ -46,7 +45,7 @@ class DevPayoutManager {
     this.subscriptions.push(devSplitSubscription);
   }
 
-  stop() {
+  stop(): void {
     if (!this.isActive) {
       console.log('⏹️ DevPayoutManager already stopped');
       return;
@@ -65,7 +64,7 @@ class DevPayoutManager {
   /**
    * Process all existing dev splits on startup
    */
-  async _processExistingDevSplits() {
+  private async _processExistingDevSplits(): Promise<void> {
     const allRecords = accountingService.records.getAllItems();
     const devSplits = allRecords.filter(r => r.type === 'dev_split');
     
@@ -82,13 +81,8 @@ class DevPayoutManager {
 
   /**
    * Process a developer split and send payout from unified coco balance
-   * @param {Object} devSplit - The developer split accounting record
-   * @param {string} devSplit.receiptEventId - Receipt event ID
-   * @param {string} devSplit.settlementEventId - Settlement event ID
-   * @param {number} devSplit.amount - Amount in sats
-   * @param {string} devSplit.mintUrl - Mint URL
    */
-  async _processDevSplit(devSplit) {
+  private async _processDevSplit(devSplit: AccountingRecord): Promise<void> {
     try {
         // Activate background audio for dev payout (debounced)
         backgroundAudioService.activate('dev_payout_started');
@@ -111,62 +105,93 @@ class DevPayoutManager {
         console.log(`   💰 Amount: ${devSplit.amount} sats (${devSplit.metadata?.percentage}%)`);
         console.log(`   🏦 Mint: ${devSplit.mintUrl}`);
 
-        // Get coco instance
-        const coco = cocoService.getCoco();
-        
-        // Send tokens using coco (may incur swap fees)
-        const token = await coco.wallet.send(
-          devSplit.mintUrl,
-          devSplit.amount
-        );
-        
-        console.log(`📤 Sent ${devSplit.amount} sats from Coco balance`);
-        
-        // IMMEDIATELY store proofs in safety buffer
-        const payoutId = `${devSplit.receiptEventId}-${devSplit.settlementEventId}-dev`;
-        proofSafetyService.storePendingPayout({
-          id: payoutId,
-          receiptEventId: devSplit.receiptEventId,
-          settlementEventId: devSplit.settlementEventId,
-          type: 'dev',
-          proofs: token.proofs,
-          mintUrl: devSplit.mintUrl,
-          amount: devSplit.amount,
-          destination: DEV_CASHU_REQ,
-          createdAt: Date.now(),
-          status: 'pending'
+        // Use operation lock to serialize operations on this mint
+        await operationLockService.withLock(devSplit.mintUrl, async () => {
+          // Get coco instance
+          const coco = cocoService.getCoco();
+          
+          // ✅ Use prepareSend to find amount that fits within allocation
+          let amountToSend = devSplit.amount; // Start with allocated amount
+          let preparedSend = await coco.send.prepareSend(devSplit.mintUrl, amountToSend);
+          
+          // Adjust down until amount + fee fits within allocation
+          const maxIterations = 20;
+          let iterations = 0;
+          
+          while (amountToSend + preparedSend.fee > devSplit.amount && amountToSend > 0 && iterations < maxIterations) {
+            // ✅ Rollback previous prepare before trying next amount
+            await coco.send.rollback(preparedSend.id);
+            
+            amountToSend--;
+            preparedSend = await coco.send.prepareSend(devSplit.mintUrl, amountToSend);
+            iterations++;
+          }
+          
+          if (amountToSend <= 0) {
+            console.error(`❌ Cannot fit dev payout in ${devSplit.amount} sats`);
+            return;
+          }
+          
+          const totalCost = amountToSend + preparedSend.fee;
+          console.log(`📊 Dev payout: ${amountToSend} sats + ${preparedSend.fee} fee = ${totalCost} sats (allocated: ${devSplit.amount})`);
+          
+          // ✅ Handle change if actual cost < allocated
+          const change = devSplit.amount - totalCost;
+          if (change > 0) {
+            console.log(`💰 Dev payout change: ${change} sats (will stay in balance)`);
+          }
+          
+          // Execute the prepared send
+          const { token } = await coco.send.executePreparedSend(preparedSend.id);
+          
+          console.log(`📤 Sent ${amountToSend} sats from Coco balance (fee: ${preparedSend.fee})`);
+          
+          // IMMEDIATELY store proofs in safety buffer
+          const payoutId = `${devSplit.receiptEventId}-${devSplit.settlementEventId}-dev`;
+          proofSafetyService.storePendingPayout({
+            id: payoutId,
+            receiptEventId: devSplit.receiptEventId,
+            settlementEventId: devSplit.settlementEventId,
+            type: 'dev',
+            proofs: token.proofs,
+            mintUrl: devSplit.mintUrl,
+            amount: amountToSend,
+            destination: DEV_CASHU_REQ,
+            createdAt: Date.now(),
+            status: 'pending'
+          });
+          
+          // Send via Cashu DM
+          await cashuDmSender.payCashuPaymentRequest(
+            DEV_CASHU_REQ,
+            token.proofs,
+            devSplit.mintUrl
+          );
+          
+          // Mark as sent in safety buffer
+          proofSafetyService.markSent(payoutId);
+          
+          // Record payout in accounting with actual amounts
+          accountingService.recordDevPayout(
+            devSplit.receiptEventId,
+            devSplit.settlementEventId,
+            amountToSend,
+            preparedSend.fee,
+            devSplit.mintUrl,
+            'cashu' // Dev payouts are always Cashu
+          );
+          
+          // Update reserve with actual amounts
+          accountingService.updateReserveAfterPayout(
+            devSplit.receiptEventId,
+            devSplit.settlementEventId,
+            'dev',
+            amountToSend,
+            preparedSend.fee
+          );
+          
+          console.log(`✅ Dev payout complete with safety buffer (change: ${change} sats)`);
         });
-        
-        // Send via Cashu DM
-        await cashuDmSender.payCashuPaymentRequest(
-          DEV_CASHU_REQ,
-          token.proofs,
-          devSplit.mintUrl
-        );
-        
-        // Mark as sent in safety buffer
-        proofSafetyService.markSent(payoutId);
-        
-        // Record payout in accounting (fees = 0, coco handles swap fees internally)
-        accountingService.recordDevPayout(
-          devSplit.receiptEventId,
-          devSplit.settlementEventId,
-          devSplit.amount,
-          0, // fees
-          devSplit.mintUrl,
-          'cashu' // Dev payouts are always Cashu
-        );
-        
-        // Update reserve
-        accountingService.updateReserveAfterPayout(
-          devSplit.receiptEventId,
-          devSplit.settlementEventId,
-          'dev',
-          devSplit.amount,
-          0
-        );
-        
-        console.log(`✅ Dev payout complete with safety buffer`);
 
     } catch (error) {
       console.error(`❌ Error processing dev split ${devSplit.receiptEventId}:`, error);
@@ -174,7 +199,7 @@ class DevPayoutManager {
     }
   }
 
-  async _createSignerFromSessionId(receiptEventId) {
+  private async _createSignerFromSessionId(receiptEventId: string): Promise<SimpleSigner> {
     try {
       // Get owned receipt to access private key
       const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);

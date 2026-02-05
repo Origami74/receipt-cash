@@ -9,6 +9,7 @@ import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
 import { cocoService } from "../../cocoService";
 import { accountingService } from "../../accountingService";
+import { operationLockService } from "../../operationLockService";
 import { getEncodedToken } from "@cashu/cashu-ts";
 import { sumProofs } from "../../../utils/cashuUtils";
 
@@ -98,41 +99,56 @@ class CashuPaymentCollector {
         return;
       }
 
-      // Get coco instance
-      const coco = cocoService.getCoco();
-      
-      // Add mint if not already added (auto-trust)
-      const mints = await coco.mint.getAllMints();
-      const mintExists = mints.some(m => m.url === cashuDM.mintUrl);
-      
-      if (!mintExists) {
-        await coco.mint.addMint(cashuDM.mintUrl, { trusted: true });
-        console.log(`✅ Auto-trusted mint: ${cashuDM.mintUrl}`);
-      }
-      
-      // Construct token for coco
-      const tokenData = {
-        mint: cashuDM.mintUrl,
-        proofs: cashuDM.proofs
-      };
-      const token = getEncodedToken(tokenData);
-      
-      // Receive into coco (handles swapping to fresh proofs)
-      await coco.wallet.receive(token);
-      
-      const amount = sumProofs(cashuDM.proofs);
-      console.log(`💰 Received ${amount} sats into Coco from ${cashuDM.mintUrl}`);
-      
-      // Record in accounting
-      accountingService.recordIncoming(
-        this.receipt.eventId,
-        cashuDM.settlementId,
-        amount,
-        cashuDM.mintUrl
-      );
-      
-      // Confirm settlement
-      await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId);
+      // Use operation lock to prevent concurrent receives on same mint
+      await operationLockService.withLock(cashuDM.mintUrl, async () => {
+        // Get coco instance
+        const coco = cocoService.getCoco();
+        
+        // Add mint if not already added (auto-trust)
+        const mints = await coco.mint.getAllMints();
+        const mintExists = mints.some(m => m.url === cashuDM.mintUrl);
+        
+        if (!mintExists) {
+          await coco.mint.addMint(cashuDM.mintUrl, { trusted: true });
+          console.log(`✅ Auto-trusted mint: ${cashuDM.mintUrl}`);
+        }
+        
+        // Get balance BEFORE receive (to calculate actual incoming)
+        const balanceBefore = await cocoService.getBalance(cashuDM.mintUrl);
+        
+        // Construct token for coco
+        const tokenData = {
+          mint: cashuDM.mintUrl,
+          proofs: cashuDM.proofs
+        };
+        const token = getEncodedToken(tokenData);
+        
+        // Receive into coco (handles swapping to fresh proofs)
+        await coco.wallet.receive(token);
+        
+        // Get balance AFTER receive
+        const balanceAfter = await cocoService.getBalance(cashuDM.mintUrl);
+        
+        // Calculate ACTUAL incoming amount (accounts for receive swap fees)
+        const actualIncoming = balanceAfter - balanceBefore;
+        const nominalAmount = sumProofs(cashuDM.proofs);
+        const receiveFee = nominalAmount - actualIncoming;
+        
+        console.log(`💰 Received ${actualIncoming} sats into Coco from ${cashuDM.mintUrl} (nominal: ${nominalAmount}, fee: ${receiveFee})`);
+        
+        // ✅ Record ACTUAL incoming amount with receive fee for display
+        accountingService.recordIncoming(
+          this.receipt.eventId,
+          cashuDM.settlementId,
+          actualIncoming, // Use actual, not nominal!
+          cashuDM.mintUrl,
+          receiveFee, // Track receive fee for user display
+          nominalAmount // Track original nominal amount
+        );
+        
+        // Confirm settlement
+        await confirmSettlement(signer, this.receipt.eventId, cashuDM.settlementId);
+      });
       
       console.debug("💾 Successfully processed payment via Coco");
       

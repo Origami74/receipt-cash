@@ -69,9 +69,9 @@
             :melt-rounds="meltRounds"
           />
           
-          <!-- Fees -->
+          <!-- All Fees (receive + swap + LN) - Always show once payouts exist -->
           <ActivityAccountingRecord
-            v-if="totalFees > 0"
+            v-if="feesRecord"
             :record="feesRecord"
             status="success"
           />
@@ -83,9 +83,9 @@
             status="pending"
           />
           
-          <!-- Change/Dust (after completion) -->
+          <!-- Change/Dust (after completion) - Always show once payouts complete -->
           <ActivityAccountingRecord
-            v-if="changeAmount > 0"
+            v-if="changeRecord"
             :record="changeRecord"
             status="success"
           />
@@ -161,6 +161,34 @@ export default {
       return accountingRecords.value.filter(r => r.type === 'shortfall');
     });
     
+    // Get incoming record to extract receive fee
+    const incomingRecord = computed(() => {
+      return accountingRecords.value.find(r => r.type === 'incoming') || null;
+    });
+    
+    // Extract receive fee from incoming record
+    const receiveFee = computed(() => {
+      if (!incomingRecord.value || !incomingRecord.value.fees) {
+        return 0;
+      }
+      return incomingRecord.value.fees;
+    });
+    
+    // Get payout fees from reserve
+    const payoutFees = computed(() => {
+      const reserve = accountingService.getReserve(
+        props.receiptId,
+        props.settlement.event.id
+      );
+      
+      return reserve?.totalFees || 0;
+    });
+    
+    // Total fees = receive fee + payout fees
+    const totalFees = computed(() => {
+      return receiveFee.value + payoutFees.value;
+    });
+    
     // Check if payout is actually complete by looking at melt session and accounting
     const isPayoutComplete = computed(() => {
       // Must have both dev and payer payouts
@@ -200,7 +228,7 @@ export default {
       return true;
     });
     
-    // Calculate change/dust from reserve
+    // Calculate change/dust from reserve + payout dust
     const changeAmount = computed(() => {
       const reserve = accountingService.getReserve(
         props.receiptId,
@@ -209,13 +237,20 @@ export default {
       
       if (!reserve) return 0;
       
-      // Show change if payout is complete (either by reserve status or melt session)
+      let totalChange = 0;
+      
+      // Add reserve remaining (traditional change)
       if (reserve.remainingReserve > 0 &&
           (reserve.status === 'complete' || isPayoutComplete.value)) {
-        return reserve.remainingReserve;
+        totalChange += reserve.remainingReserve;
       }
       
-      return 0;
+      // Add dust from Lightning melts (stored in payout record)
+      if (payerPayout.value?.dustAmount) {
+        totalChange += payerPayout.value.dustAmount;
+      }
+      
+      return totalChange;
     });
     
     // Calculate pending amount (unallocated money during processing)
@@ -237,35 +272,55 @@ export default {
       return 0;
     });
     
-    // Get total fees from reserve or calculate from melt rounds
-    const totalFees = computed(() => {
-      // First try to get from reserve
-      const reserve = accountingService.getReserve(
-        props.receiptId,
-        props.settlement.event.id
-      );
-      
-      if (reserve && reserve.totalFees > 0) {
-        return reserve.totalFees;
+    // Create a virtual record for all fees display (receive + swap + LN)
+    // Always show fees once payouts exist, even if zero
+    const feesRecord = computed(() => {
+      // Only show fees if we have at least one payout (dev or payer)
+      if (!devPayout.value && !payerPayout.value) {
+        return null;
       }
       
-      // If not in reserve yet, calculate from melt rounds
-      if (meltRounds.value.length > 0) {
-        const feesFromRounds = meltRounds.value.reduce((sum, round) => {
-          return sum + (round.meltQuote?.fee_reserve || 0);
-        }, 0);
-        
-        if (feesFromRounds > 0) {
-          return feesFromRounds;
+      // Get individual fee components
+      const devFee = devPayout.value?.fees || 0;
+      const payerFee = payerPayout.value?.fees || 0;
+      
+      // Build detailed description
+      const parts = [];
+      parts.push(`receive: ${receiveFee.value}`);
+      parts.push(`dev swap: ${devFee}`);
+      
+      if (payerPayout.value?.metadata?.payoutType === 'lightning') {
+        parts.push(`payer swap+LN: ${payerFee}`);
+      } else {
+        parts.push(`payer swap: ${payerFee}`);
+      }
+      
+      const description = `Fees (${parts.join(', ')})`;
+      const totalAmount = receiveFee.value + devFee + payerFee;
+      
+      return {
+        receiptEventId: props.receiptId,
+        settlementEventId: props.settlement.event.id,
+        timestamp: Date.now(),
+        type: 'fees',
+        amount: totalAmount,
+        mintUrl: props.settlement.mint || '',
+        metadata: {
+          description,
+          receiveFee: receiveFee.value,
+          devFee,
+          payerFee,
+          payoutFees: payoutFees.value
         }
-      }
-      
-      return 0;
+      };
     });
     
-    // Create a virtual record for change display
+    // Create a virtual record for change display - always show once payouts complete
     const changeRecord = computed(() => {
-      if (changeAmount.value === 0) return null;
+      // Only show change once both payouts exist
+      if (!devPayout.value || !payerPayout.value) {
+        return null;
+      }
       
       return {
         receiptEventId: props.receiptId,
@@ -275,7 +330,7 @@ export default {
         amount: changeAmount.value,
         mintUrl: props.settlement.mint || '',
         metadata: {
-          description: 'Saved to wallet for AI payments'
+          description: changeAmount.value > 0 ? 'Saved to wallet for AI payments' : 'No change'
         }
       };
     });
@@ -297,27 +352,10 @@ export default {
       };
     });
     
-    // Create a virtual record for fees display
-    const feesRecord = computed(() => {
-      if (totalFees.value === 0) return null;
-      
-      return {
-        receiptEventId: props.receiptId,
-        settlementEventId: props.settlement.event.id,
-        timestamp: Date.now(),
-        type: 'fees',
-        amount: totalFees.value,
-        mintUrl: props.settlement.mint || '',
-        metadata: {
-          description: 'Lightning network fees'
-        }
-      };
-    });
-    
     const hasPayoutOperations = computed(() => {
       return devPayout.value || payerPayout.value || meltRounds.value.length > 0 ||
              changeAmount.value > 0 || pendingAmount.value > 0 ||
-             totalFees.value > 0 || shortfalls.value.length > 0;
+             totalFees.value > 0 || receiveFee.value > 0 || shortfalls.value.length > 0;
     });
     
     // Get melt rounds for Lightning payouts
@@ -443,6 +481,8 @@ export default {
       pendingAmount,
       pendingRecord,
       totalFees,
+      receiveFee,
+      payoutFees,
       feesRecord,
       shortfalls,
       hasPayoutOperations,

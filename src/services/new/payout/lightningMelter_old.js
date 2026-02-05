@@ -193,7 +193,7 @@ class LightningMelter {
       
 
       // Create melt session for tracking
-      const session = meltSessionStorageManager.createSession(
+      meltSessionStorageManager.createSession(
         finalSessionId,
         proofs,
         lightningAddress,
@@ -285,12 +285,54 @@ class LightningMelter {
         }
       }
       
+      // Calculate totals from ALL rounds in session
+      const session = meltSessionStorageManager.getByKey(finalSessionId);
+      
+      const totalMeltedFromSession = session?.rounds?.reduce((sum, round) => {
+        if (!round.success) return sum;
+        // Amount melted = input proofs - change proofs
+        const inputAmount = sumProofs(round.inputProofs || []);
+        const changeAmount = sumProofs(round.changeProofs || []);
+        return sum + (inputAmount - changeAmount);
+      }, 0) || 0;
+      
+      const totalLightningFees = session?.rounds?.reduce((sum, round) => {
+        return sum + (round.meltQuote?.fee_reserve || 0);
+      }, 0) || 0;
+      
+      console.log(`📊 Session ${finalSessionId} complete:`);
+      console.log(`   Rounds: ${session?.rounds?.length || 0}`);
+      console.log(`   Total melted: ${totalMeltedFromSession} sats`);
+      console.log(`   Lightning fees: ${totalLightningFees} sats`);
+      console.log(`   Remaining: ${finalRemainingAmount} sats`);
+      
+      // Auto-receive remaining dust at the very end
+      if (finalRemainingProofs.length > 0) {
+        try {
+          const coco = cocoService.getCoco();
+          const token = getEncodedToken({
+            mint: mintUrl,
+            proofs: finalRemainingProofs
+          });
+          await coco.wallet.receive(token);
+          console.log(`💰 Auto-received ${finalRemainingAmount} sats dust to Coco`);
+          
+          // Clear remaining proofs since they're now in Coco
+          finalRemainingProofs = [];
+          finalRemainingAmount = 0;
+        } catch (receiveError) {
+          console.error('Failed to auto-receive remaining proofs:', receiveError);
+          // Keep the proofs in the result so caller can handle them
+        }
+      }
+      
       // Complete the session
       const finalResult = {
         success: true,
-        totalMelted,
+        totalMelted: totalMeltedFromSession,      // Actual sats sent via Lightning
+        lightningFees: totalLightningFees,        // Fees from all melt rounds
+        remainingAmount: finalRemainingAmount,    // Dust auto-received
         remainingProofs: finalRemainingProofs,
-        remainingAmount: finalRemainingAmount,
         attempts: meltResult.attempts + (finalRemainingAmount !== meltResult.remainingAmount ? 1 : 0),
         changeStored: storeChangeInJar && finalRemainingProofs.length > 0,
         sessionId: finalSessionId
@@ -492,45 +534,14 @@ class LightningMelter {
       console.log(`- Remaining: ${finalRemainingAmount} sats in ${remainingProofs.length} proofs`);
       console.log(`- Attempts made: ${meltAttempts}`);
       
-      // Automatically store remaining proofs in Coco wallet if melt was successful
-      // This ensures change is never lost, even if the calling function doesn't handle it
-      if (totalMelted > 0 && remainingProofs.length > 0) {
-        try {
-          const coco = cocoService.getCoco();
-          
-          // Add mint if not already added (auto-trust)
-          const mints = await coco.mint.getAllMints();
-          const mintExists = mints.some(m => m.url === mintUrl);
-          
-          if (!mintExists) {
-            await coco.mint.addMint(mintUrl, { trusted: true });
-            console.log(`✅ Auto-trusted mint: ${mintUrl}`);
-          }
-          
-          // Construct token and receive into coco
-          const token = getEncodedToken({
-            mint: mintUrl,
-            proofs: remainingProofs
-          });
-          
-          await coco.wallet.receive(token);
-          console.log(`💰 Automatically received ${finalRemainingAmount} sats remaining change into Coco wallet`);
-          
-          // IMPORTANT: After receiving into Coco, these proofs are now spent/swapped
-          // Return empty arrays to prevent caller from trying to use stale proofs
-          remainingProofs = [];
-        } catch (changeError) {
-          console.error('Failed to store remaining proofs to Coco:', changeError);
-          // Don't fail the whole operation if change storage fails
-          // But keep the remainingProofs so caller can try to handle them
-        }
-      }
+      // NOTE: Auto-receive is now handled at the end of melt() function
+      // This function just returns the remaining proofs for the caller to handle
       
       return {
         success: totalMelted > 0,
         totalMelted,
-        remainingProofs, // Will be empty if auto-received into Coco
-        remainingAmount: remainingProofs.length > 0 ? sumProofs(remainingProofs) : 0,
+        remainingProofs,
+        remainingAmount: finalRemainingAmount,
         attempts: meltAttempts
       };
       

@@ -17,6 +17,7 @@ export interface AccountingRecord {
   mintUrl: string;
   fees?: number;
   originalAmount?: number; // For payouts that were reduced due to fees
+  dustAmount?: number; // Change/dust that was returned (Lightning melts)
   metadata?: Record<string, any>;
 }
 
@@ -40,7 +41,7 @@ export interface SettlementReserve {
  * Manages settlement reserves to prevent overspending
  */
 export class AccountingService {
-  private records: ReactiveMapStorageManager<AccountingRecord>;
+  public records: ReactiveMapStorageManager<AccountingRecord>;
   private reserves: ReactiveMapStorageManager<SettlementReserve>;
 
   constructor() {
@@ -158,7 +159,9 @@ export class AccountingService {
     receiptEventId: string,
     settlementEventId: string,
     amount: number,
-    mintUrl: string
+    mintUrl: string,
+    receiveFee?: number,
+    nominalAmount?: number
   ): AccountingRecord {
     const record: AccountingRecord = {
       receiptEventId,
@@ -166,11 +169,17 @@ export class AccountingService {
       timestamp: Date.now(),
       type: 'incoming',
       amount,
-      mintUrl
+      mintUrl,
+      fees: receiveFee,
+      originalAmount: nominalAmount
     };
 
     this.records.setItem(record);
-    console.log(`📥 Recorded incoming: ${amount} sats`);
+    if (receiveFee && receiveFee > 0) {
+      console.log(`📥 Recorded incoming: ${amount} sats (nominal: ${nominalAmount}, receive fee: ${receiveFee})`);
+    } else {
+      console.log(`📥 Recorded incoming: ${amount} sats`);
+    }
     return record;
   }
 
@@ -261,7 +270,8 @@ export class AccountingService {
     fees: number,
     mintUrl: string,
     payoutType: 'cashu' | 'lightning' | 'changejar',
-    originalAmount?: number
+    originalAmount?: number,
+    dustAmount?: number
   ): AccountingRecord {
     const record: AccountingRecord = {
       receiptEventId,
@@ -272,6 +282,7 @@ export class AccountingService {
       mintUrl,
       fees,
       originalAmount,
+      dustAmount,
       metadata: { payoutType }
     };
 

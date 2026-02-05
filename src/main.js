@@ -10,7 +10,7 @@ import { devPayoutManager } from './services/new/payout/devPayoutManager';
 import { cashuDmSender } from './services/new/payout/cashuDmSender';
 import { payerPayoutManager } from './services/new/payout/payerPayoutManager';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
-import lightningMelter from './services/new/payout/lightningMelter';
+import { lightningMelter } from './services/new/payout/lightningMelter';
 import { receiptLifecycleManager } from './services/new/receiptLifecycleManager';
 import { cocoService } from './services/cocoService';
 import { proofSafetyService } from './services/proofSafetyService';
@@ -54,14 +54,11 @@ tabLockService.acquireLock().then(lockAcquired => {
     receiptLifecycleManager.start();
     incomingPaymentSplitter.start();
     devPayoutManager.start();
+    lightningMelter.start(); // Start immediately, not delayed
     payerPayoutManager.start();
     cashuDmSender.start();
 
     // Run recovery services after a short delay
-    setTimeout(async () => {
-      lightningMelter.start();
-    }, 1000);
-
     setTimeout(async () => {
       mintQuoteRecoveryService.start();
     }, 1000);

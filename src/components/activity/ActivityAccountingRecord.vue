@@ -208,16 +208,16 @@ export default {
         case 'dev_split':
           return `Dev split (${props.record.metadata?.percentage || 0}%)`;
         case 'payer_split':
-          return `Payer split (${props.record.metadata?.percentage || 0}%)`;
+          return `Host split (${props.record.metadata?.percentage || 0}%)`;
         case 'dev_payout':
           return 'Dev payout';
         case 'payer_payout':
           if (props.record.metadata?.payoutType === 'lightning') {
-            return 'Payer payout';
+            return 'Host payout';
           } else if (props.record.metadata?.payoutType === 'changejar') {
             return 'Saved to change jar';
           }
-          return 'Payer payout';
+          return 'Host payout';
         case 'change':
           return 'Change';
         case 'pending':
@@ -231,12 +231,8 @@ export default {
       }
     });
     
-    // Display amount (for Lightning, show total including fees)
+    // Display amount - always show the actual amount sent, fees are shown separately
     const displayAmount = computed(() => {
-      if (props.record.type === 'payer_payout' && props.record.fees && props.record.fees > 0) {
-        // For Lightning payouts, show amount + fees as the total
-        return props.record.amount + props.record.fees;
-      }
       return props.record.amount;
     });
 
