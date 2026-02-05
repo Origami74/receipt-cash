@@ -1,5 +1,3 @@
-import { Proof } from '@cashu/cashu-ts';
-
 /**
  * Request to start a Lightning melt operation
  */
@@ -12,24 +10,30 @@ export interface MeltRequest {
 }
 
 /**
- * A single melt round attempt
+ * A single melt round attempt using Coco saga API
  */
 export interface MeltRound {
   roundNumber: number;
-  targetAmount: number;        // Amount we tried to melt
-  inputProofs: Proof[];        // Proofs sent to melt
-  inputAmount: number;         // Sum of input proofs
-  meltQuote: {
-    amount: number;            // Amount to be melted to Lightning
-    fee_reserve: number;       // Lightning fee estimate
-    quote: string;
-  };
+  targetAmount: number;        // Amount we requested invoice for
+  
+  // Coco operation tracking
+  cocoOperationId?: string;    // Coco melt operation ID
+  quoteId?: string;            // Mint quote ID
+  operationState?: string;     // Coco operation state (prepared, executing, pending, finalized, etc.)
+  
+  // Quote details
+  amount?: number;             // Amount to be melted to Lightning
+  feeReserve?: number;         // Lightning fee estimate
+  swapFee?: number;            // Swap fee from Coco
+  needsSwap?: boolean;         // Whether pre-swap was needed
+  
+  // Results
   success: boolean;
-  actualMelted?: number;       // meltQuote.amount (what went to Lightning)
-  lightningFee?: number;       // Actual Lightning fee charged
-  changeProofs?: Proof[];      // Change returned from melt
-  changeAmount?: number;       // Sum of change proofs
+  actualMelted?: number;       // Amount actually sent to Lightning
+  actualLightningFee?: number; // Actual Lightning fee charged (from finalized operation)
   error?: string;
+  
+  // Timestamps
   startedAt: number;
   completedAt?: number;
 }
@@ -44,15 +48,18 @@ export interface MeltSession {
   maxBudget: number;
   lightningAddress: string;
   mintUrl: string;
-  status: 'active' | 'completed' | 'failed';
+  status: 'active' | 'completed' | 'failed' | 'pending';
   rounds: MeltRound[];
   
-  // Amounts
-  swapFee: number;             // Fee from prepareSend
+  // Current operation (for pending/resume)
+  currentCocoOperationId?: string;
+  currentQuoteId?: string;
+  
+  // Totals
   totalMelted: number;         // Sum of actualMelted from all rounds
-  totalLightningFees: number;  // Sum of lightningFee from all rounds
-  totalFees: number;           // swapFee + totalLightningFees
-  dustAmount: number;          // Change that was auto-received to Coco
+  totalLightningFees: number;  // Sum of actualLightningFee from all rounds
+  totalSwapFees: number;       // Sum of swapFee from all rounds
+  totalFees: number;           // totalSwapFees + totalLightningFees
   
   // Timestamps
   createdAt: number;
