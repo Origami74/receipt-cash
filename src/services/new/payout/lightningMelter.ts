@@ -1,20 +1,18 @@
 import { LightningAddress } from '@getalby/lightning-tools';
-import { Proof, getEncodedToken } from '@cashu/cashu-ts';
-import cashuWalletManager from '../../flows/shared/cashuWalletManager.js';
+import { getEncodedToken } from '@cashu/cashu-ts';
 import { sumProofs } from '../../../utils/cashuUtils.js';
 import meltSessionStorageManager from '../storage/meltSessionStorageManager.js';
 import { cocoService } from '../../cocoService';
 import { backgroundAudioService } from '../../backgroundAudioService';
 import { accountingService } from '../../accountingService';
 import { proofSafetyService } from '../../proofSafetyService';
-import { operationLockService } from '../../operationLockService';
 import { MeltRequest, MeltSession, MeltRound, MeltResult } from './types/lightningMelter.types';
 
 /**
- * Lightning Melter Service (TypeScript Redesign)
+ * Lightning Melter Service (Coco Saga API)
  * 
- * Budget-based async melting with self-recording accounting.
- * Uses prepareSend + rollback to never overspend allocated budget.
+ * Budget-based async melting using Coco's melt saga API.
+ * Handles proof reservation, fee transparency, and crash recovery.
  */
 class LightningMelter {
   private isActive: boolean = false;
@@ -66,81 +64,21 @@ class LightningMelter {
     backgroundAudioService.activate('lightning_melt_started');
 
     try {
-      // Execute melt - lock will be acquired only when needed
       await this._executeMelt(request, sessionId);
     } catch (error) {
       console.error(`❌ Error in startMelt for ${sessionId}:`, error);
-      console.error(`❌ Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
       // Session will be marked as failed in _executeMelt
     }
   }
 
   /**
-   * Execute the melt operation with budget protection
+   * Execute the melt operation using Coco melt saga API
    */
   private async _executeMelt(request: MeltRequest, sessionId: string): Promise<void> {
-    console.log(`🔧 _executeMelt called for session: ${sessionId}`);
     try {
-      console.log(`🔧 Getting Coco instance...`);
       const coco = cocoService.getCoco();
-      console.log(`✅ Coco instance obtained`);
       
-      let amountToSend: number;
-      let swapFee: number;
-      let proofs: any[];
-      
-      // Step 1: Use operation lock ONLY for prepareSend/executePreparedSend
-      await operationLockService.withLock(request.mintUrl, async () => {
-        console.log(`🔒 Lock acquired for prepareSend/executePreparedSend`);
-        
-        // Use prepareSend to find maximum amount that fits in budget
-        amountToSend = request.maxBudget;
-        let preparedSend = await coco.send.prepareSend(request.mintUrl, amountToSend);
-        
-        const maxIterations = 20;
-        let iterations = 0;
-        
-        // Reduce until amount + swap fee fits within budget
-        while (amountToSend + preparedSend.fee > request.maxBudget && amountToSend > 0 && iterations < maxIterations) {
-          await coco.send.rollback(preparedSend.id);
-          amountToSend--;
-          preparedSend = await coco.send.prepareSend(request.mintUrl, amountToSend);
-          iterations++;
-        }
-        
-        if (amountToSend <= 0) {
-          throw new Error(`Cannot fit melt operation in budget of ${request.maxBudget} sats`);
-        }
-        
-        swapFee = preparedSend.fee;
-        console.log(`📊 Prepared: ${amountToSend} sats + ${swapFee} swap fee = ${amountToSend + swapFee} (budget: ${request.maxBudget})`);
-        
-        // Execute the prepared send to get proofs
-        const { token } = await coco.send.executePreparedSend(preparedSend.id);
-        proofs = token.proofs;
-        console.log(`📤 Got ${proofs.length} proofs (${sumProofs(proofs)} sats)`);
-        
-        console.log(`🔓 Lock released after getting proofs`);
-      });
-      
-      // Step 2: Continue with proofs (outside lock)
-      
-      // Step 3: Store in safety buffer
-      const payoutId = `${request.receiptEventId}-${request.settlementEventId}-payer`;
-      proofSafetyService.storePendingPayout({
-        id: payoutId,
-        receiptEventId: request.receiptEventId,
-        settlementEventId: request.settlementEventId,
-        type: 'payer',
-        proofs: proofs,
-        mintUrl: request.mintUrl,
-        amount: amountToSend!,
-        destination: request.lightningAddress,
-        createdAt: Date.now(),
-        status: 'pending'
-      });
-      
-      // Step 4: Create session
+      // Create initial session
       const session: MeltSession = {
         sessionId,
         receiptEventId: request.receiptEventId,
@@ -150,48 +88,25 @@ class LightningMelter {
         mintUrl: request.mintUrl,
         status: 'active',
         rounds: [],
-        swapFee,
         totalMelted: 0,
         totalLightningFees: 0,
-        totalFees: swapFee,
-        dustAmount: 0,
+        totalSwapFees: 0,
+        totalFees: 0,
         createdAt: Date.now()
       };
       
       meltSessionStorageManager.setItem(session);
       
-      // Step 5: Attempt melt rounds
-      const result = await this._attemptMeltRounds(session, proofs);
+      // Attempt melt rounds with decreasing amounts
+      const result = await this._attemptMeltRounds(session, request);
       
-      // Step 6: Mark as sent in safety buffer
-      proofSafetyService.markSent(payoutId);
-      
-      // Step 7: Record in accounting
+      // Record in accounting if successful
       if (result.success) {
         console.log(`✅ Melt complete, recording in accounting:`);
         console.log(`   Actually melted: ${result.actualMelted} sats`);
-        console.log(`   Total fees: ${result.totalFees} sats (${result.swapFee} swap + ${result.lightningFees} LN)`);
-        console.log(`   Dust: ${result.dustAmount} sats (auto-received to Coco)`);
+        console.log(`   Total fees: ${result.totalFees} sats`);
         
-        accountingService.recordPayerPayout(
-          request.receiptEventId,
-          request.settlementEventId,
-          result.actualMelted,
-          result.totalFees,
-          request.mintUrl,
-          'lightning',
-          request.maxBudget, // originalAmount
-          result.dustAmount  // dustAmount
-        );
-        
-        accountingService.updateReserveAfterPayout(
-          request.receiptEventId,
-          request.settlementEventId,
-          'payer',
-          result.actualMelted,
-          result.totalFees
-        );
-        
+        this._recordAccounting(session);
         console.log(`✅ Lightning melt complete and recorded`);
       } else {
         console.error(`❌ Melt failed: ${result.error}`);
@@ -216,119 +131,156 @@ class LightningMelter {
   }
 
   /**
-   * Attempt melt rounds until successful or exhausted
+   * Attempt melt rounds with decreasing amounts until successful
    */
-  private async _attemptMeltRounds(session: MeltSession, initialProofs: Proof[]): Promise<MeltResult> {
+  private async _attemptMeltRounds(session: MeltSession, request: MeltRequest): Promise<MeltResult> {
     const coco = cocoService.getCoco();
-    const wallet = await cashuWalletManager.getWallet(session.mintUrl);
     
-    let remainingProofs = [...initialProofs];
-    let totalMelted = 0;
-    let totalLightningFees = 0;
     let roundNumber = 0;
-    
     const maxAttempts = 10;
-    const totalAvailable = sumProofs(initialProofs);
-    let currentAttemptPercentage = 1.0;
+    let currentAmount = request.maxBudget;
     const reductionPercentage = 0.02; // 2% reduction per attempt
     
-    while (roundNumber < maxAttempts && remainingProofs.length > 0) {
+    while (roundNumber < maxAttempts) {
       roundNumber++;
-      const targetAmount = Math.floor(totalAvailable * currentAttemptPercentage);
       
-      if (targetAmount < 1) {
-        console.log(`Target amount too small (${targetAmount} sats), stopping attempts`);
+      if (currentAmount < 1) {
+        console.log(`Amount too small (${currentAmount} sats), stopping attempts`);
         break;
       }
       
-      console.log(`🔄 Round ${roundNumber}: Trying ${targetAmount} sats (${Math.round(currentAttemptPercentage * 100)}% of ${totalAvailable} sats)`);
+      console.log(`🔄 Round ${roundNumber}: Trying ${currentAmount} sats`);
+      
+      const round: MeltRound = {
+        roundNumber,
+        targetAmount: currentAmount,
+        success: false,
+        startedAt: Date.now()
+      };
+      
+      session.rounds.push(round);
+      meltSessionStorageManager.setItem(session);
       
       try {
-        // Request invoice
-        const invoice = await this._requestInvoice(session.lightningAddress, targetAmount);
-        console.log(`✅ Invoice received for ${targetAmount} sats`);
+        // Step 1: Request invoice
+        const invoice = await this._requestInvoice(request.lightningAddress, currentAmount);
+        console.log(`✅ Invoice received for ${currentAmount} sats`);
         
-        // Get melt quote
-        const meltQuote = await wallet.createMeltQuote(invoice);
-        const totalNeeded = meltQuote.amount + meltQuote.fee_reserve;
-        console.log(`📋 Quote: ${meltQuote.amount} sats + ${meltQuote.fee_reserve} fee = ${totalNeeded} needed`);
+        // Step 2: Prepare melt using Coco saga API
+        console.log(`🔧 Preparing melt with Coco...`);
+        const prepared = await coco.quotes.prepareMeltBolt11(request.mintUrl, invoice);
         
-        // Check if we have enough
-        const availableAmount = sumProofs(remainingProofs);
-        if (availableAmount < totalNeeded) {
-          console.log(`⚠️ Insufficient: need ${totalNeeded}, have ${availableAmount}. Reducing...`);
-          const feeAmount = meltQuote.fee_reserve;
-          const newTargetAmount = Math.max(1, targetAmount - feeAmount);
-          currentAttemptPercentage = newTargetAmount / totalAvailable;
+        round.cocoOperationId = prepared.id;
+        round.quoteId = prepared.quoteId;
+        round.amount = prepared.amount;
+        round.feeReserve = prepared.fee_reserve;
+        round.swapFee = prepared.swap_fee;
+        round.needsSwap = prepared.needsSwap;
+        round.operationState = 'prepared';
+        
+        console.log(`📊 Melt prepared:`);
+        console.log(`   Operation ID: ${prepared.id}`);
+        console.log(`   Quote ID: ${prepared.quoteId}`);
+        console.log(`   Amount: ${prepared.amount} sats`);
+        console.log(`   Fee reserve: ${prepared.fee_reserve} sats`);
+        console.log(`   Swap fee: ${prepared.swap_fee} sats`);
+        console.log(`   Needs swap: ${prepared.needsSwap}`);
+        
+        const totalCost = prepared.amount + prepared.fee_reserve + prepared.swap_fee;
+        console.log(`   Total cost: ${totalCost} sats (budget: ${request.maxBudget})`);
+        
+        // Check if it fits in budget
+        if (totalCost > request.maxBudget) {
+          console.log(`⚠️ Doesn't fit in budget (${totalCost} > ${request.maxBudget}), reducing amount...`);
+          // Note: We can't rollback a prepared operation in Coco, so we just don't execute it
+          // The operation will be cleaned up by Coco's internal mechanisms
+          round.error = `Total cost ${totalCost} exceeds budget ${request.maxBudget}`;
+          round.completedAt = Date.now();
+          meltSessionStorageManager.setItem(session);
+          
+          currentAmount = Math.floor(currentAmount * (1 - reductionPercentage));
           continue;
         }
         
-        // Split proofs
-        const { keep: keepProofs, send: sendProofs } = await wallet.send(totalNeeded, remainingProofs);
-        const inputAmount = sumProofs(sendProofs);
-        
-        // Create round record
-        const round: MeltRound = {
-          roundNumber,
-          targetAmount,
-          inputProofs: sendProofs,
-          inputAmount,
-          meltQuote: {
-            amount: meltQuote.amount,
-            fee_reserve: meltQuote.fee_reserve,
-            quote: meltQuote.quote
-          },
-          success: false,
-          startedAt: Date.now()
-        };
-        
-        // Update session BEFORE melt (for crash recovery)
-        remainingProofs = keepProofs;
-        session.rounds.push(round);
+        // Update session with current operation
+        session.currentCocoOperationId = prepared.id;
+        session.currentQuoteId = prepared.quoteId;
         meltSessionStorageManager.setItem(session);
         
-        // Attempt melt
-        const meltResult = await wallet.meltProofs(meltQuote, sendProofs);
-        console.log(`✅ Melt successful!`);
+        // Step 3: Execute melt
+        console.log(`⚡ Executing melt...`);
+        round.operationState = 'executing';
+        meltSessionStorageManager.setItem(session);
         
-        // Process result
-        const actualMelted = meltQuote.amount; // What went to Lightning
-        const lightningFee = meltQuote.fee_reserve; // Fee charged
-        let changeProofs: Proof[] = [];
-        let changeAmount = 0;
+        const result = await coco.quotes.executeMelt(prepared.id);
+        round.operationState = result.state;
         
-        if (meltResult.change && meltResult.change.length > 0) {
-          changeProofs = meltResult.change;
-          changeAmount = sumProofs(changeProofs);
-          remainingProofs.push(...changeProofs);
-          console.log(`💰 Received ${changeAmount} sats in change`);
+        console.log(`📊 Melt result state: ${result.state}`);
+        
+        // Step 4: Handle result based on state
+        if (result.state === 'finalized') {
+          // Success! Finalize the round and session
+          this._finalizeRound(round, prepared, result);
+          this._completeSession(session, round);
+          
+          return {
+            success: true,
+            actualMelted: session.totalMelted,
+            totalFees: session.totalFees,
+            swapFee: session.totalSwapFees,
+            lightningFees: session.totalLightningFees,
+            dustAmount: 0,
+          };
+          
+        } else if (result.state === 'pending') {
+          // Melt is pending, need to check later
+          console.log(`⏳ Melt is pending, will check status...`);
+          session.status = 'pending';
+          meltSessionStorageManager.setItem(session);
+          
+          // Check pending melt
+          const decision = await coco.quotes.checkPendingMelt(prepared.id);
+          console.log(`📊 Pending decision: ${decision}`);
+          
+          if (decision === 'finalize') {
+            // Re-fetch the operation to get final state
+            const finalResult = await coco.quotes.executeMelt(prepared.id);
+            
+            if (finalResult.state === 'finalized') {
+              this._finalizeRound(round, prepared, finalResult);
+              this._completeSession(session, round);
+              
+              return {
+                success: true,
+                actualMelted: session.totalMelted,
+                totalFees: session.totalFees,
+                swapFee: session.totalSwapFees,
+                lightningFees: session.totalLightningFees,
+                dustAmount: 0,
+              };
+            }
+          } else if (decision === 'rollback') {
+            console.log(`❌ Pending melt rolled back`);
+            round.error = 'Melt rolled back after pending check';
+            round.completedAt = Date.now();
+            meltSessionStorageManager.setItem(session);
+            
+            // Try smaller amount
+            currentAmount = Math.floor(currentAmount * (1 - reductionPercentage));
+            continue;
+          }
+        } else {
+          // Unexpected state - treat as error
+          throw new Error(`Unexpected melt state`);
         }
-        
-        // Update round as successful
-        round.success = true;
-        round.actualMelted = actualMelted;
-        round.lightningFee = lightningFee;
-        round.changeProofs = changeProofs;
-        round.changeAmount = changeAmount;
-        round.completedAt = Date.now();
-        
-        // Update totals
-        totalMelted += actualMelted;
-        totalLightningFees += lightningFee;
-        
-        // Update session
-        session.totalMelted = totalMelted;
-        session.totalLightningFees = totalLightningFees;
-        session.totalFees = session.swapFee + totalLightningFees;
-        meltSessionStorageManager.setItem(session);
-        
-        console.log(`✅ Round ${roundNumber} complete: ${actualMelted} sats melted, ${lightningFee} sats fee, ${changeAmount} sats change`);
-        
-        // Success! Break out of loop
-        break;
         
       } catch (error) {
         console.error(`❌ Round ${roundNumber} failed:`, error);
+        
+        round.success = false;
+        round.error = error instanceof Error ? error.message : String(error);
+        round.completedAt = Date.now();
+        meltSessionStorageManager.setItem(session);
         
         // Check if tokens already spent
         const isTokenSpentError = error instanceof Error && (
@@ -342,66 +294,90 @@ class LightningMelter {
           throw error;
         }
         
-        // Update round as failed
-        const round = session.rounds[session.rounds.length - 1];
-        if (round) {
-          round.success = false;
-          round.error = error instanceof Error ? error.message : String(error);
-          round.completedAt = Date.now();
-          meltSessionStorageManager.setItem(session);
-        }
-        
-        // Reduce target for next attempt
-        currentAttemptPercentage -= reductionPercentage;
+        // Try smaller amount
+        currentAmount = Math.floor(currentAmount * (1 - reductionPercentage));
         continue;
       }
     }
     
-    // Handle any remaining proofs (dust)
-    const dustAmount = sumProofs(remainingProofs);
-    if (dustAmount > 0) {
-      console.log(`💰 Auto-receiving ${dustAmount} sats dust to Coco...`);
-      try {
-        const token = getEncodedToken({
-          mint: session.mintUrl,
-          proofs: remainingProofs
-        });
-        await coco.wallet.receive(token);
-        session.dustAmount = dustAmount;
-        console.log(`✅ Auto-received ${dustAmount} sats dust`);
-      } catch (receiveError) {
-        console.error('Failed to auto-receive dust:', receiveError);
-      }
-    }
-    
-    // Complete session
-    session.status = totalMelted > 0 ? 'completed' : 'failed';
+    // All attempts failed
+    session.status = 'failed';
+    session.error = 'No sats could be melted after all attempts';
     session.completedAt = Date.now();
-    if (totalMelted === 0) {
-      session.error = 'No sats could be melted after all attempts';
-    }
     meltSessionStorageManager.setItem(session);
     
-    console.log(`📊 Session ${session.sessionId} complete:`);
-    console.log(`   Rounds: ${session.rounds.length}`);
-    console.log(`   Total melted: ${totalMelted} sats`);
-    console.log(`   Lightning fees: ${totalLightningFees} sats`);
-    console.log(`   Swap fee: ${session.swapFee} sats`);
-    console.log(`   Total fees: ${session.totalFees} sats`);
-    console.log(`   Dust: ${session.dustAmount} sats`);
-    console.log(`   Budget: ${session.maxBudget} sats`);
-    console.log(`   Spent: ${totalMelted + session.totalFees} sats`);
-    console.log(`   Remaining: ${session.maxBudget - totalMelted - session.totalFees} sats`);
+    console.log(`❌ All ${maxAttempts} melt attempts failed`);
     
     return {
-      success: totalMelted > 0,
-      actualMelted: totalMelted,
-      totalFees: session.totalFees,
-      swapFee: session.swapFee,
-      lightningFees: totalLightningFees,
-      dustAmount: session.dustAmount,
+      success: false,
+      actualMelted: 0,
+      totalFees: 0,
+      swapFee: 0,
+      lightningFees: 0,
+      dustAmount: 0,
       error: session.error
     };
+  }
+
+  /**
+   * Finalize a successful melt round
+   */
+  private _finalizeRound(round: MeltRound, prepared: any, result: any): void {
+    const actualMelted = prepared.amount;
+    const actualLightningFee = (result as any).actualFee || prepared.fee_reserve;
+    
+    round.success = true;
+    round.actualMelted = actualMelted;
+    round.actualLightningFee = actualLightningFee;
+    round.operationState = 'finalized';
+    round.completedAt = Date.now();
+    
+    console.log(`✅ Round ${round.roundNumber} finalized:`);
+    console.log(`   Melted: ${actualMelted} sats`);
+    console.log(`   Lightning fee: ${actualLightningFee} sats`);
+    console.log(`   Swap fee: ${prepared.swap_fee} sats`);
+  }
+
+  /**
+   * Complete the session after successful melt
+   */
+  private _completeSession(session: MeltSession, round: MeltRound): void {
+    if (!round.actualMelted || round.actualLightningFee === undefined || round.swapFee === undefined) {
+      throw new Error('Round not properly finalized');
+    }
+    
+    session.totalMelted += round.actualMelted;
+    session.totalLightningFees += round.actualLightningFee;
+    session.totalSwapFees += round.swapFee;
+    session.totalFees = session.totalSwapFees + session.totalLightningFees;
+    session.status = 'completed';
+    session.completedAt = Date.now();
+    session.currentCocoOperationId = undefined;
+    session.currentQuoteId = undefined;
+    meltSessionStorageManager.setItem(session);
+  }
+
+  /**
+   * Record accounting for completed melt
+   */
+  private _recordAccounting(session: MeltSession): void {
+    accountingService.recordPayerPayout(
+      session.receiptEventId,
+      session.settlementEventId,
+      session.totalMelted,
+      session.totalFees,
+      session.mintUrl,
+      'lightning',
+      session.maxBudget
+    );
+    
+    accountingService.updateReserveAfterPayout(
+      session.receiptEventId,
+      session.settlementEventId,
+      'payer',
+      session.totalMelted,
+      session.totalFees
+    );
   }
 
   /**
@@ -421,7 +397,6 @@ class LightningMelter {
     const ln = new LightningAddress(lnAddress);
     await ln.fetch();
     
-    // Type assertion since @getalby/lightning-tools doesn't export proper TypeScript types
     const lnData = ln as any;
     const minSats = lnData.minSendable / 1000;
     const maxSats = lnData.maxSendable / 1000;
@@ -444,7 +419,9 @@ class LightningMelter {
   private async _checkForResumableSessions(): Promise<void> {
     try {
       const allSessions = meltSessionStorageManager.getAllItems();
-      const resumableSessions = allSessions.filter(s => s.status === 'active');
+      const resumableSessions = allSessions.filter(s => 
+        s.status === 'active' || s.status === 'pending'
+      );
       
       if (resumableSessions.length > 0) {
         console.log(`🔄 Found ${resumableSessions.length} resumable melt sessions`);
@@ -480,95 +457,79 @@ class LightningMelter {
    */
   private async _resumeSession(session: MeltSession): Promise<void> {
     console.log(`🔄 Resuming melt session: ${session.sessionId}`);
-    console.log(`📊 Progress: ${session.totalMelted} sats melted so far`);
     
-    // Reconstruct the request
-    const request: MeltRequest = {
-      receiptEventId: session.receiptEventId,
-      settlementEventId: session.settlementEventId,
-      maxBudget: session.maxBudget,
-      lightningAddress: session.lightningAddress,
-      mintUrl: session.mintUrl
-    };
+    const coco = cocoService.getCoco();
     
-    // Calculate remaining budget
-    const spentSoFar = session.totalMelted + session.totalFees;
-    const remainingBudget = session.maxBudget - spentSoFar;
-    
-    if (remainingBudget <= 0) {
-      console.log(`✅ Session ${session.sessionId} already complete (budget exhausted)`);
-      session.status = 'completed';
+    // If we have a pending operation, resume by quote ID
+    if (session.currentQuoteId && session.status === 'pending') {
+      console.log(`⏳ Resuming pending melt by quote: ${session.currentQuoteId}`);
+      
+      try {
+        // Resume execution using the quote ID
+        const result = await coco.quotes.executeMeltByQuote(session.mintUrl, session.currentQuoteId);
+        console.log(`📊 Resume result state: ${result.state}`);
+          
+        if (result.state === 'finalized') {
+          // Find the round for this quote
+          const round = session.rounds.find(r => r.quoteId === session.currentQuoteId);
+          
+          if (round && round.amount && round.swapFee !== undefined) {
+            // Reconstruct prepared data for finalization
+            const prepared = {
+              amount: round.amount,
+              fee_reserve: round.feeReserve || 0,
+              swap_fee: round.swapFee
+            };
+            
+            this._finalizeRound(round, prepared, result);
+            this._completeSession(session, round);
+            this._recordAccounting(session);
+            
+            console.log(`✅ Resumed session completed successfully`);
+          }
+        } else if (result.state === 'pending') {
+          // Still pending, check it
+          console.log(`⏳ Melt still pending, checking...`);
+          const decision = await coco.quotes.checkPendingMelt(result.id);
+          console.log(`📊 Pending decision: ${decision}`);
+          
+          if (decision === 'finalize') {
+            // Recursively call resume to finalize
+            await this._resumeSession(session);
+          } else if (decision === 'rollback') {
+            console.log(`❌ Pending melt rolled back`);
+            session.status = 'failed';
+            session.error = 'Pending melt rolled back on resume';
+            session.completedAt = Date.now();
+            session.currentCocoOperationId = undefined;
+            session.currentQuoteId = undefined;
+            meltSessionStorageManager.setItem(session);
+          }
+        } else {
+          console.log(`⚠️ Unexpected state on resume`);
+          session.status = 'failed';
+          session.error = 'Unexpected state on resume';
+          session.completedAt = Date.now();
+          session.currentCocoOperationId = undefined;
+          session.currentQuoteId = undefined;
+          meltSessionStorageManager.setItem(session);
+        }
+      } catch (error) {
+        console.error(`❌ Error checking pending operation:`, error);
+        session.status = 'failed';
+        session.error = error instanceof Error ? error.message : String(error);
+        session.completedAt = Date.now();
+        meltSessionStorageManager.setItem(session);
+      }
+    } else {
+      // No pending operation, mark as failed
+      console.log(`⚠️ Session has no pending operation, marking as failed`);
+      session.status = 'failed';
+      session.error = 'No pending operation to resume';
       session.completedAt = Date.now();
       meltSessionStorageManager.setItem(session);
-      
-      // Record in accounting if not already recorded
-      const records = accountingService.getSettlementAccounting(
-        session.receiptEventId,
-        session.settlementEventId
-      );
-      
-      if (!records.some(r => r.type === 'payer_payout')) {
-        accountingService.recordPayerPayout(
-          session.receiptEventId,
-          session.settlementEventId,
-          session.totalMelted,
-          session.totalFees,
-          session.mintUrl,
-          'lightning',
-          session.maxBudget,
-          session.dustAmount
-        );
-        
-        accountingService.updateReserveAfterPayout(
-          session.receiptEventId,
-          session.settlementEventId,
-          'payer',
-          session.totalMelted,
-          session.totalFees
-        );
-      }
-      
-      return;
-    }
-    
-    console.log(`💰 Remaining budget: ${remainingBudget} sats`);
-    
-    // Try to continue melting with remaining budget
-    // For now, just mark as complete since we don't have a good way to resume
-    // TODO: Implement proper resumption logic
-    session.status = 'completed';
-    session.completedAt = Date.now();
-    meltSessionStorageManager.setItem(session);
-    
-    // Record in accounting if not already recorded
-    const records = accountingService.getSettlementAccounting(
-      session.receiptEventId,
-      session.settlementEventId
-    );
-    
-    if (!records.some(r => r.type === 'payer_payout')) {
-      accountingService.recordPayerPayout(
-        session.receiptEventId,
-        session.settlementEventId,
-        session.totalMelted,
-        session.totalFees,
-        session.mintUrl,
-        'lightning',
-        session.maxBudget,
-        session.dustAmount
-      );
-      
-      accountingService.updateReserveAfterPayout(
-        session.receiptEventId,
-        session.settlementEventId,
-        'payer',
-        session.totalMelted,
-        session.totalFees
-      );
     }
   }
 }
 
-// Export singleton instance
 export const lightningMelter = new LightningMelter();
-export default lightningMelter;
