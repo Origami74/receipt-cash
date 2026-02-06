@@ -10,28 +10,42 @@ export interface MeltRequest {
 }
 
 /**
+ * Round status tracking
+ */
+export type RoundStatus =
+  | 'preparing'      // Requesting invoice
+  | 'prepared'       // Coco operation prepared, ready to execute
+  | 'executing'      // Executing melt
+  | 'pending'        // Melt pending at mint
+  | 'finalized'      // Successfully completed
+  | 'rolled_back'    // Rolled back (didn't fit budget, etc.)
+  | 'failed';        // Failed with error
+
+/**
  * A single melt round attempt using Coco saga API
  */
 export interface MeltRound {
   roundNumber: number;
   targetAmount: number;        // Amount we requested invoice for
+  status: RoundStatus;
   
   // Coco operation tracking
   cocoOperationId?: string;    // Coco melt operation ID
   quoteId?: string;            // Mint quote ID
-  operationState?: string;     // Coco operation state (prepared, executing, pending, finalized, etc.)
   
-  // Quote details
+  // Quote details (from prepared operation)
   amount?: number;             // Amount to be melted to Lightning
   feeReserve?: number;         // Lightning fee estimate
   swapFee?: number;            // Swap fee from Coco
   needsSwap?: boolean;         // Whether pre-swap was needed
   
-  // Results
-  success: boolean;
+  // Results (from finalized operation)
   actualMelted?: number;       // Amount actually sent to Lightning
-  actualLightningFee?: number; // Actual Lightning fee charged (from finalized operation)
+  actualTotalFees?: number;    // Actual total fees (swap + Lightning)
+  
+  // Error tracking
   error?: string;
+  rollbackReason?: 'exceeds_budget' | 'other'; // Why round was rolled back
   
   // Timestamps
   startedAt: number;
@@ -48,18 +62,12 @@ export interface MeltSession {
   maxBudget: number;
   lightningAddress: string;
   mintUrl: string;
-  status: 'active' | 'completed' | 'failed' | 'pending';
+  status: 'active' | 'completed' | 'failed';
   rounds: MeltRound[];
   
-  // Current operation (for pending/resume)
-  currentCocoOperationId?: string;
-  currentQuoteId?: string;
-  
-  // Totals
-  totalMelted: number;         // Sum of actualMelted from all rounds
-  totalLightningFees: number;  // Sum of actualLightningFee from all rounds
-  totalSwapFees: number;       // Sum of swapFee from all rounds
-  totalFees: number;           // totalSwapFees + totalLightningFees
+  // Totals (sum of finalized rounds)
+  totalMelted: number;         // Sum of actualMelted from finalized rounds
+  totalFees: number;           // Sum of actualTotalFees from finalized rounds (swap + Lightning)
   
   // Timestamps
   createdAt: number;
@@ -75,9 +83,7 @@ export interface MeltSession {
 export interface MeltResult {
   success: boolean;
   actualMelted: number;        // Sats actually sent to Lightning
-  totalFees: number;           // swapFee + lightningFees
-  swapFee: number;
-  lightningFees: number;
+  totalFees: number;           // Total fees (swap + Lightning)
   dustAmount: number;          // Change auto-received to Coco
   error?: string;
 }
