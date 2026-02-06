@@ -45,13 +45,19 @@
 
     <!-- Melt Rounds (for Lightning payouts) -->
     <div v-if="meltRounds && meltRounds.length > 0" class="mt-2 ml-12">
-      <div v-for="(round, index) in meltRounds" :key="`round-${index}`" class="text-xs text-gray-600 mb-1">
+      <div
+        v-for="(round, index) in meltRounds"
+        :key="`round-${index}`"
+        class="text-xs mb-1"
+        :class="isRoundSkipped(round) ? 'text-gray-400' : 'text-gray-600'"
+      >
         <span class="font-mono">Round {{ round.roundNumber || index + 1 }}:</span>
         <span class="ml-2">{{ formatSats(round.targetAmount || round.meltQuote?.amount || 0) }} sats</span>
-        <span v-if="round.meltQuote?.fee_reserve" class="ml-1 text-gray-500">
+        <span v-if="!isRoundSkipped(round) && round.meltQuote?.fee_reserve" class="ml-1 text-gray-500">
           ({{ formatSats(round.meltQuote.fee_reserve) }} fee)
         </span>
-        <span v-if="round.success" class="ml-2 text-green-600">✓</span>
+        <span v-if="isRoundSkipped(round)" class="ml-2">⊘ Exceeded budget</span>
+        <span v-else-if="round.success" class="ml-2 text-green-600">✓</span>
         <span v-else-if="round.error" class="ml-2 text-red-600">✗</span>
       </div>
     </div>
@@ -268,7 +274,12 @@ export default {
       return `${days}d ago`;
     };
 
+    const isRoundSkipped = (round) => {
+      return round.status === 'rolled_back' && round.rollbackReason === 'exceeds_budget';
+    };
+
     return {
+      isRoundSkipped,
       statusClasses,
       textClasses,
       statusIconColor,
