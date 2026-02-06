@@ -606,12 +606,3 @@ class LightningMelter {
 }
 
 export const lightningMelter = new LightningMelter();
-
-/**
- * Get displayable rounds (filter out rounds rolled back due to exceeding budget)
- */
-export function getDisplayableRounds(session: MeltSession): MeltRound[] {
-  return session.rounds.filter(round =>
-    round.status !== 'rolled_back' || round.rollbackReason !== 'exceeds_budget'
-  );
-}

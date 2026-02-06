@@ -110,7 +110,6 @@ import ActivityAccountingRecord from './ActivityAccountingRecord.vue';
 import { accountingService } from '../../services/accountingService';
 import { proofSafetyService } from '../../services/proofSafetyService';
 import meltSessionStorageManager from '../../services/new/storage/meltSessionStorageManager.js';
-import { getDisplayableRounds } from '../../services/new/payout/lightningMelter.ts';
 
 export default {
   name: 'ActivityPayment',
@@ -364,12 +363,11 @@ export default {
              totalFees.value > 0 || receiveFee.value > 0 || shortfalls.value.length > 0;
     });
     
-    // Get melt rounds for Lightning payouts (filtered to show only displayable rounds)
+    // Get melt rounds for Lightning payouts
     const meltRounds = computed(() => {
-      // Show rounds if there's a melt session, even without payout record yet
+      // Show all rounds if there's a melt session
       if (meltSessionData.value && meltSessionData.value.rounds) {
-        // Filter out rounds that were rolled back due to exceeding budget
-        return getDisplayableRounds(meltSessionData.value);
+        return meltSessionData.value.rounds;
       }
       
       return [];
