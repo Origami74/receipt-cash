@@ -9,7 +9,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/host/01-the-problem.png"
+            :src="hostProblemImg"
             alt="Split bill frustration"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -46,7 +46,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/host/02-the-solution-alt.png"
+            :src="hostSolutionImg"
             alt="Easy payment flow"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -83,7 +83,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/host/03-privacy-control.png"
+            :src="hostPrivacyImg"
             alt="Privacy and security"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -169,6 +169,11 @@
 import { onMounted, onUnmounted } from 'vue';
 import { useOnboardingFlow } from '../../composables/useOnboardingFlow';
 import TermsAndBackupScreen from './TermsAndBackupScreen.vue';
+import {
+  hostProblemImg,
+  hostSolutionImg,
+  hostPrivacyImg
+} from '../../assets/images/onboard';
 
 export default {
   name: 'WelcomeOnboarding',
@@ -254,7 +259,10 @@ export default {
       copySeedphrase,
       saveToPasswordManager,
       startSlide,
-      handleImageError
+      handleImageError,
+      hostProblemImg,
+      hostSolutionImg,
+      hostPrivacyImg
     };
   }
 };

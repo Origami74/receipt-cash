@@ -4,7 +4,7 @@
     <ContextualTip
       :show="showPaymentSuccessCelebration"
       tip-name="PaymentSuccessCelebration"
-      image="/onboard/tips/11-payment-success.png"
+      :image="tipPaymentSuccessImg"
       title="Payment Sent!"
       description="Great! Your payment has been sent. The host will process it and you'll be all set."
       :bullets="[
@@ -201,6 +201,11 @@ import { getGuestPayment } from '../services/guestPaymentStorageService';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import ContextualTip from '../components/onboarding/ContextualTip.vue';
 import { onboardingService } from '../services/onboardingService';
+import {
+  tipPaymentSuccessImg,
+  tipPaymentPendingImg,
+  tipPaymentFailedImg
+} from '../assets/images/onboard';
 
 export default {
   name: 'PaymentConfirmationView',
@@ -252,10 +257,10 @@ export default {
     
     const statusImage = computed(() => {
       switch (status.value) {
-        case 'pending': return '/onboard/tips/12-payment-pending.png';
-        case 'confirmed': return '/onboard/tips/11-payment-success.png';
-        case 'failed': return '/onboard/tips/13-payment-failed.png';
-        default: return '/onboard/tips/13-payment-failed.png';
+        case 'pending': return tipPaymentPendingImg;
+        case 'confirmed': return tipPaymentSuccessImg;
+        case 'failed': return tipPaymentFailedImg;
+        default: return tipPaymentFailedImg;
       }
     });
     
@@ -475,7 +480,8 @@ export default {
       done,
       showPaymentRequest,
       handleCashuPaid,
-      guestPaymentData
+      guestPaymentData,
+      tipPaymentSuccessImg
     };
   }
 };

@@ -4,7 +4,7 @@
     <ContextualTip
       :show="showPayoutTip"
       tip-name="PayoutTip"
-      image="/onboard/tips/04-payout-address.png"
+      :image="tipPayoutAddressImg"
       title="Where to Send Money"
       description="Configure the wallet to forward incoming payments to."
       :bullets="['Lightning address (user@domain.com)', 'Or Cashu payment request', 'Funds sent automatically', 'You can change this later']"
@@ -16,7 +16,7 @@
     <ContextualTip
       :show="showDeveloperSplitTip"
       tip-name="DeveloperSplitTip"
-      image="/onboard/tips/05-developer-split.png"
+      :image="tipDeveloperSplitImg"
       title="Keep This Tool Alive"
       description="Set your contribution to help maintain Receipt.Cash. Default is 2.1%, adjust to any amount."
       :bullets="['Helps keep the app running', 'Adjustable from 0-100%', 'Change anytime']"
@@ -143,6 +143,7 @@ import { formatCurrency } from '../../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil } from '../../utils/pricingUtils';
 import { showNotification } from '../../services/notificationService';
 import { onboardingService } from '../../services/onboardingService';
+import { tipPayoutAddressImg, tipDeveloperSplitImg } from '../../assets/images/onboard';
 
 export default {
   name: 'PaymentSetupForm',
@@ -315,7 +316,9 @@ export default {
       convertToSats,
       handleAddressValidation,
       handleAddressFocus,
-      handleCreate
+      handleCreate,
+      tipPayoutAddressImg,
+      tipDeveloperSplitImg
     };
   }
 };

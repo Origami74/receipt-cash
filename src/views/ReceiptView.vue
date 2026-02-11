@@ -28,7 +28,7 @@
       <ContextualTip
         :show="showSharingTip"
         tip-name="SharingTip"
-        image="/onboard/tips/06-sharing.png"
+        :image="tipSharingImg"
         title="Share Your Receipt"
         description="Share this QR code with your friends so they can select their items and pay their share."
         :bullets="['They scan the QR code', 'Select their items', 'Pay their share', 'You get reimbursed!']"
@@ -40,7 +40,7 @@
       <ContextualTip
         :show="showFirstPaymentCelebration"
         tip-name="FirstPaymentCelebration"
-        image="/onboard/tips/first-payment-alt.png"
+        :image="tipFirstPaymentAltImg"
         title="🎉 Payment Received!"
         description="Great! Your first payment has been confirmed. Funds will be automatically split between you and the developer."
         :bullets="['Developer fee deducted', 'Your portion ready', 'Funds in your wallet', 'More payments processed automatically']"
@@ -52,7 +52,7 @@
       <ContextualTip
         :show="showProcessingReminder"
         tip-name="ProcessingReminder"
-        image="/onboard/tips/08-processing-reminder.png"
+        :image="tipProcessingReminderImg"
         title="💡 Your Phone Processes Payments"
         description="Important: Your phone needs to be online to process incoming payments. Keep the app open or return regularly to process pending payments. You can view what's being processed in the Activity tab."
         :bullets="['Your phone is the payment processor', 'Keep app open when expecting payments', 'Return regularly to process', 'Payments queue until you return']"
@@ -154,6 +154,11 @@ import btcPriceService from '../services/btcPriceService';
 import { fullReceiptModel, receiptModel } from '../services/nostr/receipt';
 import { onboardingService } from '../services/onboardingService';
 import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager';
+import {
+  tipSharingImg,
+  tipFirstPaymentAltImg,
+  tipProcessingReminderImg
+} from '../assets/images/onboard';
 
 
 export default {
@@ -448,7 +453,12 @@ export default {
       
       // Notifications
       notification,
-      clearNotification
+      clearNotification,
+      
+      // Images
+      tipSharingImg,
+      tipFirstPaymentAltImg,
+      tipProcessingReminderImg
     };
   }
 };

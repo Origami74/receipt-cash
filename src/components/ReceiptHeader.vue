@@ -19,7 +19,7 @@
       
       <!-- Center: Logo (absolutely positioned) -->
       <img
-        src="/receipt-cash-logo.png"
+        :src="logoImg"
         alt="Receipt.Cash Logo"
         class="w-8 h-8 absolute left-1/2 transform -translate-x-1/2"
       />
@@ -38,11 +38,17 @@
 
 <script>
 import CurrencySelector from './CurrencySelector.vue';
+import { logoImg } from '../assets/images/onboard';
 
 export default {
   name: 'ReceiptHeader',
   components: {
     CurrencySelector
+  },
+  setup() {
+    return {
+      logoImg
+    };
   },
   props: {
     // Display options

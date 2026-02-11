@@ -1,12 +1,22 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
+import { imagetools } from 'vite-imagetools';
 import fs from 'fs';
 import path from 'path';
 
 export default defineConfig({
   plugins: [
     vue(),
+    imagetools({
+      exclude: ['public/**/*'],
+      defaultDirectives: (url) => {
+        const params = new URLSearchParams();
+        params.set('format', 'webp');
+        params.set('quality', '85');
+        return params;
+      },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['receipt-cash-logo.ico', 'receipt-cash-logo.png', 'robots.txt', 'apple-touch-icon.png', '_redirects'],

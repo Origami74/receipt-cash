@@ -10,7 +10,7 @@
       <ContextualTip
         :show="showCameraTip"
         tip-name="CameraTip"
-        image="/onboard/tips/02-camera.png"
+        :image="tipCameraImg"
         title="Capture Receipt"
         description="Take a clear photo of your receipt - our AI will extract items automatically!"
         :bullets="['Point camera at receipt', 'Ensure good lighting', 'Tap capture button']"
@@ -42,7 +42,7 @@
           <div class="p-4 bg-black/50">
             <div class="flex items-center justify-center space-x-2">
               <img
-                src="/receipt-cash-logo.png"
+                :src="logoImg"
                 alt="SugarDaddy.Cash Logo"
                 class="w-8 h-8"
               />
@@ -86,6 +86,7 @@ import { showNotification, useNotification } from '../services/notificationServi
 import receiptService from '../services/aiService';
 import { getCameraPermission, saveCameraPermission } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
+import { tipCameraImg, logoImg } from '../assets/images/onboard';
 
 export default {
   name: 'HomeView',
@@ -459,7 +460,9 @@ export default {
       handleToggleActivity,
       handleQrCodeResult,
       handleFileSelected,
-      requestCameraPermission
+      requestCameraPermission,
+      tipCameraImg,
+      logoImg
     };
   }
 };

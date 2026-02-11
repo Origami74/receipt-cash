@@ -9,7 +9,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/guest/01-invited-alt.png"
+            :src="guestInvitedImg"
             alt="You're invited to pay"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -46,7 +46,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/guest/02-math.png"
+            :src="guestMathImg"
             alt="Automatic calculations"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -83,7 +83,7 @@
       <div class="min-w-full h-full flex flex-col items-center justify-center p-8">
         <div class="flex-1 flex items-center justify-center w-full">
           <img
-            src="/onboard/guest/03-privacy-control.png"
+            :src="guestPrivacyImg"
             alt="Fast and private payments"
             class="w-full h-full max-h-[60vh] object-contain"
             @error="handleImageError"
@@ -171,6 +171,11 @@ import { onMounted, onUnmounted } from 'vue';
 import { onboardingService } from '../../services/onboardingService';
 import { useOnboardingFlow } from '../../composables/useOnboardingFlow';
 import TermsAndBackupScreen from './TermsAndBackupScreen.vue';
+import {
+  guestInvitedImg,
+  guestMathImg,
+  guestPrivacyImg
+} from '../../assets/images/onboard';
 
 const emit = defineEmits(['complete']);
 

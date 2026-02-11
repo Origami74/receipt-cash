@@ -18,7 +18,7 @@
     <ContextualTip
       :show="showItemSelectionTip"
       tip-name="ItemSelectionTip"
-      image="/onboard/tips/09-item-selection.png"
+      :image="tipItemSelectionImg"
       title="Select Your Items"
       description="Tap the + button next to each item you had. You can adjust quantities as needed."
       :bullets="[
@@ -33,7 +33,7 @@
     <ContextualTip
       :show="showPaymentMethodTip"
       tip-name="PaymentMethodTip"
-      image="/onboard/tips/10-payment-method.png"
+      :image="tipPaymentMethodImg"
       title="Choose Payment Method"
       description="Select how you want to pay. Both methods go directly to the host."
       :bullets="[
@@ -158,6 +158,10 @@ import { showNotification, useNotification } from '../services/notificationServi
 import { onboardingService } from '../services/onboardingService';
 import { convertFromSats } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
+import {
+  tipItemSelectionImg,
+  tipPaymentMethodImg
+} from '../assets/images/onboard';
 import settlementService from '../services/flows/outgoing/settlement';
 import cashuWalletManager from '../services/flows/shared/cashuWalletManager';
 import { MintQuoteState } from '@cashu/cashu-ts';
@@ -838,7 +842,9 @@ export default {
       showGuestWelcome,
       handleGuestWelcomeComplete,
       showItemSelectionTip,
-      showPaymentMethodTip
+      showPaymentMethodTip,
+      tipItemSelectionImg,
+      tipPaymentMethodImg
     };
   }
 };

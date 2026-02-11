@@ -1,10 +1,27 @@
+<script setup>
+import { logoImg } from '../../assets/images/onboard';
+
+defineProps({
+  hasPermission: {
+    type: Boolean,
+    required: true
+  },
+  isInitializing: {
+    type: Boolean,
+    required: true
+  }
+});
+
+defineEmits(['request-permission']);
+</script>
+
 <template>
   <!-- Show loading overlay when camera is initializing -->
   <div v-if="isInitializing" class="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
     <div class="text-center text-white">
       <div class="flex items-center justify-center space-x-2 mb-4">
         <img
-          src="/receipt-cash-logo.png"
+          :src="logoImg"
           alt="SugarDaddy.Cash Logo"
           class="w-8 h-8"
         />
@@ -20,7 +37,7 @@
     <div class="text-center p-6 bg-black/70 rounded-lg backdrop-blur-sm mx-4">
       <div class="flex items-center justify-center space-x-2 mb-4">
         <img
-          src="/receipt-cash-logo.png"
+          :src="logoImg"
           alt="SugarDaddy.Cash Logo"
           class="w-10 h-10"
         />
@@ -40,23 +57,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  name: 'CameraPermissionOverlay',
-  emits: ['request-permission'],
-  props: {
-    hasPermission: {
-      type: Boolean,
-      required: true
-    },
-    isInitializing: {
-      type: Boolean,
-      required: true
-    }
-  }
-};
-</script>
 
 <style scoped>
 /* Component styles are inline in the template */

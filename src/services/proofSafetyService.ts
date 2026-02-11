@@ -161,7 +161,7 @@ export class ProofSafetyService {
       );
     
     toDelete.forEach(p => {
-      this.pending.deleteItem(p.id);
+      this.pending.removeByKey(p.id);
     });
     
     if (toDelete.length > 0) {
@@ -193,7 +193,7 @@ export class ProofSafetyService {
    * Delete a specific payout (for manual cleanup)
    */
   deletePayout(payoutId: string): void {
-    this.pending.deleteItem(payoutId);
+    this.pending.removeByKey(payoutId);
     console.log(`🗑️ Deleted payout: ${payoutId}`);
   }
 

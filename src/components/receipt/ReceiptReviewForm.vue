@@ -4,7 +4,7 @@
     <ContextualTip
       :show="showReviewTip"
       tip-name="ReviewTip"
-      image="/onboard/tips/03-review-edit.png"
+      :image="tipReviewEditImg"
       title="Items Extracted!"
       description="Review and edit the extracted items if needed, then continue to set up payment."
       :bullets="['Tap any item to edit', 'Add or remove items', 'Adjust quantities and prices', 'Everything looks good? Continue!']"
@@ -292,6 +292,7 @@ import { formatCurrency } from '../../utils/currencyUtils';
 import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as calculateSubtotalUtil } from '../../utils/pricingUtils';
 import { showNotification } from '../../services/notificationService';
 import { onboardingService } from '../../services/onboardingService';
+import { tipReviewEditImg } from '../../assets/images/onboard';
 
 export default {
   name: 'ReceiptReviewForm',
@@ -583,7 +584,8 @@ export default {
       getSelectedItemsCount,
       getSelectedItemsTotal,
       calculateRemainingTotal,
-      handleContinue
+      handleContinue,
+      tipReviewEditImg
     };
   }
 };
