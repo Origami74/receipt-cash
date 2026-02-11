@@ -12,6 +12,8 @@
             :src="hostProblemImg"
             alt="Split bill frustration"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="eager"
+            decoding="async"
             @error="handleImageError"
           />
         </div>
@@ -49,6 +51,8 @@
             :src="hostSolutionImg"
             alt="Easy payment flow"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="lazy"
+            decoding="async"
             @error="handleImageError"
           />
         </div>
@@ -86,6 +90,8 @@
             :src="hostPrivacyImg"
             alt="Privacy and security"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="lazy"
+            decoding="async"
             @error="handleImageError"
           />
         </div>

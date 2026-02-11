@@ -12,6 +12,8 @@
             :src="guestInvitedImg"
             alt="You're invited to pay"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="eager"
+            decoding="async"
             @error="handleImageError"
           />
         </div>
@@ -49,6 +51,8 @@
             :src="guestMathImg"
             alt="Automatic calculations"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="lazy"
+            decoding="async"
             @error="handleImageError"
           />
         </div>
@@ -86,6 +90,8 @@
             :src="guestPrivacyImg"
             alt="Fast and private payments"
             class="w-full h-full max-h-[60vh] object-contain"
+            loading="lazy"
+            decoding="async"
             @error="handleImageError"
           />
         </div>

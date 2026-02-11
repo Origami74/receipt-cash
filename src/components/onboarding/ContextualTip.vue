@@ -14,11 +14,13 @@
     >
       <!-- Icon/Image -->
       <div v-if="image || icon" class="flex justify-center">
-        <img 
+        <img
           v-if="image"
-          :src="image" 
+          :src="image"
           :alt="title"
           class="max-w-full max-h-48 object-contain"
+          loading="lazy"
+          decoding="async"
         />
         <div 
           v-else-if="icon"
