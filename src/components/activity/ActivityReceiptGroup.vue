@@ -40,7 +40,7 @@
               <span v-if="!isErrorState">
                 {{ paymentsCount }} payment{{ paymentsCount === 1 ? '' : 's' }}
                 <span v-if="receiptStatus === 'processing'"> • Processing</span>
-                <span v-if="receiptStatus === 'completed'"> • Ready</span>
+                <span v-if="receiptStatus === 'completed'"> • All payments processed</span>
                 <span v-if="receiptStatus === 'pending'"> • Awaiting payments</span>
                 <span v-if="receiptStatus === 'error'"> • Errors detected</span>
               </span>
@@ -248,13 +248,8 @@ export default {
       const unconfirmed = props.receiptModel.unConfirmedSettlements || [];
       
       if (payments.length === 0) {
-        // No payments yet - this is normal, just waiting
+        // No confirmed payments yet - just waiting
         return 'pending';
-      }
-
-      // If there are unconfirmed settlements, still awaiting payments
-      if (unconfirmed.length > 0) {
-        return 'processing';
       }
 
       // Check if all confirmed payments are complete (using child component status)
@@ -262,7 +257,7 @@ export default {
         return 'completed';
       }
 
-      // Payments confirmed but payouts still processing
+      // Confirmed payments exist but payouts still processing
       return 'processing';
     });
 

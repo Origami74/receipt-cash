@@ -49,6 +49,7 @@
 </template>
 
 <script>
+import { ref, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import ReceiptItem from '../components/ReceiptItem.vue';
 import { ownedReceiptsStorageManager } from '../services/new/storage/ownedReceiptsStorageManager.js';
@@ -66,21 +67,25 @@ export default {
       router.push('/');
     };
 
-    var receiptsDisplay = []
-    var error = undefined
-    var loading = true
-    
-    ownedReceiptsStorageManager.receipts$
+    const receiptsDisplay = ref([]);
+    const error = ref(undefined);
+    const loading = ref(true);
+
+    const subscription = ownedReceiptsStorageManager.receipts$
       .subscribe({
         next: (receipts) => {
-          receiptsDisplay = receipts
-          loading = false
+          receiptsDisplay.value = [...receipts].reverse();
+          loading.value = false;
         },
         error: (err) => {
-          error = err
-          loading = false
+          error.value = err;
+          loading.value = false;
         }
-      })
+      });
+
+    onUnmounted(() => {
+      subscription.unsubscribe();
+    });
 
     return {
       loading,

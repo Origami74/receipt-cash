@@ -1,5 +1,32 @@
 import { getAiSettings } from './storageService';
 
+const MAX_DIMENSION = 1500;
+const JPEG_QUALITY = 0.8;
+
+/**
+ * Resize and compress a base64 image to reduce upload size
+ */
+const compressImage = (base64Image) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.src = `data:image/jpeg;base64,${base64Image}`;
+  });
+};
+
 /**
  * Process a captured receipt image using the PPQ API
  * @param {String} base64Image - Base64-encoded receipt image
@@ -9,7 +36,10 @@ export const processReceiptImage = async (base64Image) => {
   try {
     // Get AI settings from storage
     const aiSettings = getAiSettings();
-    
+
+    // Compress before upload
+    const compressedImage = await compressImage(base64Image);
+
     // Send to AI API using settings from storage
     const response = await fetch(aiSettings.completionsUrl, {
       method: 'POST',
@@ -59,7 +89,7 @@ Here are some things to keep in mind:
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
+                  url: `data:image/jpeg;base64,${compressedImage}`
                 }
               }
             ]
@@ -77,8 +107,11 @@ Here are some things to keep in mind:
 
     console.log('AI Response:', responseText);
 
+    // Strip markdown code fences if present (some models wrap JSON in ```json ... ```)
+    const cleanedText = responseText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
     // Parse the response text as JSON
-    const parsedData = JSON.parse(responseText);
+    const parsedData = JSON.parse(cleanedText);
     
     console.log('Parsed data:', parsedData);
     

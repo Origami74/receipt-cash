@@ -51,16 +51,19 @@
           :class="isActive('/activity') ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'"
         >
           <!-- Hourglass/Timer Icon with pulse when background audio is active -->
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-6 w-6 mb-1"
-            :class="{ 'animate-subtle-pulse': isBackgroundAudioActive }"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
-          </svg>
+          <div class="relative">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 mb-1"
+              :class="{ 'animate-subtle-pulse': isBackgroundAudioActive }"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 2h12v6l-6 4 6 4v6H6v-6l6-4-6-4V2z" />
+            </svg>
+            <span v-if="isBackgroundAudioActive" class="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 animate-subtle-pulse"></span>
+          </div>
           <span class="text-xs font-medium">Activity</span>
         </router-link>
       </div>
@@ -161,11 +164,12 @@ button:active {
     opacity: 1;
   }
   50% {
-    opacity: 0.6;
+    opacity: 0.4;
   }
 }
 
 .animate-subtle-pulse {
   animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  color: #ef4444 !important; /* red-500 */
 }
 </style>

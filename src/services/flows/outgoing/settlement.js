@@ -75,23 +75,47 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     // Sign the event
     const signed = await factory.sign(draft);
     
-    // Publish using the global relay pool
-    const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
-    
-    const successResponses = []
-    responses.forEach((response) => {
-        if (response.ok) {
-            successResponses.push(response)
-            console.log(`Event published successfully to ${response.from}`);
-        } else {
-            console.error(`Failed to publish event to ${response.from}: ${response.message}`);
-        }
+    // Publish to relays, resolve early once enough relays accept
+    const MIN_SUCCESSFUL_RELAYS = 3;
+    let successCount = 0;
+
+    let resolveEarlySuccess;
+    const earlySuccessPromise = new Promise((resolve) => {
+      resolveEarlySuccess = resolve;
     });
 
-    if(successResponses.length <= 1){
-        console.error(`Failed to publish event ${signed.id} to enough relays!`);
-        throw new Error("Could not publish event")
+    const publishPromises = DEFAULT_RELAYS.map(relay =>
+      globalPool.publish([relay], signed)
+        .then(responses => {
+          const response = responses[0];
+          if (response && response.ok) {
+            successCount++;
+            console.log(`✅ Settlement published to ${response.from} (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
+            if (successCount >= MIN_SUCCESSFUL_RELAYS) {
+              resolveEarlySuccess();
+            }
+            return { success: true, relay: response.from };
+          } else {
+            console.warn(`⚠️ Failed to publish settlement to ${relay}: ${response?.message || 'unknown error'}`);
+            return { success: false, relay };
+          }
+        })
+        .catch(error => {
+          console.warn(`⚠️ Failed to publish settlement to ${relay}:`, error.message);
+          return { success: false, relay };
+        })
+    );
+
+    await Promise.race([
+      earlySuccessPromise,
+      Promise.all(publishPromises)
+    ]);
+
+    if (successCount < MIN_SUCCESSFUL_RELAYS) {
+      throw new Error(`Could not publish settlement to enough relays (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
     }
+
+    console.log(`✅ Settlement published successfully to ${successCount}+ relays`);
     
     // Add to local event store for caching
     globalEventStore.add(signed);
