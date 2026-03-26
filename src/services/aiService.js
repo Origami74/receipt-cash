@@ -48,7 +48,7 @@ export const processReceiptImage = async (base64Image) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: aiSettings.model || "gpt-4.1-mini",
+        model: (aiSettings.model === 'custom' ? aiSettings.customModel : aiSettings.model) || "gpt-4.1-mini",
         messages: [
           {
             role: "user",

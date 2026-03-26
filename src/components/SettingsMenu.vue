@@ -101,7 +101,19 @@
                   <option value="openai/gpt-5-image">openai/gpt-5-images</option>
                   <option value="openai/gpt-5-chat">openai/gpt-5-chat</option>
                   <option value="openai/gpt-5-image-mini">openai/gpt-5-image-mini</option>
+                  <option value="nvidia/nemotron-nano-12b-v2-vl">nvidia/nemotron-nano-12b-v2-vl</option>
+                  <option value="qwen/qwen-vl-plus">qwen/qwen-vl-plus</option>
+                  <option value="google/gemini-3.1-flash-lite-preview">google/gemini-3.1-flash-lite-preview</option>
+                  <option value="custom">Custom...</option>
                 </select>
+                <input
+                  v-if="settings.model === 'custom'"
+                  type="text"
+                  v-model="settings.customModel"
+                  class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="e.g. anthropic/claude-sonnet-4"
+                  @change="saveSettings"
+                />
               </div>
             </div>
           </div>
@@ -304,7 +316,8 @@ export default {
       saveAiSettings({
         completionsUrl: settings.value.completionsUrl,
         apiKey: settings.value.apiKey,
-        model: settings.value.model
+        model: settings.value.model,
+        customModel: settings.value.customModel
       });
       
       // Note: Receive address is auto-saved by ReceiveAddressInput component
