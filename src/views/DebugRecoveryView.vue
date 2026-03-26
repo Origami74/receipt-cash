@@ -299,7 +299,7 @@
           @click="confirmClearAll"
           class="w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors"
         >
-          Clear All Database
+          Delete Database
         </button>
       </div>
     </div>

@@ -108,6 +108,7 @@ import { computed, ref, onMounted, watch } from 'vue';
 import { formatSats, toFiat } from '../utils/pricingUtils';
 import { formatRelativeTime } from '../utils/dateUtils';
 import btcPriceService from '../services/btcPriceService';
+import { isSettlementFullyPaidOut } from '../composables/useSettlementPayoutStatus.ts';
 
 export default {
   name: 'ReceiptSettlementsList',
@@ -147,14 +148,17 @@ export default {
       return props.receiptModel?.confirmedSettlements || [];
     });
 
-    // Check if settlement has payout (distributed)
+    // Check if settlement has payout (distributed) using accounting service
     const isPaidOut = (settlement) => {
-      // For owned receipts, check the fullyPaidOut boolean
-      // For non-owned receipts, we don't track payouts so always return false
       if (!isOwnedReceipt.value) {
         return false;
       }
-      return settlement.fullyPaidOut || false;
+      const settlementEventId = settlement.event?.id || settlement.id;
+      const receiptEventId = props.receiptModel?.receiptModel?.event?.id ||
+                            props.receiptModel?.eventId ||
+                            props.receiptModel?.event?.id;
+      if (!settlementEventId || !receiptEventId) return false;
+      return isSettlementFullyPaidOut(receiptEventId, settlementEventId);
     };
 
     // Toggle settlement expansion

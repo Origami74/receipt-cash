@@ -78,12 +78,12 @@ export const decodeRequest = (paymentRequest) => {
  */
 export const createPaymentMessage = (requestId, mintUrl, unit, proofs) => {
   const paymentMessage = {
-    id: requestId,
+    id: requestId + '-' + crypto.randomUUID().slice(0, 8),
     mint: mintUrl,
     unit: unit,
     proofs: proofs
   };
-  
+
   return JSON.stringify(paymentMessage);
 };
 

@@ -156,17 +156,13 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                         const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
                         const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
                         
-                        // TODO: Calculate fullyPaidOut from accountingService instead of payout events
-                        const fullyPaidOut = false;
-                        
                         return {
                             event: settlement,
-            
+
                             // settlement
                             paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
-                            total: settlementTotal,
-                            fullyPaidOut
+                            total: settlementTotal
                         }
                     })
     
@@ -176,15 +172,13 @@ export const fullReceiptModel = (receiptEventId, sharedEncryptionKey = null) => 
                         const parsedSettlement = decryptAndParseSettlement(settlement, encryptionKey)
                         const settlementTotal = parsedSettlement.settledItems.reduce((sum, item) => sum + (item.price * item.selectedQuantity), 0);
                         
-                        // Unconfirmed settlements are never fully paid out
                         return {
                             event: settlement,
-            
+
                             // settlement
                             paymentType: getTagValue(settlement, 'payment'),
                             items: parsedSettlement.settledItems,
-                            total: settlementTotal,
-                            fullyPaidOut: false,
+                            total: settlementTotal
                         }
                     });
     

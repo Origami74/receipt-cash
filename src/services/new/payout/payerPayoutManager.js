@@ -197,7 +197,7 @@ class PayerPayoutManager {
             }
             
             // Execute the prepared send
-            token = await coco.send.executePreparedSend(preparedSend.id);
+            ({ token } = await coco.send.executePreparedSend(preparedSend.id));
             
             // IMMEDIATELY store proofs in safety buffer
             payoutId = `${payerSplit.receiptEventId}-${payerSplit.settlementEventId}-payer`;
@@ -218,12 +218,16 @@ class PayerPayoutManager {
           }); // End of operation lock - release BEFORE sending DM
           
           // Send via Cashu DM (outside lock)
-          await cashuDmSender.payCashuPaymentRequest(
+          const sent = await cashuDmSender.payCashuPaymentRequest(
             receiveAddress,
             token.proofs,
             payerSplit.mintUrl
           );
-          
+
+          if (!sent) {
+            throw new Error('Failed to send Cashu payment DM');
+          }
+
           // Mark as sent in safety buffer
           proofSafetyService.markSent(payoutId);
           

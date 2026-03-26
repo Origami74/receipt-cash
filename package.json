@@ -1,6 +1,6 @@
 {
   "name": "receipt-cash",
-  "version": "0.3.0",
+  "version": "3.0.0",
   "private": true,
   "description": "A mobile-first receipt settlement PWA using Nostr and Cashu",
   "type": "module",
@@ -27,8 +27,8 @@
     "applesauce-relay": "^3.1.0",
     "applesauce-signers": "^3.1.0",
     "canvas-confetti": "^1.9.3",
-    "coco-cashu-core": "^1.1.2-rc.47",
-    "coco-cashu-indexeddb": "^1.1.2-rc.47",
+    "coco-cashu-core": "^1.1.2-rc.48",
+    "coco-cashu-indexeddb": "^1.1.2-rc.48",
     "nostr-idb": "^2.4.0",
     "pinia": "^2.1.7",
     "qr-scanner": "^1.4.2",

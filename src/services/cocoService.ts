@@ -46,7 +46,7 @@ export class CocoService {
     this.coco = new Manager(repo, seedGetter);
     
     // Enable watchers manually
-    await this.coco.enableMintQuoteWatcher({ watchExistingPendingOnStart: true });
+    await this.coco.enableMintOperationWatcher({ watchExistingPendingOnStart: true });
     await this.coco.enableProofStateWatcher();
 
     this.isInitialized = true;

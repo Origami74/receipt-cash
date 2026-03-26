@@ -27,6 +27,7 @@ import PaymentSetupForm from '../components/receipt/PaymentSetupForm.vue';
 import { getReceiptDraft, clearReceiptDraft } from '../services/receiptDraftService';
 import nostrService from '../services/flows/shared/nostr';
 import cashuService from '../services/flows/shared/cashuService';
+import { extractPreferredMints } from '../utils/cashuUtils';
 import btcPriceService from '../services/btcPriceService';
 import receiptKeyManager from '../services/keyManagementService';
 import { showNotification } from '../services/notificationService';
@@ -91,7 +92,7 @@ export default {
         
         // Extract preferred mints from payment request if it's a Cashu request
         const preferredMints = (paymentSetup.addressType === 'cashu' && paymentSetup.receiveAddress)
-          ? cashuService.extractPreferredMints(paymentSetup.receiveAddress)
+          ? extractPreferredMints(paymentSetup.receiveAddress)
           : [];
         
         const publishedReceiptEvent = await nostrService.publishReceiptEvent(

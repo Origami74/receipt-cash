@@ -204,8 +204,7 @@ export default {
       // Check melt session status for Lightning payouts
       if (meltSessionData.value) {
         // If session exists and all rounds are successful, it's complete
-        const allRoundsSuccessful = meltSessionData.value.rounds?.every(r => r.success === true);
-        const sessionComplete = meltSessionData.value.status === 'complete' || allRoundsSuccessful;
+        const sessionComplete = meltSessionData.value.status === 'completed';
         
         if (!sessionComplete) {
           return false;

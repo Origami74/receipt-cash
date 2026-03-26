@@ -162,12 +162,16 @@ class DevPayoutManager {
           });
           
           // Send via Cashu DM
-          await cashuDmSender.payCashuPaymentRequest(
+          const sent = await cashuDmSender.payCashuPaymentRequest(
             DEV_CASHU_REQ,
             token.proofs,
             devSplit.mintUrl
           );
-          
+
+          if (!sent) {
+            throw new Error('Failed to send Cashu payment DM');
+          }
+
           // Mark as sent in safety buffer
           proofSafetyService.markSent(payoutId);
           
