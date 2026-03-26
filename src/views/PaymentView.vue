@@ -76,6 +76,7 @@
           :paymentSuccess="paymentSuccess"
           :toFiat="toFiat"
           :isUnified="true"
+          :language="receiptModel?.language || ''"
           @select-all="selectAllItems"
           @increment-quantity="incrementQuantity"
           @decrement-quantity="decrementQuantity"
@@ -554,8 +555,6 @@ export default {
         // Start monitoring mint quote payment status
         monitorMintQuotePayment();
         
-        showNotification('Settlement request sent! Please pay the invoice.', 'success');
-        
         // Mark selected items as pending
         selectedItems.value.forEach(selectedItem => {
           const item = items.value.find(i => i.name === selectedItem.name && i.price === selectedItem.price);
@@ -623,8 +622,6 @@ export default {
         });
         
         showCashuModal.value = true;
-        
-        showNotification('Settlement request sent! Please pay the Cashu request.', 'success');
         
         // Subscribe to confirmations for auto-redirect when host confirms
         subscribeToSettlementConfirmation();

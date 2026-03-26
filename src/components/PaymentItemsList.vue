@@ -23,8 +23,15 @@
     
     <!-- Items container with conditional padding -->
     <div :class="isUnified ? 'px-4 pt-4' : ''">
-      <!-- Select All button for unified mode -->
-      <div v-if="isUnified && !paymentInProgress && !paymentSuccess" class="pb-3 flex justify-end">
+      <!-- Select All + Translate for unified mode -->
+      <div v-if="isUnified && !paymentInProgress && !paymentSuccess" class="pb-3 flex justify-between items-center">
+        <button
+          @click="toggleTranslation"
+          class="text-sm text-blue-500 hover:text-blue-600"
+          :disabled="isTranslating"
+        >
+          🌐 {{ isTranslating ? 'Translating...' : (isTranslated ? 'Original' : 'Translate') }}
+        </button>
         <button
           @click="$emit('select-all')"
           class="text-sm text-blue-500 hover:text-blue-600"
@@ -78,7 +85,7 @@
         <div class="ml-4 flex-1">
           <div class="flex items-center justify-between">
             <div :class="{ 'line-through text-gray-400': item.settled }">
-              {{ item.name }}
+              {{ isTranslated && translatedNames[item.name] ? translatedNames[item.name] : item.name }}
               <span v-if="item.settled" class="text-xs text-green-500 ml-1">
                 (Settled)
               </span>
@@ -143,6 +150,7 @@
 
 <script>
 import { formatSats } from '../utils/pricingUtils';
+import { useTranslation } from '../composables/useTranslation';
 
 export default {
   name: 'PaymentItemsList',
@@ -167,7 +175,24 @@ export default {
     isUnified: {
       type: Boolean,
       default: false
+    },
+    language: {
+      type: String,
+      default: ''
     }
+  },
+  setup(props) {
+    const { isTranslated, isTranslating, translatedNames, toggleTranslation } = useTranslation(
+      () => props.items.map(item => item.name),
+      () => props.language || 'auto'
+    );
+
+    return {
+      isTranslated,
+      isTranslating,
+      translatedNames,
+      toggleTranslation
+    };
   },
   methods: {
     formatSats,

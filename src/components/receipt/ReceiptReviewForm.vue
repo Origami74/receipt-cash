@@ -66,9 +66,34 @@
           </div>
         </div>
         
+        <!-- Total mismatch banner -->
+        <div v-if="totalMismatch" class="mx-4 mt-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 flex items-center gap-2">
+          <span>⚠️</span>
+          <span>Items add up to {{ formatPrice(itemsSum) }} but receipt total is {{ formatPrice(receipt.total) }}</span>
+        </div>
+
+        <!-- Review banners -->
+        <div v-if="mathErrorCount > 0" class="mx-4 mt-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 flex items-center gap-2">
+          <span>❌</span>
+          <span>{{ mathErrorCount }} item{{ mathErrorCount === 1 ? ' has' : 's have' }} mismatched totals</span>
+        </div>
+        <div v-if="lowConfidenceCount > 0" class="mx-4 mt-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{{ lowConfidenceCount }} item{{ lowConfidenceCount === 1 ? '' : 's' }} may need a closer look</span>
+        </div>
+
         <!-- Items container -->
-        <div class="px-4 pt-4">
-          <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item">
+        <div class="px-4 pt-3 pb-1">
+          <button
+            @click="toggleTranslation"
+            class="text-sm text-blue-500 hover:text-blue-600"
+            :disabled="isTranslating"
+          >
+            🌐 {{ isTranslating ? 'Translating...' : (isTranslated ? 'Original' : 'Translate') }}
+          </button>
+        </div>
+        <div class="px-4">
+          <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item" :class="{ 'math-error': hasMathError(item), 'low-confidence': !hasMathError(item) && item.confidence != null && item.confidence <= CONFIDENCE_THRESHOLD }">
             <!-- Item Selection Controls -->
             <div v-if="showItemSelection" class="flex items-center space-x-2 mr-3">
               <button
@@ -87,7 +112,7 @@
             <div class="flex-1">
               <div v-if="!item.editing" class="cursor-pointer" @click="startEditing(index)">
                 <div class="flex items-center justify-between">
-                  <div>{{ item.name }}</div>
+                  <div>{{ isTranslated && translatedNames[item.name] ? translatedNames[item.name] : item.name }}</div>
                   <div v-if="showItemSelection && (item.selectedQuantity || 0) > 0" class="text-xs text-green-600 font-medium">
                     {{ item.selectedQuantity }}/{{ item.quantity }} selected
                   </div>
@@ -293,6 +318,7 @@ import { formatSats, convertToSats as convertToSatsUtil, calculateSubtotal as ca
 import { showNotification } from '../../services/notificationService';
 import { onboardingService } from '../../services/onboardingService';
 import { tipReviewEditImg } from '../../assets/images/onboard';
+import { useTranslation, CONFIDENCE_THRESHOLD } from '../../composables/useTranslation';
 
 export default {
   name: 'ReceiptReviewForm',
@@ -328,7 +354,12 @@ export default {
     const titleInput = ref(null);
     const showItemSelection = ref(false);
     const showReviewTip = ref(false);
-    
+
+    const { isTranslated, isTranslating, translatedNames, toggleTranslation } = useTranslation(
+      () => receipt.value.items.map(item => item.name),
+      () => receipt.value.language || 'auto'
+    );
+
     const splitDialog = ref({
       show: false,
       itemIndex: -1,
@@ -337,6 +368,28 @@ export default {
       itemQuantity: 1
     });
     
+    const itemsSum = computed(() => {
+      return receipt.value.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
+    });
+
+    const totalMismatch = computed(() => {
+      if (receipt.value.total == null) return false;
+      return Math.abs(itemsSum.value - receipt.value.total) > 0.01;
+    });
+
+    const hasMathError = (item) => {
+      if (!item.quantity || !item.price || item.total == null) return false;
+      return Math.abs((item.price * item.quantity) - item.total) > 0.01;
+    };
+
+    const mathErrorCount = computed(() => {
+      return receipt.value.items.filter(hasMathError).length;
+    });
+
+    const lowConfidenceCount = computed(() => {
+      return receipt.value.items.filter(item => !hasMathError(item) && item.confidence != null && item.confidence <= CONFIDENCE_THRESHOLD).length;
+    });
+
     const isValid = computed(() => {
       return receipt.value.items.length > 0 &&
              receipt.value.items.every(item => item.name && item.price > 0 && item.quantity > 0);
@@ -551,6 +604,10 @@ export default {
     
     return {
       receipt,
+      isTranslated,
+      isTranslating,
+      translatedNames,
+      toggleTranslation,
       selectedCurrency,
       currentBtcPrice,
       titleEditing,
@@ -584,6 +641,12 @@ export default {
       getSelectedItemsCount,
       getSelectedItemsTotal,
       calculateRemainingTotal,
+      itemsSum,
+      totalMismatch,
+      hasMathError,
+      mathErrorCount,
+      lowConfidenceCount,
+      CONFIDENCE_THRESHOLD,
       handleContinue,
       tipReviewEditImg
     };
@@ -598,6 +661,16 @@ export default {
 
 .receipt-item:last-child {
   @apply border-b-0;
+}
+
+.receipt-item.low-confidence {
+  border-left: 3px solid #f59e0b;
+  @apply bg-amber-50/50;
+}
+
+.receipt-item.math-error {
+  border-left: 3px solid #ef4444;
+  @apply bg-red-50/50;
 }
 
 /* Receipt paper styling is now in src/style/receipt-paper.css */

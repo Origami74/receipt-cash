@@ -1,5 +1,6 @@
 const RECEIVE_ADDRESS_KEY = 'receipt-cash-receive-address';
 const AI_SETTINGS_KEY = 'receipt-cash-ai-settings';
+const TRANSLATE_LANGUAGE_KEY = 'receipt-cash-translate-language';
 const PROOFS_KEY = 'receipt-cash-proofs';
 const MINT_QUOTE_RECOVERY_KEY = 'receipt-cash-mint-quote-recovery';
 const CAMERA_PERMISSION_KEY = 'receipt-cash-camera-permission';
@@ -8,7 +9,7 @@ const CAMERA_PERMISSION_KEY = 'receipt-cash-camera-permission';
 const DEFAULT_AI_SETTINGS = {
   completionsUrl: 'https://api.ppq.ai/chat/completions',
   apiKey: '',
-  model: 'gpt-4.1-mini'
+  model: 'google/gemini-3.1-flash-lite-preview'
 };
 
 
@@ -85,6 +86,28 @@ export function clearAiSettings() {
     localStorage.removeItem(AI_SETTINGS_KEY);
   } catch (error) {
     console.error('Error clearing AI settings:', error);
+  }
+}
+
+/**
+ * Get the user's preferred translation language ('auto' = system language)
+ */
+export function getTranslateLanguage() {
+  try {
+    return localStorage.getItem(TRANSLATE_LANGUAGE_KEY) || 'auto';
+  } catch (error) {
+    return 'auto';
+  }
+}
+
+/**
+ * Save the user's preferred translation language
+ */
+export function saveTranslateLanguage(lang) {
+  try {
+    localStorage.setItem(TRANSLATE_LANGUAGE_KEY, lang);
+  } catch (error) {
+    console.error('Error saving translate language:', error);
   }
 }
 

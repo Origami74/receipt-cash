@@ -48,7 +48,7 @@ export const processReceiptImage = async (base64Image) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: (aiSettings.model === 'custom' ? aiSettings.customModel : aiSettings.model) || "gpt-4.1-mini",
+        model: (aiSettings.model === 'custom' ? aiSettings.customModel : aiSettings.model) || "google/gemini-3.1-flash-lite-preview",
         messages: [
           {
             role: "user",
@@ -62,17 +62,28 @@ export const processReceiptImage = async (base64Image) => {
                 - The receipt may be from any country/region, Try to determine where it's made to inform how to interpret the data on the receipt.
                 - The image might be blurry, especially number might be hard to read but are incredibly important to get right.
 
-                Extract the items (with prices and quantities), total amount and currency (in ISO 4217), merchant. Output the result as RAW JSON (no markdown) of the following format:
+                Extract the following things:
+                - The items (with prices and quantities)
+                - Total amount
+                - Currency (in ISO 4217)
+                - Language (in BCP 47)
+                - Merchant. 
+
+                Add confidence between 0 and 1 per item  for price / quantity that can be used as an indicator to see if an item needs manual review. 
+                
+                Output the result as RAW JSON (no markdown) of the following format:
 {
   "items": [
     {
       "name": "Item1",
       "quantity": 3,
       "price": 0.90,
-      "total": 2.70
+      "total": 2.70,
+      "confidence": 0.85
     }
   ],
   "currency": "EUR",
+  "language": "en-US",
   "total_amount": 4.70
   "merchant": "Star Coffee"
 }
@@ -136,10 +147,12 @@ Here are some things to keep in mind:
           name: name,
           price: price,
           quantity: quantity,
-          total: price * quantity
+          total: price * quantity,
+          confidence: item.confidence
         };
       }),
       currency: parsedData.currency,
+      language: parsedData.language,
       total: parsedData.total_amount
     };
   } catch (error) {

@@ -4,11 +4,20 @@
       Items
     </div>
     <div :class="isUnified ? 'px-4' : ''">
+      <div class="pt-3 pb-1 flex justify-start" :class="isUnified ? '' : 'px-3'">
+        <button
+          @click="toggleTranslation"
+          class="text-sm text-blue-500 hover:text-blue-600"
+          :disabled="isTranslating"
+        >
+          🌐 {{ isTranslating ? 'Translating...' : (isTranslated ? 'Original' : 'Translate') }}
+        </button>
+      </div>
       <div v-for="(itemWithSettlements, index) in itemsWithSettlements" :key="index" class="receipt-item">
         <div class="flex items-start w-full">
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between mb-2">
-            <div class="font-medium">{{ itemWithSettlements.name }}</div>
+            <div class="font-medium">{{ isTranslated && translatedNames[itemWithSettlements.name] ? translatedNames[itemWithSettlements.name] : itemWithSettlements.name }}</div>
             <div class="font-medium text-right">
               <div>{{ formatSats(itemWithSettlements.price * itemWithSettlements.quantity) }} sats</div>
               <div class="text-xs text-gray-500">{{ formatFiat(itemWithSettlements.price * itemWithSettlements.quantity) }}</div>
@@ -58,6 +67,7 @@ import { computed, ref, onMounted, watch } from 'vue';
 import { formatSats, toFiat } from '../utils/pricingUtils';
 import btcPriceService from '../services/btcPriceService';
 import { isSettlementFullyPaidOut } from '../composables/useSettlementPayoutStatus.ts';
+import { useTranslation } from '../composables/useTranslation';
 
 export default {
   name: 'ReceiptItemsList',
@@ -77,6 +87,11 @@ export default {
   },
   setup(props) {
     const currentBtcPrice = ref(0);
+
+    const { isTranslated, isTranslating, translatedNames, toggleTranslation } = useTranslation(
+      () => (props.receiptModel?.items || []).map(item => item.name),
+      () => props.receiptModel?.language || 'auto'
+    );
 
     // Fetch current BTC price when component mounts or currency changes
     const fetchBtcPrice = async () => {
@@ -167,7 +182,11 @@ export default {
 
     return {
       itemsWithSettlements,
-      formatFiat
+      formatFiat,
+      isTranslated,
+      isTranslating,
+      translatedNames,
+      toggleTranslation
     };
   },
   methods: {

@@ -50,6 +50,18 @@
             </div>
           </div>
           
+          <!-- Language Settings -->
+          <div class="pt-4 border-t border-gray-200">
+            <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Translation</h4>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-700">Translate to</span>
+              <LanguageSelector
+                v-model="settings.translateLanguage"
+                @update:modelValue="saveSettings"
+              />
+            </div>
+          </div>
+
           <!-- AI Settings -->
           <div class="pt-4 border-t border-gray-200">
             <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">AI Settings</h4>
@@ -92,6 +104,7 @@
                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   @change="saveSettings"
                 >
+                  <option value="google/gemini-3.1-flash-lite-preview">google/gemini-3.1-flash-lite-preview</option>
                   <option value="gpt-4.1-mini">gpt-4.1-mini</option>
                   <option value="gpt-4-turbo">gpt-4-turbo</option>
                   <option value="gpt-4o">gpt-4o</option>
@@ -103,7 +116,6 @@
                   <option value="openai/gpt-5-image-mini">openai/gpt-5-image-mini</option>
                   <option value="nvidia/nemotron-nano-12b-v2-vl">nvidia/nemotron-nano-12b-v2-vl</option>
                   <option value="qwen/qwen-vl-plus">qwen/qwen-vl-plus</option>
-                  <option value="google/gemini-3.1-flash-lite-preview">google/gemini-3.1-flash-lite-preview</option>
                   <option value="custom">Custom...</option>
                 </select>
                 <input
@@ -244,20 +256,22 @@
 
 <script>
 import { ref, onMounted, watch } from 'vue';
-import { getAiSettings, saveAiSettings, clearAiSettings } from '../services/storageService';
+import { getAiSettings, saveAiSettings, clearAiSettings, getTranslateLanguage, saveTranslateLanguage } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
 import { showNotification } from '../services/notificationService';
 import debugLogger from '../services/debugService';
 import packageInfo from '../../package.json';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import WalletSettings from './WalletSettings.vue';
+import LanguageSelector from './LanguageSelector.vue';
 import { triggerManualUpdate, getStoredVersion } from '../services/updaterService';
 
 export default {
   name: 'SettingsMenu',
   components: {
     ReceiveAddressInput,
-    WalletSettings
+    WalletSettings,
+    LanguageSelector
   },
   props: {
     isOpen: {
@@ -281,7 +295,8 @@ export default {
       completionsUrl: '',
       apiKey: '',
       model: 'gpt-4.1-mini',
-      receiveAddress: ''
+      receiveAddress: '',
+      translateLanguage: ''
     });
     
     // Receive address validation state (handled by component)
@@ -305,7 +320,9 @@ export default {
         completionsUrl: storedSettings.completionsUrl || 'https://api.ppq.ai/chat/completions',
         apiKey: storedSettings.apiKey || '',
         model: storedSettings.model || 'gpt-4.1-mini',
-        receiveAddress: '' // Will be loaded by ReceiveAddressInput component
+        customModel: storedSettings.customModel || '',
+        receiveAddress: '', // Will be loaded by ReceiveAddressInput component
+        translateLanguage: getTranslateLanguage() === 'auto' ? '' : getTranslateLanguage()
       };
     });
 
@@ -319,8 +336,8 @@ export default {
         model: settings.value.model,
         customModel: settings.value.customModel
       });
-      
-      // Note: Receive address is auto-saved by ReceiveAddressInput component
+
+      saveTranslateLanguage(settings.value.translateLanguage || 'auto');
     };
 
     // Reset onboarding state

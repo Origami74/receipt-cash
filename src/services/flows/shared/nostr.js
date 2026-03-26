@@ -47,6 +47,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       currency: receiptData.currency,
       total: receiptData.total_amount ? Math.round((receiptData.total_amount * 100000000) / btcPrice) : 0,
       preferredMints: finalPreferredMints,
+      language: receiptData.language,
       splitPercentage: devFeePercent,
       btcPrice: btcPrice
     };
