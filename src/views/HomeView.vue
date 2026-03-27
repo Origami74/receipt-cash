@@ -43,10 +43,10 @@
             <div class="flex items-center justify-center space-x-2">
               <img
                 :src="logoImg"
-                alt="SugarDaddy.Cash Logo"
+                :alt="labelConfig.appName + ' Logo'"
                 class="w-8 h-8"
               />
-              <h1 class="text-white text-center text-xl font-bold">SugarDaddy.Cash</h1>
+              <h1 class="text-white text-center text-xl font-bold">{{ labelConfig.appName }}</h1>
             </div>
           </div>
           
@@ -87,6 +87,7 @@ import receiptService from '../services/aiService';
 import { getCameraPermission, saveCameraPermission } from '../services/storageService';
 import { onboardingService } from '../services/onboardingService';
 import { tipCameraImg, logoImg } from '../assets/images/onboard';
+import { labelConfig } from '../config/label';
 
 export default {
   name: 'HomeView',
@@ -462,7 +463,8 @@ export default {
       handleFileSelected,
       requestCameraPermission,
       tipCameraImg,
-      logoImg
+      logoImg,
+      labelConfig
     };
   }
 };

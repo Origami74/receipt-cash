@@ -5,6 +5,7 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { onboardingService } from '../services/onboardingService';
 import { seedphraseService } from '../services/seedphraseService';
+import { labelConfig } from '../config/label';
 
 export interface OnboardingFlowReturn {
   // State
@@ -173,7 +174,7 @@ export function useOnboardingFlow(): OnboardingFlowReturn {
       const PasswordCredentialConstructor = (window as any).PasswordCredential;
       const credential = new PasswordCredentialConstructor({
         id: 'receipt-cash-wallet-recovery',
-        name: 'Receipt.Cash Wallet Recovery Phrase',
+        name: labelConfig.credentialName,
         password: seedphrase.value
       });
       

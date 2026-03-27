@@ -41,6 +41,8 @@ jobs:
     
     - name: Build project
       run: npm run build
+      env:
+        VITE_LABEL: receipt-cash
     
     - name: Setup Pages
       uses: actions/configure-pages@v4

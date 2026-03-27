@@ -59,7 +59,7 @@
         
         <div class="text-center space-y-4 mb-8">
           <h1 class="text-3xl font-bold text-gray-900">
-            Receipt.Cash<br/>makes it simple
+            {{ labelConfig.appName }}<br/>makes it simple
           </h1>
           <p class="text-lg text-gray-600">
             Create a digital receipt, share it,<br/>and get paid automatically
@@ -174,6 +174,7 @@
 <script>
 import { onMounted, onUnmounted } from 'vue';
 import { useOnboardingFlow } from '../../composables/useOnboardingFlow';
+import { labelConfig } from '../../config/label';
 import TermsAndBackupScreen from './TermsAndBackupScreen.vue';
 import {
   hostProblemImg,
@@ -268,7 +269,8 @@ export default {
       handleImageError,
       hostProblemImg,
       hostSolutionImg,
-      hostPrivacyImg
+      hostPrivacyImg,
+      labelConfig
     };
   }
 };

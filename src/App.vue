@@ -54,6 +54,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { showNotification, useNotification } from './services/notificationService';
+import { labelConfig } from './config/label';
 import { onboardingService } from './services/onboardingService';
 import Notification from './components/Notification.vue';
 import ReportModal from './components/ReportModal.vue';
@@ -112,7 +113,7 @@ export default {
     const handleHostWelcomeComplete = () => {
       showHostWelcome.value = false;
       onboardingService.completeHostWelcome();
-      showNotification('Welcome to Receipt.Cash! 🎉', 'success');
+      showNotification(`Welcome to ${labelConfig.appName}! 🎉`, 'success');
     };
     
     // Initialize on mount

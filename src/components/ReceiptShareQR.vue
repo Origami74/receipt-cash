@@ -82,6 +82,7 @@
 <script>
 import QRCodeVue from 'qrcode.vue';
 import { getCurrencySymbol } from '../utils/currencyUtils';
+import { labelConfig } from '../config/label';
 
 export default {
   name: 'ReceiptShareQR',
@@ -158,15 +159,7 @@ export default {
       const amount = this.receiptAmount || '0';
       const title = this.receiptTitle || 'the receipt';
       const url = this.receiptLink;
-      const currencySymbol = this.currency ? getCurrencySymbol(this.currency) : '';
-      
-      return `Hey sugar! 💅
-
-I just spent ${amount} at ${title} and I'm feeling a little... broke.
-
-Would you help me out? Pretty please? 🥺
-
-You can pay your share here: ${url}`;
+      return labelConfig.getShareText(amount, title, url);
     },
     
     async openShareMenu() {
@@ -175,7 +168,7 @@ You can pay your share here: ${url}`;
         
         if (navigator.share) {
           await navigator.share({
-            title: 'Help me out? 💅🥺',
+            title: labelConfig.shareTitle,
             text: shareText
           });
         } else {

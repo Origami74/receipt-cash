@@ -1,3 +1,5 @@
+import { labelConfig } from '../config/label';
+
 /**
  * Background Audio Service
  * 
@@ -97,8 +99,8 @@ class BackgroundAudioService {
       // Note: MediaMetadata API may not work with data URLs, but we try anyway
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: '🧾 SugarDaddy.Cash - Counting Sats',
-          artist: 'SugarDaddy.Cash',
+          title: `🧾 ${labelConfig.appName} - Counting Sats`,
+          artist: labelConfig.appName,
           album: 'Payment Processing',
           artwork: [
             {

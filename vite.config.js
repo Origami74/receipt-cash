@@ -5,6 +5,9 @@ import { imagetools } from 'vite-imagetools';
 import fs from 'fs';
 import path from 'path';
 
+const label = process.env.VITE_LABEL || 'receipt-cash'
+const appName = label === 'sugardaddy-cash' ? 'SugarDaddy.Cash' : 'Receipt.Cash'
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -17,12 +20,16 @@ export default defineConfig({
         return params;
       },
     }),
+    {
+      name: 'html-title',
+      transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${appName}</title>`)
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['receipt-cash-logo.ico', 'receipt-cash-logo.png', 'robots.txt', 'apple-touch-icon.png', '_redirects'],
       manifest: {
-        name: 'Receipt.Cash',
-        short_name: 'Receipt.Cash',
+        name: appName,
+        short_name: appName,
         description: 'A mobile-first receipt settlement PWA using Nostr and Cashu',
         theme_color: '#FFB54C',
         icons: [
