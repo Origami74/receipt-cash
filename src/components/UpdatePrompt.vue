@@ -1,70 +1,47 @@
 <template>
-  <div v-if="showUpdatePrompt" class="fixed bottom-4 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50">
-    <div class="flex items-center justify-between">
-      <div class="flex-1">
-        <h3 class="font-medium">Update Available!</h3>
-        <p class="text-sm text-blue-100">A new version of SugarDaddy.Cash is ready to install.</p>
-      </div>
-      <div class="flex gap-2 ml-4">
-        <button 
-          @click="dismissUpdate" 
-          class="px-3 py-1 bg-blue-500 hover:bg-blue-400 rounded text-sm"
-        >
-          Later
-        </button>
-        <button 
-          @click="updateApp" 
-          class="px-3 py-1 bg-white text-blue-600 hover:bg-blue-50 rounded text-sm font-medium"
-        >
-          Update Now
-        </button>
-      </div>
+  <!-- No visible UI needed — autoUpdate activates the SW immediately.
+       This component just polls for updates and reloads on controller change. -->
+  <div v-if="updating" class="fixed bottom-20 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50">
+    <div class="flex items-center gap-3">
+      <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+      <span class="text-sm">Updating to latest version...</span>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+
+const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 export default {
   name: 'UpdatePrompt',
   setup() {
-    const showUpdatePrompt = ref(false);
-    let updateSW = null;
-    
+    const updating = ref(false);
+    let checkInterval = null;
+
     onMounted(() => {
-      // Listen for SW updates
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
-        });
-      }
-      
-      // Register update event listener
-      window.addEventListener('sw-update-available', (event) => {
-        updateSW = event.detail;
-        showUpdatePrompt.value = true;
+      if (!('serviceWorker' in navigator)) return;
+
+      // Reload when a new SW takes control (autoUpdate triggers this)
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        updating.value = true;
+        setTimeout(() => window.location.reload(), 500);
+      });
+
+      // Periodically ask the browser to check for a new SW
+      navigator.serviceWorker.ready.then((registration) => {
+        checkInterval = setInterval(() => {
+          registration.update().catch(() => {});
+        }, UPDATE_CHECK_INTERVAL);
       });
     });
-    
-    const updateApp = () => {
-      if (updateSW) {
-        updateSW();
-      } else {
-        // Fallback: force refresh
-        window.location.reload();
-      }
-    };
-    
-    const dismissUpdate = () => {
-      showUpdatePrompt.value = false;
-    };
-    
-    return {
-      showUpdatePrompt,
-      updateApp,
-      dismissUpdate
-    };
+
+    onUnmounted(() => {
+      if (checkInterval) clearInterval(checkInterval);
+    });
+
+    return { updating };
   }
 };
 </script>

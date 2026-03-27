@@ -19,6 +19,9 @@
       @report="openReportModal(notification.message)"
     />
     
+    <!-- PWA update prompt -->
+    <UpdatePrompt />
+
     <!-- Report modal -->
     <ReportModal
       :is-open="showReportModal"
@@ -54,6 +57,7 @@ import { showNotification, useNotification } from './services/notificationServic
 import { onboardingService } from './services/onboardingService';
 import Notification from './components/Notification.vue';
 import ReportModal from './components/ReportModal.vue';
+import UpdatePrompt from './components/UpdatePrompt.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
 import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
@@ -68,6 +72,7 @@ export default {
   components: {
     Notification,
     ReportModal,
+    UpdatePrompt,
     BottomTabBar,
     SettingsMenu,
     TabBlockedOverlay,
