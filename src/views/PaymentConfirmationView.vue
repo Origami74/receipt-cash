@@ -103,17 +103,24 @@
 
       <!-- Receipt Details -->
       <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div class="font-medium text-gray-900 mb-3">
-          What you paid for
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium text-gray-900">What you paid for</div>
+          <button
+            @click="toggleTranslation"
+            class="text-sm text-blue-500 hover:text-blue-600"
+            :disabled="isTranslating"
+          >
+            🌐 {{ isTranslating ? 'Translating...' : (isTranslated ? 'Original' : 'Translate') }}
+          </button>
         </div>
         <div class="space-y-2">
-          <div 
-            v-for="item in paidItems" 
+          <div
+            v-for="item in paidItems"
             :key="item.name + '-' + item.price"
             class="flex justify-between text-sm"
           >
             <span class="text-gray-700">
-              {{ item.name }} × {{ item.quantity }}
+              {{ isTranslated && translatedNames[item.name] ? translatedNames[item.name] : item.name }} × {{ item.quantity }}
             </span>
             <span class="font-medium">
               {{ formatSats(item.price * item.quantity) }}
@@ -201,6 +208,7 @@ import { getGuestPayment } from '../services/guestPaymentStorageService';
 import CashuPaymentModal from '../components/CashuPaymentModal.vue';
 import ContextualTip from '../components/onboarding/ContextualTip.vue';
 import { onboardingService } from '../services/onboardingService';
+import { useTranslation } from '../composables/useTranslation';
 import {
   tipPaymentSuccessImg,
   tipPaymentPendingImg,
@@ -226,6 +234,11 @@ export default {
     const status = ref('pending'); // 'pending' | 'confirmed' | 'failed'
     const paymentAmount = ref(0);
     const paidItems = ref([]);
+
+    const { isTranslated, isTranslating, translatedNames, toggleTranslation } = useTranslation(
+      () => paidItems.value.map(item => item.name),
+      () => 'auto'
+    );
     const paymentMethod = ref('lightning'); // 'lightning' | 'cashu'
     const cashuPaymentRequest = ref('');
     const showCashuModal = ref(false);
@@ -475,6 +488,10 @@ export default {
       loading,
       error,
       formatSats,
+      isTranslated,
+      isTranslating,
+      translatedNames,
+      toggleTranslation,
       viewReceipt,
       tryAgain,
       done,
