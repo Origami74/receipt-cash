@@ -65,7 +65,7 @@
         <!-- Payout Details -->
         <div>
           <p class="text-sm font-medium" :class="payoutTextClasses">
-            {{ payoutTypeLabel }} • {{ formatSats(payoutDetails.amount) }} sats
+            {{ payoutTypeLabel }} • {{ formatSats(payoutDetails.amount) }}
             <span v-if="payoutDetails.fees && payoutDetails.fees > 0" class="text-xs opacity-75">
               ({{ formatSats(payoutDetails.fees) }} fees<span v-if="payoutDetails.dustAmount && payoutDetails.dustAmount > 0">, {{ formatSats(payoutDetails.dustAmount) }} change</span>)
             </span>

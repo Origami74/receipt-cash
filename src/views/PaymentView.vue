@@ -62,11 +62,11 @@
         <div class="receipt-edge-top"></div>
         
         <!-- Receipt Title and Date -->
-        <div class="px-4 pt-6 pb-4 text-center border-b border-dashed border-gray-300">
-          <div class="text-xl font-bold text-gray-900">
+        <div class="px-4 pt-3 pb-2 text-center border-b border-dashed border-gray-300">
+          <div class="text-lg font-bold text-gray-900">
             {{ receiptModel?.title || 'Receipt' }}
           </div>
-          <div class="text-sm text-gray-500 mt-1">{{ receiptDate }}</div>
+          <div class="text-xs text-gray-500">{{ receiptDate }}</div>
         </div>
         
         <!-- Payment Items List with quantity selection -->

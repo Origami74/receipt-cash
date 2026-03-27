@@ -31,7 +31,7 @@
     />
     
     <!-- Main content area with conditional bottom padding for tab bar -->
-    <div class="flex-1 overflow-auto" :class="{ 'pb-20': shouldShowTabBar }">
+    <div class="flex-1 overflow-auto transition-[padding] duration-300" :class="{ 'pb-20': shouldShowTabBar && !isTabBarHidden }">
       <router-view @toggle-settings="handleToggleSettings" />
     </div>
     
@@ -58,6 +58,7 @@ import { onboardingService } from './services/onboardingService';
 import Notification from './components/Notification.vue';
 import ReportModal from './components/ReportModal.vue';
 import UpdatePrompt from './components/UpdatePrompt.vue';
+import { tabBarHidden } from './components/BottomTabBar.vue';
 import BottomTabBar from './components/BottomTabBar.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
 import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
@@ -181,6 +182,7 @@ export default {
       openReportModal,
       handleReportSubmitted,
       shouldShowTabBar,
+      isTabBarHidden: tabBarHidden,
       handleToggleMonitor,
       handleToggleSettings,
       isSettingsOpen,

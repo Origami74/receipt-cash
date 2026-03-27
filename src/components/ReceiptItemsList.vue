@@ -19,7 +19,7 @@
           <div class="flex items-center justify-between mb-2">
             <div class="font-medium">{{ isTranslated && translatedNames[itemWithSettlements.name] ? translatedNames[itemWithSettlements.name] : itemWithSettlements.name }}</div>
             <div class="font-medium text-right">
-              <div>{{ formatSats(itemWithSettlements.price * itemWithSettlements.quantity) }} sats</div>
+              <div>{{ formatSats(itemWithSettlements.price * itemWithSettlements.quantity) }}</div>
               <div class="text-xs text-gray-500">{{ formatFiat(itemWithSettlements.price * itemWithSettlements.quantity) }}</div>
             </div>
           </div>
@@ -52,7 +52,7 @@
             >
               (<span :class="itemWithSettlements.confirmedQuantity > itemWithSettlements.quantity ? 'text-purple-600 font-medium text-base' : ''">{{ itemWithSettlements.confirmedQuantity }}</span>/{{ itemWithSettlements.quantity }})
             </span>
-            × {{ formatSats(itemWithSettlements.price) }} sats
+            × {{ formatSats(itemWithSettlements.price) }}
             <span class="text-xs text-gray-400 ml-1">({{ formatFiat(itemWithSettlements.price) }})</span>
           </div>
         </div>
@@ -197,6 +197,6 @@ export default {
 
 <style scoped>
 .receipt-item {
-  @apply p-3 border-b border-gray-100 last:border-b-0 flex justify-between items-start;
+  @apply py-2 px-1 border-b border-gray-100 last:border-b-0 flex justify-between items-start;
 }
 </style>

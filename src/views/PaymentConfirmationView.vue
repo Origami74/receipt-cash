@@ -76,7 +76,7 @@
       <!-- Amount Paid -->
       <div class="text-center mb-8">
         <div class="text-3xl font-bold text-gray-900 mb-2">
-          {{ formatSats(paymentAmount) }} sats
+          {{ formatSats(paymentAmount) }}
         </div>
         <div class="text-gray-600">
           sent to the host
@@ -116,7 +116,7 @@
               {{ item.name }} × {{ item.quantity }}
             </span>
             <span class="font-medium">
-              {{ formatSats(item.price * item.quantity) }} sats
+              {{ formatSats(item.price * item.quantity) }}
             </span>
           </div>
         </div>

@@ -7,7 +7,7 @@ import btcPriceService from '../services/btcPriceService';
  * @returns {string} Formatted sats amount
  */
 export function formatSats(amount) {
-  return new Intl.NumberFormat().format(amount);
+  return '₿' + new Intl.NumberFormat().format(amount);
 }
 
 /**

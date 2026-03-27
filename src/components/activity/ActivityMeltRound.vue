@@ -22,7 +22,7 @@
           <p class="text-sm font-medium" :class="isSkipped ? 'text-gray-600' : 'text-orange-900'">
             <span v-if="isSkipped">Skipped</span>
             <span v-else>LN-melt</span>
-            • {{ formatSats(meltRound.targetAmount || meltRound.meltQuote?.amount || 0) }} sats
+            • {{ formatSats(meltRound.targetAmount || meltRound.meltQuote?.amount || 0) }}
             <span v-if="!isSkipped && meltRound.meltQuote?.fee_reserve && meltRound.meltQuote.fee_reserve > 0" class="text-xs opacity-75">
               ({{ formatSats(meltRound.meltQuote.fee_reserve) }} fees)
             </span>

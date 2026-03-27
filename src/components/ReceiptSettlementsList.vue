@@ -1,14 +1,14 @@
 <template>
   <!-- Settlements List -->
   <div v-if="confirmedSettlements.length > 0" class="bg-white rounded-lg shadow">
-    <div class="p-3 border-b border-gray-200 font-medium bg-gray-50">
+    <div class="py-2 px-3 border-b border-gray-200 font-medium bg-gray-50 text-sm">
       Settlements ({{ confirmedSettlements.length }})
     </div>
     <div class="divide-y divide-gray-100">
       <div
         v-for="settlement in confirmedSettlements"
         :key="settlement.id"
-        class="p-3"
+        class="py-2 px-3"
       >
         <!-- Settlement Summary -->
         <div
@@ -35,7 +35,7 @@
                     {{ isPaidOut(settlement) ? 'Distributed' : 'Collected' }}
                   </span>
                   <span class="text-gray-500">•</span>
-                  <span class="font-medium">{{ formatSats(settlement.total || 0) }} sats</span>
+                  <span class="font-medium">{{ formatSats(settlement.total || 0) }}</span>
                   <span class="text-xs text-gray-400">({{ formatFiat(settlement.total || 0) }})</span>
                 </div>
                 <div class="text-xs text-gray-500 mt-1">
@@ -78,7 +78,7 @@
                   <span>{{ item.name }}</span>
                 </div>
                 <div>
-                  <span>{{ formatSats(item.price * item.selectedQuantity) }} sats</span>
+                  <span>{{ formatSats(item.price * item.selectedQuantity) }}</span>
                   <span class="text-xs text-gray-400 ml-1">({{ formatFiat(item.price * item.selectedQuantity) }})</span>
                 </div>
               </div>
@@ -86,7 +86,7 @@
             <div class="pt-2 border-t border-gray-100 flex justify-between text-sm font-medium">
               <div>Settlement Total:</div>
               <div>
-                <span>{{ formatSats(settlement.total || 0) }} sats</span>
+                <span>{{ formatSats(settlement.total || 0) }}</span>
                 <span class="text-xs text-gray-400 ml-1">({{ formatFiat(settlement.total || 0) }})</span>
               </div>
             </div>

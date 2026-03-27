@@ -70,21 +70,33 @@
       />
       
       <div class="flex-1 overflow-y-auto p-4">
+        <!-- Share QR Code Section -->
+        <ReceiptShareQR
+          ref="shareQRComponent"
+          :receiptLink="receiptLink"
+          :receiptTitle="receiptModel?.title"
+          :receiptAmount="toFiat(receiptModel?.total)"
+          :currency="receiptModel?.currency"
+          @go-to-payment="handlePay"
+          @scroll-to-progress="scrollToItemsList"
+        />
+
         <!-- Unified receipt paper containing items and summary -->
         <div class="bg-white shadow-lg receipt-paper mb-4">
           <!-- Zigzag top edge -->
           <div class="receipt-edge-top"></div>
           
           <!-- Receipt Title and Date -->
-          <div class="px-4 pt-6 pb-4 text-center border-b border-dashed border-gray-300">
-            <div class="text-xl font-bold text-gray-900">
+          <div class="px-4 pt-3 pb-2 text-center border-b border-dashed border-gray-300">
+            <div class="text-lg font-bold text-gray-900">
               {{ receiptModel?.title || 'Receipt' }}
             </div>
-            <div class="text-sm text-gray-500 mt-1">{{ receiptDate }}</div>
+            <div class="text-xs text-gray-500">{{ receiptDate }}</div>
           </div>
           
           <!-- Receipt Items (no wrapper, direct content) -->
           <ReceiptItemsList
+            ref="receiptItemsListComponent"
             :receiptModel="receiptModel"
             :selectedCurrency="selectedCurrency"
             :isUnified="true"
@@ -106,25 +118,7 @@
           :receiptModel="receiptModel"
           :selectedCurrency="selectedCurrency"
         />
-
-        <!-- Share QR Code Section (conditionally shown) -->
-        <ReceiptShareQR
-          v-if="showShareQR"
-          ref="shareQRComponent"
-          :receiptLink="receiptLink"
-          :receiptTitle="receiptModel?.title"
-          :receiptAmount="toFiat(receiptModel?.total)"
-          :currency="receiptModel?.currency"
-        />
       </div>
-
-    <!-- Sticky Action Bar -->
-    <ReceiptActionBar
-      :eventId="eventId"
-      :decryptionKey="decryptionKey"
-      @share="handleShare"
-      @pay="handlePay"
-    />
 
     <!-- Settings Menu -->
     <SettingsMenu
@@ -142,7 +136,6 @@ import ReceiptSummary from '../components/ReceiptSummary.vue';
 import ReceiptItemsList from '../components/ReceiptItemsList.vue';
 import ReceiptSettlementsList from '../components/ReceiptSettlementsList.vue';
 import ReceiptShareQR from '../components/ReceiptShareQR.vue';
-import ReceiptActionBar from '../components/ReceiptActionBar.vue';
 import LoadingErrorWrapper from '../components/LoadingErrorWrapper.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import CurrencySelector from '../components/CurrencySelector.vue';
@@ -169,7 +162,6 @@ export default {
     ReceiptItemsList,
     ReceiptSettlementsList,
     ReceiptShareQR,
-    ReceiptActionBar,
     LoadingErrorWrapper,
     SettingsMenu,
     CurrencySelector,
@@ -192,8 +184,8 @@ export default {
     const selectedCurrency = ref('USD');
     const currentBtcPrice = ref(0);
     const showSettings = ref(false);
-    const showShareQR = ref(false);
     const shareQRComponent = ref(null);
+    const receiptItemsListComponent = ref(null);
     const error = ref(null);
     const errorDetails = ref(null);
     const showNotificationTip = ref(false);
@@ -268,10 +260,8 @@ export default {
       return convertFromSats(satsAmount, currentBtcPrice.value, selectedCurrency.value);
     };
 
-    // Show and scroll to QR code
+    // Scroll to QR code
     const showAndScrollToQR = () => {
-      showShareQR.value = true;
-      // Use nextTick to ensure the component is rendered
       nextTick(() => {
         if (shareQRComponent.value) {
           shareQRComponent.value.scrollIntoView();
@@ -301,17 +291,18 @@ export default {
       }
     };
 
-    // Action bar event handlers
     const handleShare = () => {
-      if (showShareQR.value) {
-        showShareQR.value = false;
-      } else {
-        showAndScrollToQR();
-      }
+      showAndScrollToQR();
     };
 
-    const handlePay = ({ eventId, decryptionKey }) => {
-      router.push(`/pay/${eventId}/${decryptionKey}`);
+    const scrollToItemsList = () => {
+      nextTick(() => {
+        receiptItemsListComponent.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+
+    const handlePay = () => {
+      router.push(`/pay/${props.eventId}/${props.decryptionKey}`);
     };
     
     
@@ -332,8 +323,7 @@ export default {
       if (!isShowing &&
           isOwned &&
           onboardingService.hasSeen('NotificationTip') &&
-          !onboardingService.hasSeen('SharingTip') &&
-          showShareQR.value) {
+          !onboardingService.hasSeen('SharingTip')) {
         // Show sharing tip after notification tip is dismissed
         setTimeout(() => {
           showSharingTip.value = true;
@@ -427,8 +417,9 @@ export default {
       showSettings,
       selectedCurrency,
       currentBtcPrice,
-      showShareQR,
       shareQRComponent,
+      receiptItemsListComponent,
+      scrollToItemsList,
       showNotificationTip,
       showSharingTip,
       showFirstPaymentCelebration,

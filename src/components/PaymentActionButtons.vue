@@ -1,51 +1,49 @@
 <template>
-  <div class="p-4 bg-white shadow-inner border-t border-gray-200">
-    <div class="space-y-2">
-      <!-- Show payment buttons when payment is not successful -->
-      <template v-if="!paymentSuccess">
-        <div class="flex space-x-3">
-          <button
-            @click="$emit('pay-lightning')"
-            @touchend.prevent="$emit('pay-lightning')"
-            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition duration-150 text-white bg-amber-500 font-medium touch-manipulation"
-            :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
-            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
-          >
-            <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
-              ⏳ Settlement sent...
-            </span>
-            <span v-else>
-              ⚡️ Pay with Lightning
-            </span>
-          </button>
-          <button
-            @click="$emit('pay-cashu')"
-            @touchend.prevent="$emit('pay-cashu')"
-            class="flex-1 py-3 px-4 rounded disabled:opacity-50 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-150 text-white bg-purple-600 font-medium touch-manipulation"
-            :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
-            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
-          >
-            <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
-              ⏳ Settlement sent...
-            </span>
-            <span v-else>
-              🥜 Pay with Cashu
-            </span>
-          </button>
-        </div>
-      </template>
-      
-      <!-- Show go to receipt overview button when payment is successful -->
-      <button
-        v-if="paymentSuccess"
-        @click="$emit('go-to-receipt')"
-        @touchend.prevent="$emit('go-to-receipt')"
-        class="w-full py-8 px-4 rounded bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 text-white font-medium text-lg touch-manipulation"
-        style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
-      >
-        📋 Go to Receipt Overview
-      </button>
-    </div>
+  <div class="px-4 py-2 bg-white border-t border-gray-200">
+    <!-- Show payment buttons when payment is not successful -->
+    <template v-if="!paymentSuccess">
+      <div class="flex space-x-2">
+        <button
+          @click="$emit('pay-lightning')"
+          @touchend.prevent="$emit('pay-lightning')"
+          class="flex-1 py-2 px-3 rounded-lg disabled:opacity-50 hover:bg-amber-600 focus:outline-none transition duration-150 text-white bg-amber-500 text-sm font-medium touch-manipulation"
+          :disabled="selectedItems.length === 0 || paymentInProgress || cashuPaymentLocked"
+          style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+        >
+          <span v-if="currentPaymentType === 'lightning' && paymentInProgress">
+            ⏳ Sending...
+          </span>
+          <span v-else>
+            ⚡ Lightning
+          </span>
+        </button>
+        <button
+          @click="$emit('pay-cashu')"
+          @touchend.prevent="$emit('pay-cashu')"
+          class="flex-1 py-2 px-3 rounded-lg disabled:opacity-50 hover:bg-purple-700 focus:outline-none transition duration-150 text-white bg-purple-600 text-sm font-medium touch-manipulation"
+          :disabled="selectedItems.length === 0 || paymentInProgress || lightningPaymentLocked"
+          style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+        >
+          <span v-if="currentPaymentType === 'cashu' && paymentInProgress">
+            ⏳ Sending...
+          </span>
+          <span v-else>
+            🥜 Cashu
+          </span>
+        </button>
+      </div>
+    </template>
+
+    <!-- Show go to receipt overview button when payment is successful -->
+    <button
+      v-if="paymentSuccess"
+      @click="$emit('go-to-receipt')"
+      @touchend.prevent="$emit('go-to-receipt')"
+      class="w-full py-3 px-4 rounded-lg bg-green-500 hover:bg-green-600 focus:outline-none transition duration-150 text-white font-medium touch-manipulation"
+      style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+    >
+      📋 Go to Receipt Overview
+    </button>
   </div>
 </template>
 

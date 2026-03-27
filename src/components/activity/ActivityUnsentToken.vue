@@ -17,7 +17,7 @@
         <!-- Token Details -->
         <div>
           <p class="text-sm font-medium text-yellow-900">
-            {{ text }} • {{ formatSats(tokenAmount) }} sats
+            {{ text }} • {{ formatSats(tokenAmount) }}
           </p>
           <p class="text-xs text-yellow-600 mt-1">
             Ready to copy

@@ -31,7 +31,7 @@
         <!-- Record Details -->
         <div class="flex-1">
           <p class="text-sm font-medium" :class="textClasses">
-            {{ recordLabel }} • {{ formatSats(displayAmount) }} sats
+            {{ recordLabel }} • {{ formatSats(displayAmount) }}
           </p>
           <p v-if="statusMessage || record.metadata?.description" class="text-xs mt-1" :class="statusMessageColor">
             {{ statusMessage || record.metadata?.description }}
@@ -52,7 +52,7 @@
         :class="isRoundSkipped(round) ? 'text-gray-400' : 'text-gray-600'"
       >
         <span class="font-mono">Round {{ round.roundNumber || index + 1 }}:</span>
-        <span class="ml-2">{{ formatSats(round.targetAmount || round.meltQuote?.amount || 0) }} sats</span>
+        <span class="ml-2">{{ formatSats(round.targetAmount || round.meltQuote?.amount || 0) }}</span>
         <span v-if="!isRoundSkipped(round) && round.meltQuote?.fee_reserve" class="ml-1 text-gray-500">
           ({{ formatSats(round.meltQuote.fee_reserve) }} fee)
         </span>

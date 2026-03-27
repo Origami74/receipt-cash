@@ -9,7 +9,7 @@
         <p class="text-sm text-gray-500">{{ formatDate(receipt.created_at) }}</p>
       </div>
       <div class="text-right">
-        <div class="font-bold">{{ formatSats(receipt.totalAmount) }} sats</div>
+        <div class="font-bold">{{ formatSats(receipt.totalAmount) }}</div>
         <div class="text-sm text-gray-500">🔒 {{ convertFromSats(receipt.totalAmount, receipt.btcPrice, receipt.currency) }}</div>
       </div>
     </div>
@@ -21,7 +21,7 @@
         <span>
           <span class="text-yellow-600 font-medium">{{  formatSats(receipt.collectedAmount) || 0 }}</span> /
           <span class="text-green-600 font-medium">{{  formatSats(receipt.distributedAmount) || 0 }}</span> /
-          <span class="text-gray-600">{{  formatSats(receipt.totalAmount) }}</span> sats
+          <span class="text-gray-600">{{  formatSats(receipt.totalAmount) }}</span>
         </span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-2 relative">

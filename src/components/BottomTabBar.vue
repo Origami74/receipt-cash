@@ -1,5 +1,8 @@
 <template>
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+  <div
+    class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 transition-transform duration-300"
+    :class="{ 'translate-y-full': hidden }"
+  >
     <div class="flex items-center h-20 px-4">
       
       <!-- 1. My Receipts Tab (1/5 width) -->
@@ -90,21 +93,25 @@ import { useRoute } from 'vue-router';
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { backgroundAudioService } from '../services/backgroundAudioService';
 
+// Shared reactive state for tab bar visibility
+export const tabBarHidden = ref(false);
+
 export default {
   name: 'BottomTabBar',
   emits: ['toggle-monitor', 'toggle-settings'],
   setup() {
     const route = useRoute();
     const isBackgroundAudioActive = ref(false);
+    const hidden = tabBarHidden;
     let updateInterval = null;
-    
+    let lastScrollY = 0;
+    let scrollThreshold = 10;
+
     const isActive = (path) => {
       return computed(() => {
-        // Handle exact match for home route
         if (path === '/') {
           return route.path === '/';
         }
-        // Handle other routes that might have dynamic segments
         return route.path.startsWith(path);
       }).value;
     };
@@ -113,21 +120,34 @@ export default {
       isBackgroundAudioActive.value = backgroundAudioService.isActive();
     };
 
+    const onScroll = (e) => {
+      const target = e.target;
+      // Only respond to scrollable containers, not the document root
+      if (target === document || target === document.documentElement) return;
+      const currentY = target.scrollTop;
+      if (Math.abs(currentY - lastScrollY) < scrollThreshold) return;
+      hidden.value = currentY > lastScrollY && currentY > 50;
+      lastScrollY = currentY;
+    };
+
     onMounted(() => {
       updateBackgroundAudioStatus();
-      // Check every second
       updateInterval = setInterval(updateBackgroundAudioStatus, 1000);
+      // Capture phase catches scroll on any nested scrollable div
+      document.addEventListener('scroll', onScroll, { passive: true, capture: true });
     });
 
     onUnmounted(() => {
       if (updateInterval) {
         clearInterval(updateInterval);
       }
+      document.removeEventListener('scroll', onScroll, { capture: true });
     });
 
     return {
       isActive,
-      isBackgroundAudioActive
+      isBackgroundAudioActive,
+      hidden
     };
   }
 };

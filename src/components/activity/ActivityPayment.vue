@@ -36,7 +36,7 @@
 
       <!-- Amount and Timestamp (stacked) -->
       <div class="text-right">
-        <p class="text-sm font-semibold text-gray-900">{{ formatSats(settlement.total) }} sats</p>
+        <p class="text-sm font-semibold text-gray-900">{{ formatSats(settlement.total) }}</p>
         <span class="text-xs text-gray-500">{{ formatTime(settlement.event.created_at * 1000) }}</span>
       </div>
     </div>

@@ -36,7 +36,7 @@
       <!-- Right side: Amount and time (stacked) -->
       <div class="text-right ml-3 flex-shrink-0">
         <p class="text-sm font-semibold text-gray-900">
-          {{ formatSats(payment.amount) }} sats
+          {{ formatSats(payment.amount) }}
         </p>
         <p class="text-xs text-gray-500 mt-0.5">
           {{ formatRelativeTime(payment.timestamp / 1000) }}

@@ -53,7 +53,7 @@
 
         <!-- Receipt Amount and Timestamp -->
         <div class="text-right">
-          <p class="text-sm font-semibold text-gray-900">{{ totalAmount }} sats</p>
+          <p class="text-sm font-semibold text-gray-900">{{ totalAmount }}</p>
           <span class="text-xs text-gray-500">{{ formatTime(receiptTimestamp) }}</span>
         </div>
       </div>

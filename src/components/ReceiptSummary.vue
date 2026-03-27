@@ -3,10 +3,10 @@
     <div v-if="!isUnified" class="p-3 border-b border-gray-200 font-medium bg-gray-50">
       Summary
     </div>
-    <div v-else class="px-4 pt-6 pb-3 border-t-2 border-dashed border-gray-300 font-medium text-center">
+    <div v-else class="px-4 pt-3 pb-2 border-t-2 border-dashed border-gray-300 font-medium text-center text-sm">
       Summary
     </div>
-    <div :class="isUnified ? 'px-4 pt-3 pb-3' : 'p-3 border-t border-gray-200'" class="text-xs text-gray-500">
+    <div :class="isUnified ? 'px-4 pt-2 pb-2' : 'p-3 border-t border-gray-200'" class="text-xs text-gray-500">
       <div>
         Receipt conversion rate: 1 BTC = {{ receiptCurrency + ' ' }}{{ receiptBtcPrice.toLocaleString() }}
       </div>
@@ -14,14 +14,14 @@
         Live rate (applied to fiat values): 1 BTC = {{ selectedCurrency === 'USD' ? '$' : selectedCurrency + ' ' }}{{ currentBtcPrice.toLocaleString() }}
       </div>
     </div>
-    <div v-if="splitPercentage > 0" :class="isUnified ? 'px-4 pb-3' : 'p-3'" class="border-t border-dashed border-gray-300 text-xs text-gray-500 flex items-center">
+    <div v-if="splitPercentage > 0" :class="isUnified ? 'px-4 pb-2' : 'p-3'" class="border-t border-dashed border-gray-300 text-xs text-gray-500 flex items-center">
       <span>Receipt creator shares {{ formatDevPercentage(splitPercentage) }}% with the maintainer of this app.</span>
       <span class="emoji-display mr-2">{{ getDevPercentageEmoji(splitPercentage) }}</span>
     </div>
-    <div :class="isUnified ? 'px-4 pb-4' : 'p-3'" class="flex justify-between items-center font-bold border-t border-dashed border-gray-300">
+    <div :class="isUnified ? 'px-4 pb-3' : 'p-3'" class="flex justify-between items-center font-bold border-t border-dashed border-gray-300">
       <div>Total</div>
       <div class="text-right">
-        <div>{{ formatSats(totalAmount) }} sats</div>
+        <div>{{ formatSats(totalAmount) }}</div>
         <div class="text-sm text-gray-500">{{ formatFiat(totalAmount) }}</div>
       </div>
     </div>

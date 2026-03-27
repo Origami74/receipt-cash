@@ -119,7 +119,7 @@
                 </div>
                 <div class="text-sm text-gray-500">
                   {{ item.quantity || 0 }} × {{ formatPrice(item.price || 0) }}
-                  <span class="text-xs text-gray-400 ml-1">({{ formatSats(convertToSats(item.price || 0)) }} sats)</span>
+                  <span class="text-xs text-gray-400 ml-1">({{ formatSats(convertToSats(item.price || 0)) }})</span>
                 </div>
               </div>
               <div v-else class="space-y-2">
@@ -159,7 +159,7 @@
                   {{ formatPrice((item.price || 0) * (item.quantity || 0)) }}
                 </div>
                 <div class="text-xs font-normal" :class="showItemSelection && (item.selectedQuantity || 0) > 0 ? 'text-green-500' : 'text-gray-500'">
-                  {{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }} sats
+                  {{ formatSats(convertToSats((item.price || 0) * (item.quantity || 0))) }}
                 </div>
               </div>
               <div class="relative">
@@ -222,7 +222,7 @@
             <div>Total for me ({{ getSelectedItemsCount() }} items):</div>
             <div class="text-green-600">
               <div class="font-medium">{{ formatPrice(getSelectedItemsTotal()) }}</div>
-              <div class="text-xs">{{ formatSats(convertToSats(getSelectedItemsTotal())) }} sats</div>
+              <div class="text-xs">{{ formatSats(convertToSats(getSelectedItemsTotal())) }}</div>
             </div>
           </div>
         </div>
@@ -231,7 +231,7 @@
           <div>{{ getSelectedItemsTotal() > 0 ? 'Total for others' : 'Total' }}</div>
           <div>
             <div class="font-bold">{{ formatPrice(calculateRemainingTotal()) }}</div>
-            <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats(calculateRemainingTotal())) }} sats</div>
+            <div class="text-xs text-gray-500 font-normal">{{ formatSats(convertToSats(calculateRemainingTotal())) }}</div>
           </div>
         </div>
         <div class="px-4 pb-6 pt-2 text-xs text-gray-500 text-center">
