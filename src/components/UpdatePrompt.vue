@@ -12,13 +12,11 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 
-const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
-
 export default {
   name: 'UpdatePrompt',
   setup() {
     const updating = ref(false);
-    let checkInterval = null;
+    let onVisibilityChange = null;
 
     onMounted(() => {
       if (!('serviceWorker' in navigator)) return;
@@ -29,16 +27,21 @@ export default {
         setTimeout(() => window.location.reload(), 500);
       });
 
-      // Periodically ask the browser to check for a new SW
+      // Check for SW updates when user returns to the tab
       navigator.serviceWorker.ready.then((registration) => {
-        checkInterval = setInterval(() => {
-          registration.update().catch(() => {});
-        }, UPDATE_CHECK_INTERVAL);
+        onVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            registration.update().catch(() => {});
+          }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
       });
     });
 
     onUnmounted(() => {
-      if (checkInterval) clearInterval(checkInterval);
+      if (onVisibilityChange) {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
     });
 
     return { updating };
