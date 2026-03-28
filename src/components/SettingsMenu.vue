@@ -30,6 +30,7 @@
           <div class="flex items-center justify-between gap-2 pb-4 border-b border-gray-200">
             <span class="text-xs text-gray-500">Version {{ appVersion }}</span>
             <button
+              v-if="!isNativeApp"
               @click="checkForUpdates"
               class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
             >
@@ -264,6 +265,7 @@ import packageInfo from '../../package.json';
 import ReceiveAddressInput from './ReceiveAddressInput.vue';
 import WalletSettings from './WalletSettings.vue';
 import LanguageSelector from './LanguageSelector.vue';
+import { Capacitor } from '@capacitor/core';
 import { triggerManualUpdate, getStoredVersion } from '../services/updaterService';
 
 export default {
@@ -457,6 +459,7 @@ export default {
       reportLogs,
       
       // Update management
+      isNativeApp: Capacitor.isNativePlatform(),
       checkForUpdates,
       
       // Onboarding management

@@ -9,7 +9,8 @@
   >
     <div 
       v-if="show"
-      class="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md"
+      class="fixed left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md"
+      style="top: calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 1rem)"
     >
       <div 
         class="bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 p-4"

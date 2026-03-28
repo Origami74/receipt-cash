@@ -152,6 +152,7 @@ import {
   tipFirstPaymentAltImg,
   tipProcessingReminderImg
 } from '../assets/images/onboard';
+import { getAppOrigin } from '../config/label';
 
 
 export default {
@@ -233,7 +234,7 @@ export default {
     // Computed property for receipt link
     const receiptLink = computed(() => {
       if (!props.eventId || !props.decryptionKey) return '';
-      const baseUrl = window.location.origin;
+      const baseUrl = getAppOrigin();
       return `${baseUrl}/pay/${props.eventId}/${props.decryptionKey}`;
     });
     

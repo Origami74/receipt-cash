@@ -7,6 +7,7 @@ import path from 'path';
 
 const label = process.env.VITE_LABEL || 'receipt-cash'
 const appName = label === 'sugardaddy-cash' ? 'SugarDaddy.Cash' : 'Receipt.Cash'
+const isCapacitor = process.env.CAPACITOR_BUILD === 'true'
 
 export default defineConfig({
   plugins: [
@@ -24,7 +25,7 @@ export default defineConfig({
       name: 'html-title',
       transformIndexHtml: (html) => html.replace(/<title>.*?<\/title>/, `<title>${appName}</title>`)
     },
-    VitePWA({
+    !isCapacitor && VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['receipt-cash-logo.ico', 'receipt-cash-logo.png', 'robots.txt', 'apple-touch-icon.png', '_redirects'],
       manifest: {
@@ -74,8 +75,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/]
       }
-    })
-  ],
+    }),
+  ].filter(Boolean),
   resolve: {
     extensions: ['.js', '.ts', '.vue', '.json']
   },

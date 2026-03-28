@@ -31,7 +31,7 @@
     />
     
     <!-- Main content area with conditional bottom padding for tab bar -->
-    <div class="flex-1 overflow-auto transition-[padding] duration-300" :class="{ 'pb-20': shouldShowTabBar && !isTabBarHidden }">
+    <div class="flex-1 overflow-auto transition-[padding] duration-300" :class="[isHomePage ? '' : 'safe-area-padded', { 'pb-20': shouldShowTabBar && !isTabBarHidden }]">
       <router-view @toggle-settings="handleToggleSettings" />
     </div>
     
@@ -51,8 +51,9 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
 import { showNotification, useNotification } from './services/notificationService';
 import { labelConfig } from './config/label';
 import { onboardingService } from './services/onboardingService';
@@ -82,12 +83,15 @@ export default {
   },
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const { notification, clearNotification } = useNotification();
     const showReportModal = ref(false);
     const currentErrorMessage = ref('');
     const isSettingsOpen = ref(false);
     const isTabBlocked = ref(false);
     const showHostWelcome = ref(false);
+    let backButtonListener = null;
+    let appStateListener = null;
     
     // Check if current route is home page
     const isHomePage = computed(() => {
@@ -105,9 +109,12 @@ export default {
     });
     
     // Set up callback for if we get blocked later (can happen if another tab takes over)
-    tabLockService.onBlocked(() => {
-      isTabBlocked.value = true;
-    });
+    // Not relevant on native — single instance app
+    if (!Capacitor.isNativePlatform()) {
+      tabLockService.onBlocked(() => {
+        isTabBlocked.value = true;
+      });
+    }
     
     // Handle host welcome onboarding completion
     const handleHostWelcomeComplete = () => {
@@ -119,7 +126,8 @@ export default {
     // Initialize on mount
     onMounted(async () => {
       // Check if we have the lock (should already be acquired in main.js)
-      if (!tabLockService.hasLock()) {
+      // Native apps are single-instance, no lock needed
+      if (!Capacitor.isNativePlatform() && !tabLockService.hasLock()) {
         isTabBlocked.value = true;
         return;
       }
@@ -129,15 +137,17 @@ export default {
         showHostWelcome.value = true;
       }
       
-      // Check for version updates
-      try {
-        const updatePerformed = await checkForVersionUpdate();
-        if (updatePerformed) {
-          // If update was performed, the app will reload
-          return;
+      // Check for version updates (web only — native updates via app store)
+      if (!Capacitor.isNativePlatform()) {
+        try {
+          const updatePerformed = await checkForVersionUpdate();
+          if (updatePerformed) {
+            // If update was performed, the app will reload
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking for version update:', error);
         }
-      } catch (error) {
-        console.error('Error checking for version update:', error);
       }
       
       // Enable debug logging by default if not already set
@@ -150,6 +160,25 @@ export default {
       window.addEventListener('report-logs', (event) => {
         openReportModal('User-initiated log report');
       });
+
+      // Android back button: navigate back or minimize app on home
+      if (Capacitor.isNativePlatform()) {
+        const { App: CapApp } = await import('@capacitor/app');
+        backButtonListener = await CapApp.addListener('backButton', ({ canGoBack }) => {
+          if (isSettingsOpen.value) {
+            isSettingsOpen.value = false;
+          } else if (canGoBack) {
+            router.back();
+          } else {
+            CapApp.minimizeApp();
+          }
+        });
+
+        // Pause/resume: notify components (e.g. camera stop/start)
+        appStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
+          document.dispatchEvent(new CustomEvent('app-state-change', { detail: { isActive } }));
+        });
+      }
     });
     
     // Open the report modal with the current error message
@@ -196,5 +225,13 @@ export default {
 </script>
 
 <style>
-/* Any app-wide styles go here */
+/* Safe area insets for non-camera views.
+   Camera view goes fully edge-to-edge and handles its own insets. */
+.safe-area-padded {
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+
 </style>

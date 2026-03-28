@@ -17,7 +17,7 @@
         primary-button-text="Got it!"
         @dismiss="showCameraTip = false"
       />
-      
+
       <!-- Show captured image immediately after taking photo -->
       <div v-if="capturedImage" class="h-full flex flex-col bg-gray-900">
         <div class="flex-1 flex items-center justify-center p-4">
@@ -27,19 +27,20 @@
           <p class="text-sm">Processing receipt...</p>
         </div>
       </div>
-      
-      <div v-else-if="!capturedImage" class="camera-container">
-        <video ref="videoElement" class="h-full w-full object-cover"></video>
-        
+
+      <div v-else-if="!capturedImage" class="camera-container" :class="{ 'native-camera': isNative }">
+        <!-- Web-only: video element for getUserMedia -->
+        <video v-if="!isNative" ref="videoElement" class="h-full w-full object-cover"></video>
+
         <!-- Camera Permission Overlay Component -->
         <CameraPermissionOverlay
           :hasPermission="hasPermission"
           :isInitializing="cameraInitializing"
           @request-permission="requestCameraPermission"
         />
-        
+
         <div class="camera-overlay">
-          <div class="p-4 bg-black/50">
+          <div class="px-4 pb-4 bg-black/50 camera-overlay-header">
             <div class="flex items-center justify-center space-x-2">
               <img
                 :src="logoImg"
@@ -49,7 +50,7 @@
               <h1 class="text-white text-center text-xl font-bold">{{ labelConfig.appName }}</h1>
             </div>
           </div>
-          
+
           <camera-controls
             @toggle-flash="toggleFlash"
             @capture-receipt="captureReceipt"
@@ -57,7 +58,7 @@
             @file-selected="handleFileSelected"
           />
         </div>
-        
+
         <!-- Camera Quick Nav outside of camera-overlay for proper z-index -->
         <camera-quick-nav
           @toggle-activity="handleToggleActivity"
@@ -65,15 +66,16 @@
         />
       </div>
     </template>
-    
+
     <Spinner v-if="isProcessing" message="Processing receipt..." />
-    
+
   </div>
 </template>
 
 <script>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
 import QrScanner from 'qr-scanner';
 import Notification from '../components/Notification.vue';
 import Spinner from '../components/Spinner.vue';
@@ -88,6 +90,16 @@ import { getCameraPermission, saveCameraPermission } from '../services/storageSe
 import { onboardingService } from '../services/onboardingService';
 import { tipCameraImg, logoImg } from '../assets/images/onboard';
 import { labelConfig } from '../config/label';
+
+const isNative = Capacitor.isNativePlatform();
+
+// Eagerly load native camera plugin so it's ready by onMounted
+let CameraPreview = null;
+const cameraPreviewReady = isNative
+  ? import('@capgo/camera-preview').then(mod => {
+      CameraPreview = mod.CameraPreview;
+    })
+  : Promise.resolve();
 
 export default {
   name: 'HomeView',
@@ -111,56 +123,76 @@ export default {
     const decryptionKey = computed(() => route.query.key);
     const isProcessing = ref(false);
     const cameraInitializing = ref(false);
-    const isRequestingCameraPermission = ref(false); // Guard flag to prevent concurrent requests
-    
+    const isRequestingCameraPermission = ref(false);
+    const nativeCameraRunning = ref(false);
+
     // Use the global notification system
     const { notification, clearNotification } = useNotification();
-    
+
     // Onboarding: Camera tip only (notification tip is in ReceiptView)
     const showCameraTip = ref(false);
-    
+
+    const maybeShowCameraTip = () => {
+      if (!onboardingService.hasSeen('CameraTip')) {
+        setTimeout(() => { showCameraTip.value = true; }, 500);
+      }
+    };
+
     const requestCameraPermission = async () => {
       // Prevent concurrent permission requests
       if (isRequestingCameraPermission.value) {
         console.log('⚠️ Camera permission request already in progress, skipping duplicate');
         return;
       }
-      
+
       try {
         isRequestingCameraPermission.value = true;
         cameraInitializing.value = true;
         console.log('Requesting camera permission...');
-        
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop()); // Stop the stream after getting permission
-        hasPermission.value = true;
-        
-        // Save the permission preference
-        saveCameraPermission(true);
-        console.log('Camera permission granted and saved');
-        
-        // Use nextTick to ensure DOM is updated before initializing camera
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await initializeCamera();
+
+        if (isNative) {
+          // Ensure the plugin is loaded
+          await cameraPreviewReady;
+          const status = await CameraPreview.requestPermissions({ disableAudio: true });
+          if (status.camera === 'granted') {
+            hasPermission.value = true;
+            saveCameraPermission(true);
+            maybeShowCameraTip();
+            console.log('Native camera permission granted');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await initializeCamera();
+          } else {
+            saveCameraPermission(false);
+            hasPermission.value = false;
+            cameraInitializing.value = false;
+          }
+        } else {
+          // Web: use getUserMedia
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+          hasPermission.value = true;
+          saveCameraPermission(true);
+          maybeShowCameraTip();
+          console.log('Camera permission granted and saved');
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await initializeCamera();
+        }
       } catch (error) {
         console.error('Camera permission error:', error);
-        
-        // Check if the user explicitly denied permission
+
         const isPermissionDenied = error.name === 'NotAllowedError' ||
                                    error.name === 'PermissionDeniedError' ||
-                                   error.message.includes('Permission denied');
-        
-        // Save denial preference
+                                   error.message?.includes('Permission denied');
+
         if (isPermissionDenied) {
           saveCameraPermission(false);
           console.log('Camera permission explicitly denied by user and saved');
         }
-        
-        // Only show notification if it's not an explicit denial
+
         if (!isPermissionDenied) {
           showNotification('Camera access failed. Please check your browser settings and try again.');
         }
-        
+
         hasPermission.value = false;
         cameraInitializing.value = false;
       } finally {
@@ -169,8 +201,6 @@ export default {
     };
 
     const initializeCamera = async () => {
-      // Don't request permission here - that's handled by requestCameraPermission()
-      // This function should only be called when permission is already granted
       if (!hasPermission.value) {
         console.warn('initializeCamera called without permission');
         return;
@@ -178,67 +208,94 @@ export default {
 
       try {
         cameraInitializing.value = true;
-        
-        // Wait for video element to be available with retries
-        let retries = 0;
-        const maxRetries = 20; // 2 seconds max wait
-        
-        while (!videoElement.value && retries < maxRetries) {
-          console.log(`Waiting for video element... attempt ${retries + 1}/${maxRetries}`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          retries++;
-        }
-        
-        if (!videoElement.value) {
-          throw new Error('Video element not available after waiting');
-        }
 
-        // Clean up any existing scanner
-        if (qrScanner.value) {
-          qrScanner.value.destroy();
-          qrScanner.value = null;
-        }
-
-        qrScanner.value = new QrScanner(
-          videoElement.value,
-          (result) => {
-            console.log('QR Code detected:', result);
-            handleQrCodeResult(result);
-          },
-          {
-            highlightScanRegion: false,
-            highlightCodeOutline: false,
-            returnDetailedScanResult: true
+        if (isNative) {
+          // Native: start camera preview behind the WebView
+          await cameraPreviewReady;
+          if (nativeCameraRunning.value) {
+            cameraInitializing.value = false;
+            console.log('Native camera already running, reusing');
+            return;
           }
-        );
-        
-        console.log('Starting QR Scanner...');
-        await qrScanner.value.start();
-        console.log('QR Scanner started successfully');
-        
-        cameraInitializing.value = false;
-        
+          document.documentElement.classList.add('native-camera-active');
+          await CameraPreview.start({
+            position: 'rear',
+            toBack: true,
+            disableAudio: true,
+            aspectMode: 'cover',
+            x: 0,
+            y: 0,
+            width: window.screen.width,
+            height: window.screen.height,
+          });
+          nativeCameraRunning.value = true;
+          cameraInitializing.value = false;
+          console.log('Native camera preview started');
+        } else {
+          // Web: use QrScanner with getUserMedia
+          let retries = 0;
+          const maxRetries = 20;
+
+          while (!videoElement.value && retries < maxRetries) {
+            console.log(`Waiting for video element... attempt ${retries + 1}/${maxRetries}`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+          }
+
+          if (!videoElement.value) {
+            throw new Error('Video element not available after waiting');
+          }
+
+          if (qrScanner.value) {
+            qrScanner.value.destroy();
+            qrScanner.value = null;
+          }
+
+          qrScanner.value = new QrScanner(
+            videoElement.value,
+            (result) => {
+              console.log('QR Code detected:', result);
+              handleQrCodeResult(result);
+            },
+            {
+              highlightScanRegion: false,
+              highlightCodeOutline: false,
+              returnDetailedScanResult: true
+            }
+          );
+
+          console.log('Starting QR Scanner...');
+          await qrScanner.value.start();
+          console.log('QR Scanner started successfully');
+
+          cameraInitializing.value = false;
+        }
       } catch (error) {
         console.error('Error initializing camera:', error);
         showNotification('Failed to initialize camera. Please try refreshing the page.');
-        hasPermission.value = false; // Reset permission on error
+        hasPermission.value = false;
         cameraInitializing.value = false;
       }
     };
 
     const toggleFlash = async () => {
-      if (qrScanner.value) {
-        try {
+      try {
+        if (isNative && nativeCameraRunning.value) {
+          const { flashMode } = await CameraPreview.getFlashMode();
+          await CameraPreview.setFlashMode({
+            flashMode: flashMode === 'torch' ? 'off' : 'torch'
+          });
+        } else if (qrScanner.value) {
           await qrScanner.value.toggleFlash();
-        } catch (error) {
-          console.error('Error toggling flash:', error);
-          showNotification('Failed to toggle flash. Your device may not support this feature.', "warning");
         }
+      } catch (error) {
+        console.error('Error toggling flash:', error);
+        showNotification('Failed to toggle flash. Your device may not support this feature.', "warning");
       }
     };
 
     const capturedImage = ref(null);
-    
+
     const captureReceipt = async () => {
       if (!hasPermission.value) {
         await requestCameraPermission();
@@ -246,49 +303,56 @@ export default {
       }
 
       try {
-        // Create a canvas element
-        const canvas = document.createElement('canvas');
-        const video = videoElement.value;
-        
-        // Set canvas dimensions to match video
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        // Draw the current video frame on the canvas
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Convert canvas to blob with higher quality
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
-        
-        // Convert blob to base64
-        const base64Image = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result.split(',')[1]);
-          reader.readAsDataURL(blob);
-        });
-        
-        // Stop the camera immediately after capture
-        if (qrScanner.value) {
-          qrScanner.value.stop();
-        }
-        
-        // Show the captured image immediately
-        capturedImage.value = `data:image/jpeg;base64,${base64Image}`;
-        
+        let base64Image;
+
+        // Show processing state immediately for fast feedback
         isProcessing.value = true;
         showNotification('Processing receipt...', 'info');
-        
+
+        if (isNative && nativeCameraRunning.value) {
+          // Native: capture via plugin with reduced quality for speed
+          const result = await CameraPreview.capture({ quality: 85, format: 'jpeg' });
+          base64Image = result.value;
+
+          // Stop the native camera after capture
+          CameraPreview.stop(); // Don't await — let it tear down in background
+          nativeCameraRunning.value = false;
+          document.documentElement.classList.remove('native-camera-active');
+        } else {
+          // Web: capture from video element
+          const canvas = document.createElement('canvas');
+          const video = videoElement.value;
+
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
+
+          base64Image = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(blob);
+          });
+
+          if (qrScanner.value) {
+            qrScanner.value.stop();
+          }
+        }
+
+        // Show the captured image
+        capturedImage.value = `data:image/jpeg;base64,${base64Image}`;
+
         // Process the image in the background
         try {
           const processedReceipt = await receiptService.processReceiptImage(base64Image);
-          
-          // Clear the image
+
           capturedImage.value = null;
-          
+
           showNotification('Receipt processed successfully!', 'success');
-          
-          // Navigate to receipt review view with data in URL
+
           const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
           router.push({
             path: '/create/review',
@@ -297,13 +361,15 @@ export default {
         } catch (processingError) {
           console.error('Error processing receipt:', processingError);
           showNotification(processingError.message);
-          // Clear the image on error and restart camera
           capturedImage.value = null;
-          if (hasPermission.value && qrScanner.value) {
+          // Restart camera on error
+          if (isNative) {
+            await initializeCamera();
+          } else if (hasPermission.value && qrScanner.value) {
             qrScanner.value.start();
           }
         }
-        
+
       } catch (error) {
         console.error('Error capturing receipt:', error);
         showNotification(error.message);
@@ -319,8 +385,6 @@ export default {
 
     // Watch for changes to receiptId
     watch(receiptId, (newValue, oldValue) => {
-      // If we're transitioning from having a receipt to no receipt,
-      // don't automatically request camera - let user click button
       if (oldValue && !newValue) {
         console.log('Returned to camera view, waiting for user to enable camera');
       }
@@ -330,24 +394,48 @@ export default {
     onMounted(async () => {
       const savedPermission = getCameraPermission();
       console.log('Saved camera permission:', savedPermission);
-      
+
       if (savedPermission === true && !receiptId.value) {
         console.log('Auto-enabling camera based on saved preference');
         await requestCameraPermission();
       }
-      
-      // Show camera tip if first time and welcome is complete
-      if (!receiptId.value &&
-          onboardingService.hasSeenHostWelcome() &&
-          !onboardingService.hasSeen('CameraTip')) {
-        // Delay to let camera initialize first
-        setTimeout(() => {
-          showCameraTip.value = true;
-        }, 1000);
-      }
+
+      // Camera tip is shown after first permission grant (see requestCameraPermission)
     });
 
-    onUnmounted(() => {
+    // Pause/resume camera when app is backgrounded/foregrounded
+    const handleAppStateChange = async (e) => {
+      const { isActive } = e.detail;
+      if (!isActive) {
+        // App backgrounded — stop camera to free resources
+        if (isNative && nativeCameraRunning.value) {
+          try { await CameraPreview.stop(); } catch (e) { /* ignore */ }
+          nativeCameraRunning.value = false;
+          document.documentElement.classList.remove('native-camera-active');
+        }
+      } else {
+        // App foregrounded — restart camera if we had permission
+        if (isNative && hasPermission.value && !nativeCameraRunning.value && !receiptId.value && !capturedImage.value) {
+          await initializeCamera();
+        }
+      }
+    };
+
+    onMounted(() => {
+      document.addEventListener('app-state-change', handleAppStateChange);
+    });
+
+    onUnmounted(async () => {
+      document.removeEventListener('app-state-change', handleAppStateChange);
+      if (isNative && nativeCameraRunning.value) {
+        try {
+          await CameraPreview.stop();
+          nativeCameraRunning.value = false;
+          document.documentElement.classList.remove('native-camera-active');
+        } catch (e) {
+          console.error('Error stopping native camera:', e);
+        }
+      }
       if (qrScanner.value) {
         qrScanner.value.destroy();
       }
@@ -359,35 +447,28 @@ export default {
      */
     const handleQrCodeResult = (result) => {
       try {
-        // Extract the data from the QR code
         const qrData = result.data;
-        
-        // Check if it's a URL
+
         if (!qrData.startsWith('http://') && !qrData.startsWith('https://')) {
-          return; // Not a URL, ignore
+          return;
         }
-        
-        // Try to parse the URL
+
         const qrUrl = new URL(qrData);
-        const currentDomain = window.location.hostname;
-        
-        // Check if this URL is for the current domain
-        if (qrUrl.hostname !== currentDomain) {
+        // Match against both the current hostname and the label's canonical host
+        const validHosts = [window.location.hostname, labelConfig.host];
+        if (!validHosts.includes(qrUrl.hostname)) {
           return;
         }
 
         console.log('Detected QR code with URL to current domain:', qrUrl.href);
-        
-        // Stop scanning before redirecting
+
         if (qrScanner.value) {
           qrScanner.value.stop();
         }
 
-        // Get the path and query parameters from the URL
-        const urlParams = new URLSearchParams(qrUrl.search);
-        
-        // Redirect to the detected URL (this keeps us on the same tab)
-        window.location.href = qrUrl.href;
+        // Navigate using the path from the QR URL (works on both web and native)
+        const path = qrUrl.pathname + qrUrl.search;
+        router.push(path);
       } catch (error) {
         console.error('Error processing QR code URL:', error);
       }
@@ -395,37 +476,36 @@ export default {
 
     const handleFileSelected = async (file) => {
       try {
-        // Show the uploaded image preview immediately
         const reader = new FileReader();
         reader.onload = (e) => {
           capturedImage.value = e.target.result;
         };
         reader.readAsDataURL(file);
-        
+
         // Stop the camera
-        if (qrScanner.value) {
+        if (isNative && nativeCameraRunning.value) {
+          await CameraPreview.stop();
+          nativeCameraRunning.value = false;
+          document.documentElement.classList.remove('native-camera-active');
+        } else if (qrScanner.value) {
           qrScanner.value.stop();
         }
-        
+
         isProcessing.value = true;
         showNotification('Processing uploaded image...', 'info');
-        
-        // Convert file to base64 for processing
+
         const base64Image = await new Promise((resolve) => {
           const fileReader = new FileReader();
           fileReader.onloadend = () => resolve(fileReader.result.split(',')[1]);
           fileReader.readAsDataURL(file);
         });
-        
-        // Process the image
+
         const processedReceipt = await receiptService.processReceiptImage(base64Image);
-        
-        // Clear the preview image
+
         capturedImage.value = null;
-        
+
         showNotification('Receipt processed successfully!', 'success');
-        
-        // Navigate to receipt review view with data in URL
+
         const receiptDataEncoded = encodeURIComponent(JSON.stringify(processedReceipt));
         router.push({
           path: '/create/review',
@@ -436,7 +516,9 @@ export default {
         showNotification(error.message || 'Failed to process uploaded image');
         capturedImage.value = null;
         // Restart camera
-        if (hasPermission.value && qrScanner.value) {
+        if (isNative) {
+          await initializeCamera();
+        } else if (hasPermission.value && qrScanner.value) {
           qrScanner.value.start();
         }
       } finally {
@@ -456,6 +538,7 @@ export default {
       isProcessing,
       cameraInitializing,
       showCameraTip,
+      isNative,
       toggleFlash,
       captureReceipt,
       handleToggleActivity,
@@ -471,5 +554,13 @@ export default {
 </script>
 
 <style scoped>
-/* Component-specific styles go here */
-</style> 
+/* Native camera renders behind the WebView — make container transparent */
+.native-camera {
+  background: transparent !important;
+}
+
+/* Header background extends to the very top edge, with content pushed below the safe area */
+.camera-overlay-header {
+  padding-top: calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 1rem);
+}
+</style>

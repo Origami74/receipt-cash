@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Receipt.Cash</string>
+    <string name="title_activity_main">Receipt.Cash</string>
+    <string name="package_name">cash.receipt.app</string>
+    <string name="custom_url_scheme">cash.receipt.app</string>
+</resources>

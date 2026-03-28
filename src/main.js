@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { Capacitor } from '@capacitor/core';
 import App from './App.vue';
 import router from './router';
 import './style.css';
@@ -19,7 +20,12 @@ import { paymentNotificationService } from './services/paymentNotificationServic
 
 // CRITICAL: Acquire tab lock FIRST before any initialization
 // This prevents multiple tabs from running simultaneously
-tabLockService.acquireLock().then(lockAcquired => {
+// Native apps are single-instance so skip the lock
+const lockPromise = Capacitor.isNativePlatform()
+  ? Promise.resolve(true)
+  : tabLockService.acquireLock();
+
+lockPromise.then(lockAcquired => {
   if (!lockAcquired) {
     console.warn('⛔ Tab blocked - another instance is already running');
     // Mount a minimal app that only shows the blocked overlay

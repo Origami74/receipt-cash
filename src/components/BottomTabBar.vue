@@ -3,7 +3,7 @@
     class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 transition-transform duration-300"
     :class="{ 'translate-y-full': hidden }"
   >
-    <div class="flex items-center h-20 px-4">
+    <div class="flex items-center h-20 px-4" style="padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))">
       
       <!-- 1. My Receipts Tab (1/5 width) -->
       <div class="flex-1 flex flex-col items-center justify-center py-2">
