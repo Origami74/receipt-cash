@@ -1,10 +1,10 @@
-import { SimpleSigner } from "applesauce-signers";
+import { PrivateKeySigner } from "applesauce-signers";
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG } from "../../nostr/constants";
 import { Buffer } from 'buffer';
 import { globalEventStore, globalPool } from "../../nostr/applesauce";
 import { onlyEvents } from "applesauce-relay";
 import { mapEventsToStore } from "applesauce-core";
-import { unlockGiftWrap } from "applesauce-core/helpers";
+import { unlockGiftWrap } from "applesauce-common/helpers/gift-wrap";
 import { parseCashuDm } from "../../../utils/cashuDmUtils";
 import { confirmSettlement } from "../settlementConfirmer";
 import { cocoService } from "../../cocoService";
@@ -25,7 +25,7 @@ class CashuPaymentCollector {
     this.nostrSubscriptions = [];
 
     const privateKeyBytes = Uint8Array.from(Buffer.from(this.receipt.privateKey, 'hex'));
-    this.signer = new SimpleSigner(privateKeyBytes);
+    this.signer = new PrivateKeySigner(privateKeyBytes);
   }
 
   start() {

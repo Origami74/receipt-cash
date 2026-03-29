@@ -5,7 +5,7 @@ import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageMana
 import { getTagValue } from 'applesauce-core/helpers';
 import { Buffer } from 'buffer';
 import { sumProofs } from '../../../utils/cashuUtils.js';
-import { SimpleSigner } from 'applesauce-signers';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { confirmSettlement } from '../settlementConfirmer.js';
 import { accountingService } from '../../accountingService';
 import { cocoService } from '../../cocoService';
@@ -28,7 +28,7 @@ class LightningPaymentCollector {
     this.websocketSupported = null;
 
     const receiptPrivateKeyBytes = Uint8Array.from(Buffer.from(receipt.privateKey, 'hex'));
-    this.signer = new SimpleSigner(receiptPrivateKeyBytes)
+    this.signer = new PrivateKeySigner(receiptPrivateKeyBytes)
   }
 
   async start() {

@@ -8,23 +8,22 @@ import { decryptAndParseReceipt } from "../../utils/receiptUtils";
 import { decryptAndParseSettlement } from "../../utils/settlementUtils";
 import { getTagValue } from "applesauce-core/helpers";
 import confirmations$ from "./confirmations";
-import { SimpleSigner } from "applesauce-signers";
+import { PrivateKeySigner } from "applesauce-signers";
 
 
 function receiptSettlements(receiptEventId){
     const filter = {kinds: [KIND_SETTLEMENT], "#e": [receiptEventId]}
     const settlements$ = merge(
-        globalEventStore.filters(filter), 
-        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(onlyEvents())
+        globalEventStore.filters(filter),
+        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(
+            onlyEvents(),
+            mapEventsToStore(globalEventStore),
+        )
     ).pipe(
-        onlyEvents(),
-        // add new events to store
-        mapEventsToStore(globalEventStore), 
         // only take a single instance of each event based on id
         distinct(e => e.id),
         // create a timeline of events
         mapEventsToTimeline(),
-        // Temp fix till applesauce v4
         withImmediateValueOrDefault([]),
     )
 
@@ -38,10 +37,11 @@ function receiptConfirmations(receiptEventId){
     
     const directConfirmations$ = merge(
         globalEventStore.filters(filter),
-        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(onlyEvents())
+        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(
+            onlyEvents(),
+            mapEventsToStore(globalEventStore),
+        )
     ).pipe(
-        onlyEvents(),
-        mapEventsToStore(globalEventStore),
         distinct(e => e.id),
         mapEventsToTimeline(),
         withImmediateValueOrDefault([]),
@@ -102,8 +102,8 @@ export const receiptModel = (receiptEventId, sharedEncryptionKey = null) => {
             const effectiveSharedKey = sharedEncryptionKey || metadata?.sharedEncryptionKey
             
             // Create signers only if we have metadata (owned receipt)
-            const ownerSigner = metadata?.privateKey ? SimpleSigner.fromKey(metadata.privateKey) : undefined
-            const sharedSigner = effectiveSharedKey ? SimpleSigner.fromKey(effectiveSharedKey) : undefined
+            const ownerSigner = metadata?.privateKey ? PrivateKeySigner.fromKey(metadata.privateKey) : undefined
+            const sharedSigner = effectiveSharedKey ? PrivateKeySigner.fromKey(effectiveSharedKey) : undefined
 
             const settlements$ = receiptSettlements(receiptEventId)
             const confirmations$ = receiptConfirmations(receiptEventId)
@@ -252,7 +252,7 @@ export const settlementModel = (settlementEventId, sharedEncryptionKey) => {
                 kinds: [KIND_SETTLEMENT_CONFIRMATION],
                 '#e': [settlementEventId]
             };
-            const confirmations = globalEventStore.filters(confirmationFilter);
+            const confirmations = globalEventStore.getByFilters(confirmationFilter);
             const isConfirmed = confirmations.length > 0;
 
             return {

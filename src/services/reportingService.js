@@ -1,6 +1,6 @@
 import { globalPool, globalEventStore } from './nostr/applesauce.js';
-import { EventFactory } from 'applesauce-factory';
-import { SimpleSigner } from 'applesauce-signers';
+import { EventFactory } from 'applesauce-core';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { DEFAULT_RELAYS, DEVELOPER_PUBKEY, KIND_REPORT } from './nostr/constants.js';
@@ -133,7 +133,7 @@ export const submitReport = async ({ description, errorMessage = '', includeLogs
     
     // Generate a random secret key for this report
     const reportPrivateKey = generateSecretKey();
-    const reportSigner = new SimpleSigner(reportPrivateKey);
+    const reportSigner = new PrivateKeySigner(reportPrivateKey);
     const factory = new EventFactory({ signer: reportSigner });
     
     // Get developer's public key (hex to Uint8Array)

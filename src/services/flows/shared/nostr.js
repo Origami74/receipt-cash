@@ -1,6 +1,6 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
-import { EventFactory } from 'applesauce-factory';
-import { SimpleSigner } from 'applesauce-signers';
+import { EventFactory } from 'applesauce-core';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { generateSecretKey, getPublicKey, nip44 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { DEFAULT_RELAYS, KIND_RECEIPT } from '../../nostr/constants';
@@ -21,7 +21,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     const encryptionPrivateKey = generateSecretKey();
     
     // Create a signer for this receipt
-    const receiptSigner = new SimpleSigner(receiptPrivateKey);
+    const receiptSigner = new PrivateKeySigner(receiptPrivateKey);
     const factory = new EventFactory({ signer: receiptSigner });
     
     console.log('Receipt data:', receiptData);

@@ -18,14 +18,14 @@ const ownedReceiptConfirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
         const cachedConfirmations$ = defer( () => cacheRequest([filter]))
         .pipe(mergeAll())
 
-        return merge(newConfirmations$, cachedConfirmations$)
-        .pipe(
-            onlyEvents(),
-            // save and remove duplactes
+        return merge(
+            newConfirmations$,
+            cachedConfirmations$
+        ).pipe(
+            // save and remove duplicates
             mapEventsToStore(globalEventStore),
             // turn into an ordered timeline (array)
             mapEventsToTimeline(),
-            // Temp fix till applesauce v4
             withImmediateValueOrDefault([]),
         )
     }),

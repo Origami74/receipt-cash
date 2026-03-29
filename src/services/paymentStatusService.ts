@@ -32,7 +32,6 @@ export function settlementConfirmation$(settlementId: string) {
 
   // Merge both sources following the same pattern as confirmations.js
   return merge(newConfirmations$, cachedConfirmations$).pipe(
-    onlyEvents(),
     // Save to global event store
     mapEventsToStore(globalEventStore),
     // Remove duplicates
@@ -55,6 +54,6 @@ export function isSettlementConfirmed(settlementId: string): boolean {
     kinds: [KIND_SETTLEMENT_CONFIRMATION],
     '#e': [settlementId]
   };
-  const confirmations = globalEventStore.filters(confirmationFilter);
+  const confirmations = globalEventStore.getByFilters(confirmationFilter);
   return confirmations.length > 0;
 }

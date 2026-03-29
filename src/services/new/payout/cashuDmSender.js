@@ -1,9 +1,9 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
-import { SimpleSigner } from 'applesauce-signers';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_NIP17_DM } from '../../nostr/constants.js';
 import { SendWrappedMessage } from 'applesauce-actions/actions';
-import { EventFactory } from 'applesauce-factory';
-import { ActionHub } from 'applesauce-actions';
+import { EventFactory } from 'applesauce-core';
+import { ActionRunner } from 'applesauce-actions';
 import { createPaymentMessage, decodeRequest, extractNostrTransport } from '../../../utils/cashuUtils.js';
 
 /**
@@ -121,9 +121,9 @@ class CashuDmSender {
 
       // Create ephemeral signer
       const factory = new EventFactory({
-        signer: new SimpleSigner(),
+        signer: new PrivateKeySigner(),
       });
-      const actions = new ActionHub(globalEventStore, factory);
+      const actions = new ActionRunner(globalEventStore, factory);
 
       if(!relays || relays.length == 0){
         relays = DEFAULT_RELAYS

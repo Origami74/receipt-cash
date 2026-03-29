@@ -1,4 +1,4 @@
-import { SimpleSigner } from 'applesauce-signers';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { DEV_CASHU_REQ } from '../../nostr/constants.js';
 import { ownedReceiptsStorageManager } from '../storage/ownedReceiptsStorageManager.js';
 import { cashuDmSender } from './cashuDmSender.js';
@@ -203,7 +203,7 @@ class DevPayoutManager {
     }
   }
 
-  private async _createSignerFromSessionId(receiptEventId: string): Promise<SimpleSigner> {
+  private async _createSignerFromSessionId(receiptEventId: string): Promise<PrivateKeySigner> {
     try {
       // Get owned receipt to access private key
       const ownedReceipt = ownedReceiptsStorageManager.getReceiptByEventId(receiptEventId);
@@ -213,7 +213,7 @@ class DevPayoutManager {
       
       // Create signer from receipt's private key
       const privateKeyBytes = Uint8Array.from(Buffer.from(ownedReceipt.privateKey, 'hex'));
-      const signer = new SimpleSigner(privateKeyBytes);
+      const signer = new PrivateKeySigner(privateKeyBytes);
       
       return signer;
       

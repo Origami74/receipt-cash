@@ -1,4 +1,4 @@
-import { EventFactory } from "applesauce-factory";
+import { EventFactory } from "applesauce-core";
 import { globalEventLoader, globalEventStore, globalPool } from "../nostr/applesauce";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from "../nostr/constants";
 

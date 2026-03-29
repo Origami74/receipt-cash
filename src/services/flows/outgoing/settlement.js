@@ -1,7 +1,7 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../../nostr/constants.js';
-import { EventFactory } from 'applesauce-factory';
-import { SimpleSigner } from 'applesauce-signers';
+import { EventFactory } from 'applesauce-core';
+import { PrivateKeySigner } from 'applesauce-signers';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
 
@@ -29,7 +29,7 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     
     // Generate a temporary private key for this settlement event
     const senderPrivateKey = generateSecretKey();
-    const signer = new SimpleSigner(senderPrivateKey);
+    const signer = new PrivateKeySigner(senderPrivateKey);
     const factory = new EventFactory({ signer });
     
     // Create event content

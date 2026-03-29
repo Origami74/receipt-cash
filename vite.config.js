@@ -78,7 +78,10 @@ export default defineConfig({
     }),
   ].filter(Boolean),
   resolve: {
-    extensions: ['.js', '.ts', '.vue', '.json']
+    extensions: ['.js', '.ts', '.vue', '.json'],
+    alias: {
+      buffer: 'buffer/',
+    }
   },
   optimizeDeps: {
     include: ['@scure/bip39', 'coco-cashu-core', 'coco-cashu-indexeddb']
