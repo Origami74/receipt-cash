@@ -15,7 +15,7 @@ function receiptSettlements(receiptEventId){
     const filter = {kinds: [KIND_SETTLEMENT], "#e": [receiptEventId]}
     const settlements$ = merge(
         globalEventStore.filters(filter),
-        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(
+        globalPool.subscription(DEFAULT_RELAYS, filter, { resubscribe: true }).pipe(
             onlyEvents(),
             mapEventsToStore(globalEventStore),
         )
@@ -34,10 +34,10 @@ function receiptConfirmations(receiptEventId){
     // For owned receipts, use the global confirmations$ stream
     // For non-owned receipts, fetch confirmations directly
     const filter = {kinds: [KIND_SETTLEMENT_CONFIRMATION], "#e": [receiptEventId]}
-    
+
     const directConfirmations$ = merge(
         globalEventStore.filters(filter),
-        globalPool.subscription(DEFAULT_RELAYS, filter).pipe(
+        globalPool.subscription(DEFAULT_RELAYS, filter, { resubscribe: true }).pipe(
             onlyEvents(),
             mapEventsToStore(globalEventStore),
         )

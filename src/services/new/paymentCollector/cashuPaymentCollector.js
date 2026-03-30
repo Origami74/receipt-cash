@@ -65,7 +65,7 @@ class CashuPaymentCollector {
         kinds: [KIND_GIFTWRAPPED_MSG],
         "#p": [this.receipt.pubkey],
         since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Look back 90 days
-      })
+      }, { resubscribe: true })
       .pipe(onlyEvents(), mapEventsToStore(globalEventStore))
       .subscribe((giftWrappedEvent) => {
         this._handleGiftWrappedEvent(giftWrappedEvent, this.signer)

@@ -67,6 +67,7 @@ import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
 import WelcomeOnboarding from './components/onboarding/WelcomeOnboarding.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
+import { globalPool } from './services/nostr/applesauce';
 import { checkForVersionUpdate } from './services/updaterService';
 import { tabLockService } from './services/tabLockService';
 
@@ -174,8 +175,15 @@ export default {
           }
         });
 
-        // Pause/resume: notify components (e.g. camera stop/start)
+        // Pause/resume: manage camera and force-reconnect stale relay sockets
         appStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            // Android silently kills WebSockets on background without firing close events.
+            // Close each relay so the library's built-in reconnect/resubscribe logic kicks in.
+            for (const relay of globalPool.relays.values()) {
+              relay.close();
+            }
+          }
           document.dispatchEvent(new CustomEvent('app-state-change', { detail: { isActive } }));
         });
       }

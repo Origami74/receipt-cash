@@ -12,7 +12,7 @@ const ownedReceiptConfirmations$ = ownedReceiptsStorageManager.receipts$.pipe(
             kinds: [KIND_SETTLEMENT_CONFIRMATION],
             authors: pubkeys,
         }
-        const newConfirmations$ = globalPool.subscription(DEFAULT_RELAYS, filter)
+        const newConfirmations$ = globalPool.subscription(DEFAULT_RELAYS, filter, { resubscribe: true })
         .pipe(onlyEvents())
 
         const cachedConfirmations$ = defer( () => cacheRequest([filter]))

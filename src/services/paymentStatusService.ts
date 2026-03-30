@@ -23,7 +23,7 @@ export function settlementConfirmation$(settlementId: string) {
   };
 
   // New confirmations from relays
-  const newConfirmations$ = globalPool.subscription(DEFAULT_RELAYS, confirmationFilter)
+  const newConfirmations$ = globalPool.subscription(DEFAULT_RELAYS, confirmationFilter, { resubscribe: true })
     .pipe(onlyEvents());
 
   // Cached confirmations from database
