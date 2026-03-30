@@ -279,35 +279,47 @@ class LightningMelter {
         
       } catch (error) {
         console.error(`❌ Round ${roundNumber} failed:`, error);
-        
+
         round.status = 'failed';
         round.error = error instanceof Error ? error.message : String(error);
         round.completedAt = Date.now();
         meltSessionStorageManager.setItem(session);
-        
+
+        // Rollback the prepared operation to release reserved proofs
+        if (round.cocoOperationId) {
+          try {
+            await coco.quotes.rollbackMelt(round.cocoOperationId, 'Round failed');
+            console.log(`✅ Rolled back operation ${round.cocoOperationId} after failure`);
+          } catch (rollbackError) {
+            console.warn(`⚠️ Rollback failed for ${round.cocoOperationId}:`, rollbackError);
+          }
+        }
+
         // Check if tokens already spent
         const isTokenSpentError = error instanceof Error && (
           error.message.includes('Token already spent') ||
           error.message.includes('already spent') ||
           error.message.includes('Tokens already spent')
         );
-        
+
         if (isTokenSpentError) {
           console.error('❌ Tokens already spent - failing session');
           throw error;
         }
-        
+
         // Try smaller amount
         currentAmount = Math.floor(currentAmount * (1 - reductionPercentage));
         continue;
       }
     }
     
-    // All attempts failed
-    session.status = 'failed';
-    session.error = 'No sats could be melted after all attempts';
-    session.completedAt = Date.now();
-    meltSessionStorageManager.setItem(session);
+    // All attempts failed — but only mark failed if not already completed
+    if (session.status !== 'completed') {
+      session.status = 'failed';
+      session.error = 'No sats could be melted after all attempts';
+      session.completedAt = Date.now();
+      meltSessionStorageManager.setItem(session);
+    }
     
     console.log(`❌ All ${maxAttempts} melt attempts failed`);
     
@@ -481,7 +493,7 @@ class LightningMelter {
   private async _resumeSession(session: MeltSession, request: MeltRequest): Promise<void> {
     console.log(`🔄 Resuming melt session: ${session.sessionId}`);
     console.log(`📊 Current rounds: ${session.rounds.length}`);
-    
+
     // Find the first incomplete round
     const incompleteRound = session.rounds.find(r =>
       r.status === 'preparing' ||
@@ -489,17 +501,24 @@ class LightningMelter {
       r.status === 'executing' ||
       r.status === 'pending'
     );
-    
+
     if (incompleteRound) {
       console.log(`⏸️ Found incomplete round ${incompleteRound.roundNumber} (status: ${incompleteRound.status})`);
       await this._resumeRound(incompleteRound, session);
     } else {
       console.log(`✅ All rounds complete/failed, continuing with normal flow`);
     }
-    
+
+    // Only continue if session wasn't already completed by _resumeRound
+    if (session.status === 'completed') {
+      console.log(`✅ Session already completed during resume, recording accounting`);
+      this._recordAccounting(session);
+      return;
+    }
+
     // Continue with normal flow from current state
     const result = await this._attemptMeltRounds(session, request);
-    
+
     // Record accounting if successful
     if (result.success) {
       this._recordAccounting(session);

@@ -62,6 +62,17 @@
       </div>
     </div>
 
+    <!-- Retry Button for Failed Payouts -->
+    <div v-if="status === 'failed' && isRetryable" class="mt-2 ml-12">
+      <button
+        class="px-3 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="isRetrying"
+        @click="handleRetry"
+      >
+        {{ isRetrying ? 'Retrying...' : 'Retry Payout' }}
+      </button>
+    </div>
+
     <!-- Shortfall Details -->
     <div v-if="record.type === 'shortfall' && record.metadata?.reason" class="mt-2 ml-12">
       <p class="text-xs text-orange-700 bg-orange-50 rounded p-2">
@@ -72,11 +83,13 @@
 </template>
 
 <script>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { formatSats } from '../../utils/pricingUtils.js';
+import { proofSafetyService } from '../../services/proofSafetyService';
 
 export default {
   name: 'ActivityAccountingRecord',
+  emits: ['retry'],
   props: {
     record: {
       type: Object,
@@ -278,8 +291,31 @@ export default {
       return round.status === 'rolled_back' && round.rollbackReason === 'exceeds_budget';
     };
 
+    // Retry logic for failed payouts
+    const isRetrying = ref(false);
+
+    const isRetryable = computed(() => {
+      return props.record.type === 'dev_payout' || props.record.type === 'payer_payout';
+    });
+
+    const handleRetry = async () => {
+      if (isRetrying.value || !props.record) return;
+
+      const payoutId = `${props.record.receiptEventId}-${props.record.settlementEventId}-${props.record.type}`;
+      isRetrying.value = true;
+
+      try {
+        await proofSafetyService.retryPayout(payoutId);
+      } finally {
+        isRetrying.value = false;
+      }
+    };
+
     return {
       isRoundSkipped,
+      isRetrying,
+      isRetryable,
+      handleRetry,
       statusClasses,
       textClasses,
       statusIconColor,
