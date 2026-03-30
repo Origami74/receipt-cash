@@ -1,5 +1,6 @@
 import { ReactiveMapStorageManager } from './new/storage/reactiveMapStorageManager';
 import { cocoService } from './cocoService';
+import { cashuDmSender } from './new/payout/cashuDmSender';
 
 export interface PendingPayout {
   id: string; // unique ID for this payout
@@ -187,6 +188,53 @@ export class ProofSafetyService {
       failed: all.filter(p => p.status === 'failed').length,
       total: all.length
     };
+  }
+
+  /**
+   * Retry a failed or pending payout by re-sending via Cashu DM
+   */
+  async retryPayout(payoutId: string): Promise<boolean> {
+    const payout = this.pending.getByKey(payoutId);
+    if (!payout) {
+      console.error(`❌ Payout not found: ${payoutId}`);
+      return false;
+    }
+
+    if (payout.status === 'sent') {
+      console.warn(`⚠️ Payout already sent: ${payoutId}`);
+      return true;
+    }
+
+    console.log(`🔄 Retrying payout ${payoutId} (${payout.amount} sats)...`);
+
+    // Reset to pending during retry
+    payout.status = 'pending';
+    payout.retryCount = (payout.retryCount || 0) + 1;
+    this.pending.setItem(payout);
+
+    try {
+      const success = await cashuDmSender.payCashuPaymentRequest(
+        payout.destination,
+        payout.proofs,
+        payout.mintUrl
+      );
+
+      if (success) {
+        this.markSent(payoutId);
+        console.log(`✅ Retry successful for ${payoutId}`);
+        return true;
+      } else {
+        payout.status = 'failed';
+        this.pending.setItem(payout);
+        console.error(`❌ Retry failed for ${payoutId}`);
+        return false;
+      }
+    } catch (error) {
+      payout.status = 'failed';
+      this.pending.setItem(payout);
+      console.error(`❌ Retry error for ${payoutId}:`, error);
+      return false;
+    }
   }
 
   /**

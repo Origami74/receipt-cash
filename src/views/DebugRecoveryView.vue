@@ -259,6 +259,85 @@
         </div>
       </div>
 
+      <!-- Recover Locked Proofs Section -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Recover Locked Proofs
+        </h2>
+        <p class="text-sm text-gray-600 mb-4">
+          If proofs are stuck in prepared/pending operations (e.g. after a failed melt), use these tools to release them back to your wallet.
+        </p>
+
+        <div class="space-y-3">
+          <!-- Auto Recovery -->
+          <button
+            @click="runAutoRecovery"
+            :disabled="recoveryRunning"
+            class="w-full text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center"
+            :class="recoveryRunning
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-purple-600 text-white hover:bg-purple-700'"
+          >
+            <span v-if="recoveryRunning">Running recovery...</span>
+            <span v-else>Run Auto Recovery</span>
+          </button>
+
+          <!-- List Stuck Operations -->
+          <button
+            @click="listStuckOperations"
+            :disabled="listingOps"
+            class="w-full text-sm px-4 py-3 rounded-lg transition-colors flex items-center justify-center"
+            :class="listingOps
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-blue-100 text-blue-800 hover:bg-blue-200'"
+          >
+            <span v-if="listingOps">Listing...</span>
+            <span v-else>List Stuck Operations</span>
+          </button>
+        </div>
+
+        <!-- Recovery Result -->
+        <div v-if="recoveryResult" class="text-sm p-3 rounded mt-3" :class="{
+          'bg-green-50 text-green-800': recoveryResult.success,
+          'bg-red-50 text-red-800': !recoveryResult.success
+        }">
+          {{ recoveryResult.message }}
+        </div>
+
+        <!-- Stuck Operations List -->
+        <div v-if="stuckOperations.length > 0" class="mt-3 space-y-2">
+          <div class="text-sm font-medium text-gray-700 mb-2">
+            {{ stuckOperations.length }} stuck operation(s) found:
+          </div>
+          <div v-for="op in stuckOperations" :key="op.id" class="border border-gray-200 rounded p-3">
+            <div class="text-xs space-y-1">
+              <div><span class="font-medium">ID:</span> <span class="font-mono">{{ op.id.substring(0, 16) }}...</span></div>
+              <div><span class="font-medium">State:</span> <span class="font-medium" :class="{
+                'text-amber-600': op.state === 'prepared',
+                'text-orange-600': op.state === 'pending' || op.state === 'executing',
+                'text-red-600': op.state === 'failed'
+              }">{{ op.state }}</span></div>
+              <div v-if="op.amount"><span class="font-medium">Amount:</span> {{ op.amount }} sats</div>
+            </div>
+            <div class="flex space-x-2 mt-2">
+              <button
+                @click="cancelOperation(op)"
+                :disabled="cancellingOp[op.id]"
+                class="flex-1 text-xs px-3 py-2 rounded transition-colors"
+                :class="cancellingOp[op.id]
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-red-100 text-red-800 hover:bg-red-200'"
+              >
+                {{ cancellingOp[op.id] ? 'Cancelling...' : (op.state === 'pending' ? 'Reclaim Proofs' : 'Cancel & Release') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Storage Info Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <h2 class="text-lg font-semibold mb-3 flex items-center">
@@ -367,6 +446,11 @@ export default {
     const checkingProofs = reactive({});
     const proofCheckResults = reactive({});
     const expandedRounds = reactive({});
+    const recoveryRunning = ref(false);
+    const recoveryResult = ref(null);
+    const stuckOperations = ref([]);
+    const listingOps = ref(false);
+    const cancellingOp = reactive({});
 
     const totalIncompleteSats = computed(() => {
       return incompleteMeltSessions.value.reduce((sum, session) => sum + session.remainingAmount, 0);
@@ -637,6 +721,80 @@ export default {
       }
     };
 
+    const runAutoRecovery = async () => {
+      recoveryRunning.value = true;
+      recoveryResult.value = null;
+
+      try {
+        const coco = cocoService.getCoco();
+        await coco.ops.melt.recovery.run();
+        recoveryResult.value = {
+          success: true,
+          message: '✅ Auto recovery completed. Stuck operations should be resolved.'
+        };
+        showToastMessage('Auto recovery completed');
+      } catch (error) {
+        console.error('Auto recovery failed:', error);
+        recoveryResult.value = {
+          success: false,
+          message: `❌ Recovery failed: ${error.message || 'Unknown error'}`
+        };
+        showToastMessage(`Recovery failed: ${error.message}`);
+      } finally {
+        recoveryRunning.value = false;
+      }
+    };
+
+    const listStuckOperations = async () => {
+      listingOps.value = true;
+      stuckOperations.value = [];
+
+      try {
+        const coco = cocoService.getCoco();
+        const prepared = await coco.ops.melt.listPrepared();
+        const inFlight = await coco.ops.melt.listInFlight();
+
+        const allStuck = [
+          ...prepared.map(op => ({ ...op, state: op.state || 'prepared' })),
+          ...inFlight.map(op => ({ ...op, state: op.state || 'in_flight' }))
+        ];
+
+        stuckOperations.value = allStuck;
+
+        if (allStuck.length === 0) {
+          showToastMessage('No stuck operations found');
+        } else {
+          showToastMessage(`Found ${allStuck.length} stuck operation(s)`);
+        }
+      } catch (error) {
+        console.error('Error listing stuck operations:', error);
+        showToastMessage(`Error: ${error.message}`);
+      } finally {
+        listingOps.value = false;
+      }
+    };
+
+    const cancelOperation = async (op) => {
+      cancellingOp[op.id] = true;
+
+      try {
+        const coco = cocoService.getCoco();
+        if (op.state === 'pending') {
+          await coco.ops.melt.reclaim(op.id, 'Manual recovery');
+        } else {
+          await coco.ops.melt.cancel(op.id, 'Manual recovery');
+        }
+        showToastMessage(`✅ Operation ${op.id.substring(0, 8)}... released`);
+        // Refresh the list
+        await listStuckOperations();
+      } catch (error) {
+        console.error('Error cancelling operation:', error);
+        showToastMessage(`❌ Failed: ${error.message}`);
+      } finally {
+        cancellingOp[op.id] = false;
+      }
+    };
+
     const toggleRounds = (sessionId) => {
       expandedRounds[sessionId] = !expandedRounds[sessionId];
     };
@@ -808,7 +966,15 @@ export default {
       handleFileSelect,
       confirmClearAll,
       cancelConfirm,
-      executeConfirm
+      executeConfirm,
+      recoveryRunning,
+      recoveryResult,
+      stuckOperations,
+      listingOps,
+      cancellingOp,
+      runAutoRecovery,
+      listStuckOperations,
+      cancelOperation
     };
   }
 };
