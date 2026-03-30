@@ -8,6 +8,7 @@ import { seedphraseService } from './seedphraseService';
  */
 export class CocoService {
   private coco: Manager | null = null;
+  private repo: IndexedDbRepositories | null = null;
   private isInitialized = false;
 
   async initialize(): Promise<Manager> {
@@ -39,11 +40,11 @@ export class CocoService {
     };
 
     // Initialize IndexedDB repositories
-    const repo = new IndexedDbRepositories({});
-    await repo.init();
+    this.repo = new IndexedDbRepositories({});
+    await this.repo.init();
 
     // Create Manager instance (following demo-web pattern)
-    this.coco = new Manager(repo, seedGetter);
+    this.coco = new Manager(this.repo, seedGetter);
     
     // Enable watchers manually
     await this.coco.enableMintOperationWatcher({ watchExistingPendingOnStart: true });
@@ -105,6 +106,13 @@ export class CocoService {
       this.coco = null;
       console.log('🛑 Coco disposed');
     }
+  }
+
+  getRepo(): IndexedDbRepositories {
+    if (!this.repo) {
+      throw new Error('Coco not initialized. Call initialize() first.');
+    }
+    return this.repo;
   }
 
   isReady(): boolean {

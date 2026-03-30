@@ -338,6 +338,9 @@
         </div>
       </div>
 
+      <!-- Proof Inspector -->
+      <ProofInspector />
+
       <!-- Storage Info Section -->
       <div class="bg-white rounded-lg shadow p-4">
         <h2 class="text-lg font-semibold mb-3 flex items-center">
@@ -430,9 +433,11 @@ import { getEncodedToken } from '@cashu/cashu-ts';
 import meltSessionStorageManager from '../services/new/storage/meltSessionStorageManager';
 import cashuService from '../services/flows/shared/cashuService';
 import { cocoService } from '../services/cocoService';
+import ProofInspector from '../components/ProofInspector.vue';
 
 export default {
   name: 'DebugRecoveryView',
+  components: { ProofInspector },
   setup() {
     const router = useRouter();
     const incompleteMeltSessions = ref([]);
