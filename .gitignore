@@ -13,4 +13,10 @@ cursor-tools.config.json
 .clinerules
 
 node_modules/
+reference/.planning/
+
+.planning/
+.skills-lock.json
+.agents
+
 reference/

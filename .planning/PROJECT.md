@@ -50,6 +50,7 @@ Never lose the user's funds — money is handled on the receipt creator's phone,
 - Offscreen button reproduces broadly on mobile browsers — likely viewport-height (100vh/safe-area/keyboard) issue
 - Flapping bar is the app-wide bottom navigation, triggered by scrolling to bottom (likely mobile browser URL-bar collapse/viewport resize)
 - Verification target: PWA on mobile browsers (iOS Safari, Android Chrome) primary; Capacitor native builds best-effort
+- Applesauce SDK skill available at `.agents/skills/applesauce/SKILL.md` — per-package references, migration/patterns docs; use during applesauce upgrade and any Nostr work
 
 ## Constraints
 
