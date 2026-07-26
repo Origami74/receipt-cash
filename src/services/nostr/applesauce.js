@@ -1,5 +1,5 @@
 import { EventStore } from "applesauce-core";
-import { presistEventsToCache, setHiddenContentEncryptionMethod } from "applesauce-core/helpers";
+import { persistEventsToCache } from "applesauce-core/helpers";
 import { RelayPool } from "applesauce-relay";
 import { createEventLoader, createTagValueLoader } from "applesauce-loaders/loaders";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT } from "./constants";
@@ -21,7 +21,7 @@ const initCache = async () => {
     cacheInitialized = true;
     
     // Setup cache persistence after cache is initialized
-    presistEventsToCache(globalEventStore, (events) => addEvents(cache, events));
+    persistEventsToCache(globalEventStore, (events) => addEvents(cache, events));
   }
   return cache;
 };

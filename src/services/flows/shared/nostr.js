@@ -22,8 +22,7 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     
     // Create a signer for this receipt
     const receiptSigner = new PrivateKeySigner(receiptPrivateKey);
-    const factory = new EventFactory({ signer: receiptSigner });
-    
+
     console.log('Receipt data:', receiptData);
     
     // Convert all prices to sats and store only sats prices
@@ -58,14 +57,10 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
     // Encrypt the content using NIP-44
     const encryptedContent = await nip44.encrypt(content, encryptionPrivateKey);
     
-    // Create the draft event using EventFactory
-    const draft = await factory.build({
-      kind: KIND_RECEIPT,
-      content: encryptedContent,
-    });
-    
-    // Sign the event
-    const signed = await factory.sign(draft);
+    // Create and sign the event using the v6 EventFactory chain
+    const signed = await EventFactory.fromKind(KIND_RECEIPT)
+      .content(encryptedContent)
+      .sign(receiptSigner);
     
     // Publish using the global relay pool with early success
     // Return immediately once 3 relays accept it, let others continue in background
