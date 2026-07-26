@@ -1,4 +1,5 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
+import { publishWithRedundancy } from '../../nostr/publishWithRedundancy.ts';
 import { EventFactory } from 'applesauce-core';
 import { PrivateKeySigner } from 'applesauce-signers';
 import { generateSecretKey, getPublicKey, nip44 } from 'nostr-tools';
@@ -62,54 +63,10 @@ const publishReceiptEvent = async (receiptData, preferredMints, devFeePercent, b
       .content(encryptedContent)
       .sign(receiptSigner);
     
-    // Publish using the global relay pool with early success
-    // Return immediately once 3 relays accept it, let others continue in background
-    const MIN_SUCCESSFUL_RELAYS = 3;
-    let successCount = 0;
-    
-    // Create a promise that resolves when we have enough successes
-    let resolveEarlySuccess;
-    const earlySuccessPromise = new Promise((resolve) => {
-      resolveEarlySuccess = resolve;
-    });
-    
-    // Start publishing to all relays in parallel
-    const publishPromises = DEFAULT_RELAYS.map(relay =>
-      globalPool.publish([relay], signed)
-        .then(responses => {
-          const response = responses[0];
-          if (response && response.ok) {
-            successCount++;
-            console.log(`✅ Published to ${response.from} (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
-            
-            // Check if we have enough successes
-            if (successCount >= MIN_SUCCESSFUL_RELAYS) {
-              resolveEarlySuccess();
-            }
-            
-            return { success: true, relay: response.from };
-          } else {
-            console.warn(`⚠️ Failed to publish to ${relay}: ${response?.message || 'unknown error'}`);
-            return { success: false, relay };
-          }
-        })
-        .catch(error => {
-          console.warn(`⚠️ Failed to publish to ${relay}:`, error.message);
-          return { success: false, relay };
-        })
-    );
-    
-    // Race: return as soon as we have 3 successes OR all relays have responded
-    await Promise.race([
-      earlySuccessPromise,
-      Promise.all(publishPromises)
-    ]);
-    
-    // Check if we got enough successes
-    if (successCount < MIN_SUCCESSFUL_RELAYS) {
-      throw new Error(`Could not publish receipt to enough relays (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
-    }
-    
+    // Publish via the shared redundancy helper: resolves once >= MIN_SUCCESSFUL_RELAYS
+    // relays accept, letting the rest continue publishing in the background (D-07).
+    const successCount = await publishWithRedundancy(globalPool, DEFAULT_RELAYS, signed);
+
     console.log(`✅ Receipt published successfully to ${successCount}+ relays`);
 
     // Add to local event store for caching

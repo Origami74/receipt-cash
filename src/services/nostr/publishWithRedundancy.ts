@@ -20,8 +20,8 @@
  * threshold is met, but unsubscribing an RxJS wrapper around an already-started
  * Promise does not cancel that Promise or the socket write behind it. The
  * remaining relay publishes therefore keep running to completion in the
- * background exactly as the previous hand-rolled `Promise.race` code did —
- * that background completion is extra redundancy actually landing on more
+ * background exactly as the previous hand-rolled early-success-race code did
+ * — that background completion is extra redundancy actually landing on more
  * relays, and is deliberately not cancelled here.
  */
 

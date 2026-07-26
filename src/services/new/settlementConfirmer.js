@@ -1,6 +1,7 @@
 import { EventFactory } from "applesauce-core";
 import { addNameValueTag } from "applesauce-core/operations/tag/common";
 import { globalEventLoader, globalEventStore, globalPool } from "../nostr/applesauce";
+import { publishWithRedundancy } from "../nostr/publishWithRedundancy.ts";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from "../nostr/constants";
 
 export async function confirmSettlement(signer, receiptEventId, settlementEventId){
@@ -20,26 +21,9 @@ export async function confirmSettlement(signer, receiptEventId, settlementEventI
             )
             .sign(signer);
 
-        const responses = await globalPool.publish(DEFAULT_RELAYS, signed)
-
-        const successResponses = []
-        responses.forEach((response) => {
-            if (response.ok) {
-                successResponses.push(response)
-                console.log(`Event published successfully to ${response.from}`);
-                
-            } else {
-                console.error(`Failed to publish event to ${response.from}: ${response.message}`);
-            }
-        });
-
-        if(successResponses.length == 0){
-            console.error(`Failed to publish event ${signed.id} to any relay!`);
-        }
-        else if(successResponses.length == 1){
-            console.error(`Failed to publish event ${signed.id} to enough relays!`);
-            throw new Error("Failed to publish confirm event")
-        }
+        // Route through the shared redundancy helper at the uniform three-relay
+        // bar (D-07) — this site previously enforced only a two-relay bar.
+        await publishWithRedundancy(globalPool, DEFAULT_RELAYS, signed);
 
         globalEventStore.add(signed);
       

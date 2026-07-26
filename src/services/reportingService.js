@@ -1,4 +1,5 @@
 import { globalPool, globalEventStore } from './nostr/applesauce.js';
+import { publishWithRedundancy } from './nostr/publishWithRedundancy.ts';
 import { EventFactory } from 'applesauce-core';
 import { addNameValueTag, setSingletonTag } from 'applesauce-core/operations/tag/common';
 import { PrivateKeySigner } from 'applesauce-signers';
@@ -153,25 +154,10 @@ export const submitReport = async ({ description, errorMessage = '', includeLogs
       )
       .sign(reportSigner);
     
-    // Publish using the global relay pool
-    const responses = await globalPool.publish(DEFAULT_RELAYS, signed);
-    
-    const successResponses = [];
-    responses.forEach((response) => {
-      if (response.ok) {
-        successResponses.push(response);
-        console.log(`Bug report published successfully to ${response.from}`);
-      } else {
-        console.error(`Failed to publish bug report to ${response.from}: ${response.message}`);
-      }
-    });
+    // Route through the shared redundancy helper at the uniform three-relay
+    // bar (D-07) — this site previously enforced only a two-relay bar.
+    await publishWithRedundancy(globalPool, DEFAULT_RELAYS, signed);
 
-    if (successResponses.length <= 1) {
-      console.error(`Failed to publish bug report ${signed.id} to enough relays!`);
-      throw new Error("Could not publish bug report to enough relays");
-    }
-    
-    
     globalEventStore.add(signed);
     showNotification('Report submitted successfully. Thank you!', 'success');
     

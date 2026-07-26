@@ -4,6 +4,8 @@ import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_NIP17_DM } from '../../nostr
 import { SendWrappedMessage } from 'applesauce-actions/actions';
 import { ActionRunner } from 'applesauce-actions';
 import { createPaymentMessage, decodeRequest, extractNostrTransport } from '../../../utils/cashuUtils.js';
+import { publishWithRedundancy, withRedundancyFloor } from '../../nostr/publishWithRedundancy.ts';
+import { concatMap, defaultIfEmpty, lastValueFrom } from 'rxjs';
 
 /**
  * Cashu DM Sender Service
@@ -122,38 +124,49 @@ class CashuDmSender {
       // No publishMethod is passed, so .exec() (not .run()) is used below.
       const actions = new ActionRunner(globalEventStore, new PrivateKeySigner());
 
-      if(!relays || relays.length == 0){
-        relays = DEFAULT_RELAYS
+      // `relays` is the counterparty's own nprofile relay hints (from the NUT-18
+      // payment request) and can be shorter than the three-relay bar, or empty.
+      // Floor it against the app's own DEFAULT_RELAYS so the bar is always
+      // clearable while the recipient's hints are still published to first
+      // (D-07). This subsumes the old "swap in DEFAULT_RELAYS only when empty"
+      // branch — the floor keeps the hints AND unions in the app's relays.
+      const publishRelays = withRedundancyFloor(relays, DEFAULT_RELAYS);
+
+      let publishedCount = 0;
+
+      // Consuming with concatMap + lastValueFrom (rather than the previous
+      // async-callback-passed-to-Observable.forEach) is deliberate: RxJS's
+      // Observable.prototype.forEach only rejects on a SYNCHRONOUS throw, so
+      // a rejected promise from an async forEach callback was previously an
+      // unhandled rejection that never reached this method's own catch — a
+      // payout DM that reached zero relays would silently report success.
+      // concatMap + lastValueFrom makes a per-gift publish failure a real
+      // rejection of the awaited observable, so it propagates to the catch
+      // below and this method returns false, leaving the payout retryable in
+      // the proof-safety buffer instead of being marked sent.
+      await lastValueFrom(
+        actions.exec(SendWrappedMessage, [recipientPubkey], message.trim()).pipe(
+          concatMap(async (gift) => {
+            try {
+              await publishWithRedundancy(globalPool, publishRelays, gift);
+            } catch (error) {
+              // Keep the gift id in the rethrown message so a failed payout
+              // DM is still traceable to a specific event.
+              throw new Error(`Failed to publish gift-wrapped event ${gift.id}: ${error.message}`);
+            }
+
+            globalEventStore.add(gift);
+            console.log(`Event published successfully: ${gift.id}`);
+            publishedCount++;
+            return gift;
+          }),
+          defaultIfEmpty(null),
+        ),
+      );
+
+      if (publishedCount === 0) {
+        throw new Error('Failed to send NIP-17 DM: no gift-wrapped message was emitted to publish');
       }
-
-      await actions
-        .exec(SendWrappedMessage, [recipientPubkey], message.trim())
-        .forEach(async (gift) => {
-          const responses = await globalPool.publish(relays, gift);
-
-          const successResponses = []
-          responses.forEach((response) => {
-              if (response.ok) {
-                  successResponses.push(response)
-                  console.log(`Event published successfully to ${response.from}`);
-              } else {
-                  console.error(`Failed to publish event to ${response.from}: ${response.message}`);
-              }
-          });
-
-          if(successResponses.length == 0){
-              console.error(`Failed to publish event ${gift.id} to any relay!`);
-              throw new Error(`Failed to publish event ${gift.id} to any relay!`);
-          }
-          else if(successResponses.length == 1){
-              console.error(`Failed to publish event ${gift.id} to enough relays!`);
-              throw new Error(`Failed to publish event ${gift.id} to enough relays!`)
-          }
-
-          globalEventStore.add(gift);
-
-          return true;
-        });
 
       return true;
     } catch (error) {

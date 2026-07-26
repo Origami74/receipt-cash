@@ -1,4 +1,5 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
+import { publishWithRedundancy } from '../../nostr/publishWithRedundancy.ts';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../../nostr/constants.js';
 import { EventFactory } from 'applesauce-core';
 import { addNameValueTag } from 'applesauce-core/operations/tag/common';
@@ -72,45 +73,9 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
       )
       .sign(signer);
     
-    // Publish to relays, resolve early once enough relays accept
-    const MIN_SUCCESSFUL_RELAYS = 3;
-    let successCount = 0;
-
-    let resolveEarlySuccess;
-    const earlySuccessPromise = new Promise((resolve) => {
-      resolveEarlySuccess = resolve;
-    });
-
-    const publishPromises = DEFAULT_RELAYS.map(relay =>
-      globalPool.publish([relay], signed)
-        .then(responses => {
-          const response = responses[0];
-          if (response && response.ok) {
-            successCount++;
-            console.log(`✅ Settlement published to ${response.from} (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
-            if (successCount >= MIN_SUCCESSFUL_RELAYS) {
-              resolveEarlySuccess();
-            }
-            return { success: true, relay: response.from };
-          } else {
-            console.warn(`⚠️ Failed to publish settlement to ${relay}: ${response?.message || 'unknown error'}`);
-            return { success: false, relay };
-          }
-        })
-        .catch(error => {
-          console.warn(`⚠️ Failed to publish settlement to ${relay}:`, error.message);
-          return { success: false, relay };
-        })
-    );
-
-    await Promise.race([
-      earlySuccessPromise,
-      Promise.all(publishPromises)
-    ]);
-
-    if (successCount < MIN_SUCCESSFUL_RELAYS) {
-      throw new Error(`Could not publish settlement to enough relays (${successCount}/${MIN_SUCCESSFUL_RELAYS})`);
-    }
+    // Publish via the shared redundancy helper: resolves once >= MIN_SUCCESSFUL_RELAYS
+    // relays accept, letting the rest continue publishing in the background (D-07).
+    const successCount = await publishWithRedundancy(globalPool, DEFAULT_RELAYS, signed);
 
     console.log(`✅ Settlement published successfully to ${successCount}+ relays`);
     
