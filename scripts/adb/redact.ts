@@ -37,8 +37,25 @@ const NSEC_RE = /nsec1[a-z0-9]{20,}/g;
 /** Cashu token encoding — `cashuA`/`cashuB` prefixes are unique to this format. */
 const CASHU_TOKEN_RE = /cashu[AB][A-Za-z0-9_-]{20,}/g;
 
+/**
+ * Whole `"proofs":[...]` arrays.
+ *
+ * Scrubbing the `secret`/`C` field VALUES (below) is not sufficient: plan 01-05's redaction gate
+ * rejects the literal `"proofs"\s*:` KEY regardless of whether its contents are already redacted,
+ * so a structurally-preserved array fails the gate even when it holds nothing sensitive. That
+ * mismatch let a real gate run produce an evidence document the gate then rejected. Collapsing the
+ * array satisfies both: amounts are kept because they are the only diagnostically useful part,
+ * and the DLEQ blobs (public, but noisy 64-hex) go with it.
+ *
+ * MUST run before the field-level redactions below — once `[REDACTED:...]` markers are present,
+ * the `]` inside a marker truncates this match and corrupts the JSON. Raw proof secrets are
+ * hex/base64 and never contain `]`, so matching is unambiguous at that point.
+ */
+const PROOFS_ARRAY_RE = /"proofs"\s*:\s*\[[^\]]*\]/g;
+
 /** Cashu proof JSON shape (`{"secret": "...", "C": "..."}`) — redact the field values, not the
- * surrounding JSON structure, so the log excerpt stays diagnostically readable. */
+ * surrounding JSON structure, so the log excerpt stays diagnostically readable. Retained for
+ * proofs that appear outside a `"proofs":[...]` array. */
 const PROOF_SECRET_FIELD_RE = /("secret"\s*:\s*")([^"]+)(")/g;
 const PROOF_C_FIELD_RE = /("C"\s*:\s*")([^"]+)(")/g;
 
@@ -141,6 +158,12 @@ export function redact(text: string): string {
     out = out.replace(NSEC_RE, "[REDACTED:nsec]");
     out = redactMnemonicRuns(out);
     out = out.replace(CASHU_TOKEN_RE, (match) => `[REDACTED:cashu-token len=${match.length}]`);
+    // Before the field-level rules — see PROOFS_ARRAY_RE for why ordering is load-bearing.
+    out = out.replace(PROOFS_ARRAY_RE, (match) => {
+      const amounts = [...match.matchAll(/"amount"\s*:\s*(\d+)/g)].map((m) => Number(m[1]));
+      const total = amounts.reduce((a, b) => a + b, 0);
+      return `"proofsRedacted":"${amounts.length} proofs totalling ${total} sat"`;
+    });
     out = out.replace(PROOF_SECRET_FIELD_RE, (_m, pre, _val, post) => `${pre}[REDACTED:proof-secret]${post}`);
     out = out.replace(PROOF_C_FIELD_RE, (_m, pre, _val, post) => `${pre}[REDACTED:proof-C]${post}`);
     out = out.replace(QUOTE_ID_RE, (_m, label, sep) => `${label}${sep}[REDACTED:quote-id]`);
@@ -238,6 +261,17 @@ function runSelfCheck(): void {
   assert(!redacted.includes(fixture.secrets.fakeCashuToken), "cashu token was not redacted");
   assert(!redacted.includes("02fake0000000000000000000000000000000000000000000000000000000001"), "proof secret field was not redacted");
   assert(!redacted.includes("03fake0000000000000000000000000000000000000000000000000000000002"), "proof C field was not redacted");
+
+  // A whole proofs array must not survive in any form — plan 01-05's gate rejects the key itself,
+  // not merely the secret values, so a structurally-preserved array is a gate failure.
+  const proofsArrayLine =
+    'wallet state {"proofs":[{"secret":"deadbeefdeadbeefdeadbeefdeadbeef","C":"02aaaa","amount":8,"id":"00107937db0cc865"},' +
+    '{"secret":"cafebabecafebabecafebabecafebabe","C":"02bbbb","amount":4,"id":"00107937db0cc865"}]}';
+  const proofsRedacted = redact(proofsArrayLine);
+  assert(!/"proofs"\s*:/.test(proofsRedacted), "proofs array key survived redaction (01-05 gate would reject)");
+  assert(!proofsRedacted.includes("deadbeefdeadbeefdeadbeefdeadbeef"), "proof secret survived inside array");
+  assert(!proofsRedacted.includes("cafebabecafebabecafebabecafebabe"), "second proof secret survived inside array");
+  assert(proofsRedacted.includes("2 proofs totalling 12 sat"), "proofs amount summary was not preserved");
   assert(!redacted.includes(fixture.secrets.quoteIdValue), "quote id was not redacted");
   assert(!redacted.includes("lnbc100n1pjqzqzqpp5fake"), "lightning invoice was not redacted");
   assert(!redacted.includes(fixture.secrets.fakePreimageHex), "preimage was not redacted");
