@@ -67,7 +67,6 @@ import TabBlockedOverlay from './components/TabBlockedOverlay.vue';
 import WelcomeOnboarding from './components/onboarding/WelcomeOnboarding.vue';
 import mintQuoteRecoveryService from './services/flows/outgoing/mintQuoteRecovery';
 import debugLogger from './services/debugService';
-import { globalPool } from './services/nostr/applesauce';
 import { checkForVersionUpdate } from './services/updaterService';
 import { tabLockService } from './services/tabLockService';
 
@@ -93,6 +92,18 @@ export default {
     const showHostWelcome = ref(false);
     let backButtonListener = null;
     let appStateListener = null;
+
+    // PWA resume signals (both platforms — logging-only). Recovery itself is delegated to the
+    // pool's own liveness watchdog (enablePing/onUnresponsive, armed pool-wide in
+    // applesauce.js); these handlers must never call any relay or pool method.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[resume] tab visible again — relying on RelayPool liveness watchdog');
+      }
+    };
+    const handleOnline = () => {
+      console.log('[resume] network back online — relying on RelayPool liveness watchdog');
+    };
     
     // Check if current route is home page
     const isHomePage = computed(() => {
@@ -175,18 +186,25 @@ export default {
           }
         });
 
-        // Pause/resume: manage camera and force-reconnect stale relay sockets
+        // Pause/resume: notify other views. Relay recovery after backgrounding is handled
+        // entirely by the pool's own liveness watchdog (enablePing/onUnresponsive, armed
+        // pool-wide in applesauce.js) — application code must not tear down or otherwise
+        // touch relay connections here.
         appStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) {
-            // Android silently kills WebSockets on background without firing close events.
-            // Close each relay so the library's built-in reconnect/resubscribe logic kicks in.
-            for (const relay of globalPool.relays.values()) {
-              relay.close();
-            }
-          }
           document.dispatchEvent(new CustomEvent('app-state-change', { detail: { isActive } }));
         });
       }
+
+      // PWA resume signals — logging-only, non-destructive, active on both platforms (matters
+      // most on mobile browsers, which today have no other resume detection). See handler
+      // definitions above for why they must never call a relay/pool method.
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('online', handleOnline);
+    });
+
+    onUnmounted(() => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     });
     
     // Open the report modal with the current error message
