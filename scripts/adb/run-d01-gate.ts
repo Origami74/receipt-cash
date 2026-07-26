@@ -23,7 +23,8 @@ import {
 } from "./device.ts";
 import { attachAndroidChrome, attachCapacitorWebView, readLoadId, readDebugLogs } from "./cdp.ts";
 import { writeD01Result, writeNativeResumeResult, type ScenarioResult } from "./evidence.ts";
-import { settleItemAsPayer, payerBalance } from "./payer.ts";
+import { settleItemAsPayer } from "./payer.ts";
+import { readCreatorWallet, readPayerWallet, formatFundAccounting } from "./balances.ts";
 import { execFileSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
@@ -419,16 +420,8 @@ async function runScenario(
   return { scenarioResult: aggregateScenario(scenario, cycles, minCycles), cycles };
 }
 
-async function reportBalances(): Promise<{ payer: string; creator: string }> {
-  // Balance reporting is app/wallet-specific and requires reading coco-cashu-core's wallet
-  // state from each context. Left as a documented manual cross-check step here rather than
-  // guessing at an unverified API surface: report via the app's own balance display
-  // (visible in each context's UI) rather than a private wallet-internals call.
-  return {
-    payer: "(read from payer context's own balance display at run end)",
-    creator: "(read from creator context's own balance display at run end)",
-  };
-}
+// Fund accounting (threat H-7) lives in balances.ts — see readCreatorWallet for why the
+// creator side reads coco-cashu's store directly rather than the app's balance UI.
 
 async function main(): Promise<void> {
   console.log("D-01 exit gate: starting Android Chrome run...");
@@ -476,6 +469,13 @@ async function main(): Promise<void> {
     const commit = currentCommitSha();
     const date = new Date().toISOString();
 
+    // Fund accounting baseline (H-7). Taken BEFORE any cycle runs: a post-run figure alone
+    // cannot distinguish "213 sat sat inflight the whole time" from "213 sat got stranded by
+    // this run", which is the only question the threat asks.
+    const payerBefore = readPayerWallet();
+    const creatorBefore = await readCreatorWallet(creatorPage);
+    console.log(`fund accounting (before): payer ready ${payerBefore.ready} sat, creator inflight ${creatorBefore.inflight} sat`);
+
     // One cursor shared by BOTH scenarios — see makeItemCursor for why per-scenario indexing
     // silently re-settled items.
     const itemCursor = makeItemCursor(itemNames);
@@ -486,7 +486,10 @@ async function main(): Promise<void> {
     const networkDropPassed = scenarioPassed(networkDropRun.scenarioResult, MIN_NETWORK_DROP_CYCLES);
     const overallVerdict = backgroundingPassed && networkDropPassed ? "PASS" : "FAIL";
 
-    const balances = await reportBalances();
+    const payerAfter = readPayerWallet();
+    const creatorAfter = await readCreatorWallet(creatorPage);
+    const fundAccounting = formatFundAccounting(payerBefore, payerAfter, creatorBefore, creatorAfter);
+    console.log(`fund accounting (after): ${fundAccounting}`);
 
     const allCycles = [...backgroundingRun.cycles, ...networkDropRun.cycles];
     const combinedExcerpt = allCycles
@@ -503,7 +506,7 @@ async function main(): Promise<void> {
       verdict: overallVerdict,
       logExcerptRaw: combinedExcerpt,
       notes:
-        `Final payer balance: ${balances.payer}; final creator balance: ${balances.creator}. ` +
+        `${fundAccounting} ` +
         "iOS Safari is not adb-reachable — not covered by this harness (see the iOS Safari " +
         "result block above, left as an explicit scope note rather than blank).",
     });
