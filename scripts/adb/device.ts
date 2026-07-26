@@ -75,17 +75,37 @@ export async function requireUsbDevice(): Promise<string> {
     );
   }
 
+  // An explicit serial resolves the ambiguity the multi-device guard below exists to prevent,
+  // so it is honoured rather than overridden — but it must still name a device that is actually
+  // attached. Silently falling back to "the only other one" would reintroduce exactly the
+  // wrong-phone-under-test risk this function is here to eliminate.
+  const requested = process.env.ADB_DEVICE_SERIAL?.trim();
+  if (requested) {
+    const picked = entries.find((e) => e.serial === requested);
+    if (!picked) {
+      const list = entries.map((e) => `${e.serial} (${e.state})`).join(", ");
+      throw new Error(
+        `requireUsbDevice: ADB_DEVICE_SERIAL="${requested}" is not attached. Attached: ${list}.`,
+      );
+    }
+    return assertUsableDevice(picked);
+  }
+
   if (entries.length > 1) {
     const list = entries.map((e) => `${e.serial} (${e.state})`).join(", ");
     throw new Error(
       `requireUsbDevice: ${entries.length} devices attached (${list}) — exactly one device must ` +
         "be connected so the harness is unambiguous about which phone is under test. Disconnect " +
-        "the others.",
+        "the others, or set ADB_DEVICE_SERIAL to name the one under test.",
     );
   }
 
-  const [device] = entries;
+  return assertUsableDevice(entries[0]);
+}
 
+/** Shared state/transport validation, so an explicitly-selected device is held to exactly the
+ * same bar as an auto-selected one. */
+function assertUsableDevice(device: AdbDeviceEntry): string {
   if (device.state === "unauthorized") {
     throw new Error(
       `requireUsbDevice: device ${device.serial} is unauthorized. Accept the "Allow USB ` +

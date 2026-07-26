@@ -12,8 +12,42 @@ import { chromium, type Page } from "playwright";
 
 const LOAD_ID_KEY = "__d01LoadId";
 
+/**
+ * Resolves the host the `adb forward`ed CDP port is reachable on.
+ *
+ * `adb forward` opens its listening socket on whichever machine runs the adb *server*, not the
+ * machine running this script. With a local server those are the same host and `localhost` is
+ * correct. With a remote server they are not: when the phone is cabled to another machine and
+ * this harness talks to that machine's adb server (`ADB_SERVER_SOCKET=tcp:<host>:<port>`), the
+ * forwarded port lives on `<host>`, so dialling `localhost` would connect to nothing. Deriving
+ * the CDP host from `ADB_SERVER_SOCKET` keeps the two in agreement automatically; `ADB_CDP_HOST`
+ * overrides both for topologies where the port is republished somewhere else again.
+ */
+function resolveCdpHost(): string {
+  const explicit = process.env.ADB_CDP_HOST?.trim();
+  if (explicit) return explicit;
+
+  const serverSocket = process.env.ADB_SERVER_SOCKET?.trim();
+  if (serverSocket?.startsWith("tcp:")) {
+    const rest = serverSocket.slice(4);
+    const ipv6 = /^\[([^\]]+)\](?::\d+)?$/.exec(rest);
+    if (ipv6) return ipv6[1];
+    // `tcp:<port>` addresses a local server; only `tcp:<host>:<port>` names a remote one.
+    const lastColon = rest.lastIndexOf(":");
+    if (lastColon > 0) return rest.slice(0, lastColon);
+  }
+
+  return "localhost";
+}
+
+/** Wraps bare IPv6 literals in brackets so they are valid in a URL authority. */
+function forUrl(host: string): string {
+  return host.includes(":") ? `[${host}]` : host;
+}
+
 async function attachViaCdp(port: number, urlMatch?: string | RegExp): Promise<Page> {
-  const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
+  const host = resolveCdpHost();
+  const browser = await chromium.connectOverCDP(`http://${forUrl(host)}:${port}`);
   const contexts = browser.contexts();
 
   const candidatePages: Page[] = [];
@@ -23,7 +57,7 @@ async function attachViaCdp(port: number, urlMatch?: string | RegExp): Promise<P
 
   if (candidatePages.length === 0) {
     throw new Error(
-      `attachViaCdp: no pages found over CDP at localhost:${port}. Confirm Chrome (or the ` +
+      `attachViaCdp: no pages found over CDP at ${host}:${port}. Confirm Chrome (or the ` +
         "Capacitor WebView) is actually open and showing a page on the device.",
     );
   }

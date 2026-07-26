@@ -23,6 +23,7 @@ import {
 } from "./device.ts";
 import { attachAndroidChrome, attachCapacitorWebView, readLoadId, readDebugLogs } from "./cdp.ts";
 import { writeD01Result, writeNativeResumeResult, type ScenarioResult } from "./evidence.ts";
+import { settleItemAsPayer, payerBalance } from "./payer.ts";
 import { execFileSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
@@ -37,8 +38,18 @@ export const MIN_NETWORK_DROP_CYCLES = 2;
 /** Minimum hold time for a disruption before driving the payer, per the plan's action step 3. */
 const DISRUPTION_HOLD_MS = 60_000;
 
-/** Bounded wait for the paid item's progress/settlement to land after restoring the phone. */
-const RECOVERY_ASSERTION_TIMEOUT_MS = 45_000;
+/**
+ * Bounded wait for the paid item's progress/settlement to land after restoring the phone.
+ *
+ * This is a harness convenience bound, NOT part of D-01. D-01 asks only that events land with no
+ * manual page refresh; it sets no latency ceiling. The first real run showed why that distinction
+ * matters: backgrounding recovered in 0.4–1.8s, but network-drop recovery took ~34s on one cycle
+ * and longer than the original 45s bound on another — whose payment nevertheless landed, and would
+ * have been scored a D-01 failure purely because the harness stopped watching. Keep this
+ * comfortably above observed worst-case recovery so a slow-but-successful recovery is recorded as
+ * the latency finding it is, rather than a false failure. Override with RECOVERY_TIMEOUT_MS.
+ */
+const RECOVERY_ASSERTION_TIMEOUT_MS = Number(process.env.RECOVERY_TIMEOUT_MS ?? 180_000);
 const RECOVERY_POLL_INTERVAL_MS = 1_000;
 
 /** Android Chrome's package id, used to bring it back to the foreground without navigating. */
@@ -56,7 +67,13 @@ export interface CycleResult {
   cycleIndex: number;
   verdict: CycleVerdict;
   reason: string;
+  /** End-to-end: from device restore to the payment landing. Includes OS network recovery. */
   recoveryLatencyMs?: number;
+  /** App-only: from the platform resume signal (`online`/`visibilitychange`) to the payment
+   * landing. Excludes Android radio/DHCP recovery, so this is the app's actual contribution. */
+  appRecoveryLatencyMs?: number;
+  /** How much of `recoveryLatencyMs` was spent waiting for the OS to restore connectivity. */
+  osRecoveryLatencyMs?: number;
   logExcerpt?: string;
 }
 
@@ -64,6 +81,37 @@ export interface ItemProgressSnapshot {
   itemName: string;
   confirmedQuantity: number;
   quantity: number;
+}
+
+// ---------------------------------------------------------------------------
+// App-side recovery timing.
+//
+// `recoveryLatencyMs` is measured from the moment the harness restores the device, which for the
+// network-drop scenario includes Android re-enabling the radio, re-associating with the AP and
+// completing DHCP — measured at ~7s on the gate device, and entirely outside the app's control.
+// Reporting only that number materially understates the app: it made a ~1.4s app-side resume look
+// like a ~9s one. These helpers stamp the moment the *platform* tells the page it is back
+// (`online` / `visibilitychange`), so the evidence can separate OS recovery from app recovery.
+// ---------------------------------------------------------------------------
+
+/** Installs a page-side stamp for the next resume signal. Must run BEFORE the disruption. */
+async function armResumeStamp(page: Page): Promise<void> {
+  await page.evaluate(`(function(){
+    window.__d01ResumeAt = null;
+    if (!window.__d01ResumeArmed) {
+      window.__d01ResumeArmed = true;
+      window.addEventListener('online', function(){ window.__d01ResumeAt = Date.now(); });
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'visible') window.__d01ResumeAt = Date.now();
+      });
+    }
+  })()`);
+}
+
+/** Epoch ms of the resume signal for this cycle, or null if the platform never fired one. */
+async function readResumeStamp(page: Page): Promise<number | null> {
+  const v = await page.evaluate(`window.__d01ResumeAt`);
+  return typeof v === "number" ? v : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,59 +168,64 @@ async function ensureDebugLoggingOn(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Payer-side automation — separate headless Chromium context on the host, per the plan's
-// action step 4 ("drive the payer... separate context"). Real sats, real mint, per D-05.
+// Payer-side automation lives in ./payer.ts. The implementation that used to sit here could
+// never settle a payment: it recreated an ephemeral Chromium context per cycle (destroying the
+// payer's wallet and re-triggering onboarding every time), clicked the item row rather than its
+// `+` stepper (which does not select), and assumed an in-app wallet that nothing ever funded.
+// See payer.ts for the replacement and the full rationale.
 // ---------------------------------------------------------------------------
-
-async function settleItemAsPayer(shareLink: string, itemName: string): Promise<void> {
-  const browser = await chromium.launch({ headless: true });
-  try {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await page.goto(shareLink, { waitUntil: "domcontentloaded" });
-
-    // The payer flow (src/views/PaymentView.vue) lists payable items; select the named item
-    // and drive it to confirmation via whichever payment method the wallet has funds for.
-    // Selector strategy: role-based text matching on the item's row, matching the same
-    // ".receipt-item" shape the creator's progress bar reads from.
-    const itemRow = page.locator(".receipt-item", { hasText: itemName }).first();
-    await itemRow.waitFor({ state: "visible", timeout: 30_000 });
-    await itemRow.click();
-
-    const payButton = page.getByRole("button", { name: /pay|settle|confirm/i }).first();
-    await payButton.waitFor({ state: "visible", timeout: 30_000 });
-    await payButton.click();
-
-    // Wait for the payer-side confirmation screen (src/views/PaymentConfirmationView.vue route)
-    // or an in-page confirmed state — either indicates the payment+settlement round trip
-    // completed on the payer's side.
-    await page.waitForURL(/confirmation/, { timeout: 60_000 }).catch(() => {
-      // Some payment methods confirm in-place without a route change; that's acceptable as
-      // long as the creator-side assertion below independently observes the landed payment.
-    });
-  } finally {
-    await browser.close();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Single-cycle execution
 // ---------------------------------------------------------------------------
+
+/**
+ * Hands out a DIFFERENT receipt item for every cycle, across all scenarios.
+ *
+ * The original `itemNames[cycleIndex % itemNames.length]` was wrong twice over: `cycleIndex`
+ * restarts at 0 for each scenario, so the network-drop scenario re-used the items the
+ * backgrounding scenario had already settled; and the modulo silently wrapped onto settled items
+ * once retries pushed the index past the end. A settled item cannot be paid again, so both cases
+ * fail the cycle for a harness reason and would be misread as a D-01 failure. Running out is a
+ * setup error and must be loud, never a silent wrap.
+ */
+interface ItemCursor {
+  next(): string;
+  remaining(): number;
+}
+
+function makeItemCursor(itemNames: string[]): ItemCursor {
+  let i = 0;
+  return {
+    next() {
+      if (i >= itemNames.length) {
+        throw new Error(
+          `run-d01-gate: ran out of unsettled receipt items (had ${itemNames.length}). Every cycle ` +
+            "must settle a different item because a settled item cannot be paid again. Open a receipt " +
+            `with at least ${MIN_BACKGROUND_CYCLES + MIN_NETWORK_DROP_CYCLES} items, plus spares for retries.`,
+        );
+      }
+      return itemNames[i++];
+    },
+    remaining: () => itemNames.length - i,
+  };
+}
 
 interface RunCycleArgs {
   serial: string;
   scenario: Scenario;
   cycleIndex: number;
   creatorPage: Page;
-  itemNames: string[];
+  itemForThisCycle: string;
 }
 
 async function runCycle(args: RunCycleArgs): Promise<CycleResult> {
-  const { serial, scenario, cycleIndex, creatorPage, itemNames } = args;
-  const itemForThisCycle = itemNames[cycleIndex % itemNames.length];
+  const { serial, scenario, cycleIndex, creatorPage, itemForThisCycle } = args;
 
   const loadIdBefore = await readLoadId(creatorPage);
   const before = await readItemProgress(creatorPage, itemForThisCycle);
+  // Must be armed before the disruption — the page is unreachable while backgrounded/offline.
+  await armResumeStamp(creatorPage);
 
   const shareLink = deriveShareLink(creatorPage.url());
 
@@ -225,6 +278,8 @@ async function runCycle(args: RunCycleArgs): Promise<CycleResult> {
   const deadline = Date.now() + RECOVERY_ASSERTION_TIMEOUT_MS;
   let landed = false;
   let recoveryLatencyMs: number | undefined;
+  let appRecoveryLatencyMs: number | undefined;
+  let osRecoveryLatencyMs: number | undefined;
   while (Date.now() < deadline) {
     const currentLoadId = await readLoadId(creatorPage);
     if (currentLoadId !== loadIdBefore) {
@@ -240,7 +295,13 @@ async function runCycle(args: RunCycleArgs): Promise<CycleResult> {
     const beforeConfirmed = before?.confirmedQuantity ?? 0;
     if (after && after.confirmedQuantity > beforeConfirmed) {
       landed = true;
-      recoveryLatencyMs = Date.now() - restoreStart;
+      const landedAt = Date.now();
+      recoveryLatencyMs = landedAt - restoreStart;
+      const resumeAt = await readResumeStamp(creatorPage);
+      if (resumeAt !== null && resumeAt >= restoreStart) {
+        appRecoveryLatencyMs = landedAt - resumeAt;
+        osRecoveryLatencyMs = resumeAt - restoreStart;
+      }
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, RECOVERY_POLL_INTERVAL_MS));
@@ -266,6 +327,8 @@ async function runCycle(args: RunCycleArgs): Promise<CycleResult> {
     verdict: "PASS",
     reason: `${itemForThisCycle} advanced to a confirmed state without a page reload`,
     recoveryLatencyMs,
+    appRecoveryLatencyMs,
+    osRecoveryLatencyMs,
     logExcerpt,
   };
 }
@@ -292,8 +355,19 @@ function scenarioPassed(result: ScenarioResult, minCycles: number): boolean {
   return result.cyclesRun >= minCycles && result.paymentLandedWithoutRefresh && result.settlementLandedWithoutRefresh;
 }
 
+/**
+ * The commit the run was produced on, marked `-dirty` when tracked files differ from HEAD.
+ *
+ * Bare `rev-parse HEAD` silently attributes a run to a commit that may not contain the code that
+ * actually ran. That happened on this phase's second gate run: it exercised an uncommitted relay
+ * reconnect fix but recorded `e7dbebd`, a commit without it — precisely the repudiation risk
+ * T-01-17 exists to prevent. A `-dirty` marker makes an un-anchorable run obvious in the record
+ * instead of quietly wrong.
+ */
 function currentCommitSha(): string {
-  return execFileSync("git", ["rev-parse", "--short", "HEAD"]).toString().trim();
+  const sha = execFileSync("git", ["rev-parse", "--short", "HEAD"]).toString().trim();
+  const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"]).toString().trim();
+  return dirty ? `${sha}-dirty` : sha;
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +381,7 @@ async function runScenario(
   creatorPage: Page,
   scenario: Scenario,
   minCycles: number,
-  itemNames: string[],
+  itemCursor: ItemCursor,
 ): Promise<{ scenarioResult: ScenarioResult; cycles: CycleResult[] }> {
   const cycles: CycleResult[] = [];
   let validCount = 0;
@@ -316,14 +390,19 @@ async function runScenario(
   // Re-run until the minimum VALID (non-INVALID) cycle count is reached — an invalidated
   // cycle (reload detected) does not count toward the minimum and must be retried.
   while (validCount < minCycles) {
-    const result = await runCycle({ serial, scenario, cycleIndex, creatorPage, itemNames });
+    const result = await runCycle({ serial, scenario, cycleIndex, creatorPage, itemForThisCycle: itemCursor.next() });
     cycles.push(result);
     if (result.verdict === "PASS" || result.verdict === "FAIL") validCount += 1;
     cycleIndex += 1;
 
     console.log(
       `[${scenario} cycle ${cycleIndex}] ${result.verdict}: ${result.reason}` +
-        (result.recoveryLatencyMs ? ` (recovery: ${result.recoveryLatencyMs}ms)` : ""),
+        (result.recoveryLatencyMs ? ` (recovery: ${result.recoveryLatencyMs}ms` : "") +
+        (result.appRecoveryLatencyMs !== undefined
+          ? ` = ${result.osRecoveryLatencyMs}ms OS network + ${result.appRecoveryLatencyMs}ms app)`
+          : result.recoveryLatencyMs
+            ? ")"
+            : ""),
     );
 
     // Guard against an unbounded retry loop if every cycle is invalidated (e.g. the device
@@ -368,25 +447,40 @@ async function main(): Promise<void> {
     // re-scripting the full creation form here, since that flow is exercised and already
     // covered by the outstanding manual-verification carry-forward in
     // 01-FUND-SAFETY-EVIDENCE.md (full receipt-create -> payer-open -> decrypt round trip).
+    // Only UNSETTLED items are usable: a fully-paid item (n/n) cannot be settled again, so
+    // including one would fail its cycle for a harness reason and be misread as a D-01 failure.
+    // Filtering here also makes the gate safe to re-run against a partially-settled receipt.
     const itemNames = await creatorPage.evaluate(() => {
       const rows = Array.from(document.querySelectorAll(".receipt-item"));
       return rows
+        .filter((row) => {
+          const m = (row.textContent ?? "").match(/\((\d+)\/(\d+)\)/);
+          return m ? Number(m[1]) < Number(m[2]) : true;
+        })
         .map((row) => row.querySelector(".font-medium")?.textContent?.trim())
         .filter((name): name is string => !!name);
     });
 
-    if (itemNames.length < 3) {
+    // Both scenarios draw from one pool and a settled item cannot be re-settled, so the receipt
+    // needs at least one item per required cycle — not merely 3.
+    const requiredItems = MIN_BACKGROUND_CYCLES + MIN_NETWORK_DROP_CYCLES;
+    if (itemNames.length < requiredItems) {
       throw new Error(
-        `main: expected at least 3 separately-payable items on the open receipt, found ${itemNames.length}. ` +
-          "Create a receipt with >=3 items on the creator page before running this gate.",
+        `main: expected at least ${requiredItems} separately-payable items on the open receipt ` +
+          `(${MIN_BACKGROUND_CYCLES} backgrounding + ${MIN_NETWORK_DROP_CYCLES} network-drop cycles, each ` +
+          `settling a different item), found ${itemNames.length}. Create a receipt with more items, ` +
+          "ideally with spares so an invalidated cycle can be retried.",
       );
     }
 
     const commit = currentCommitSha();
     const date = new Date().toISOString();
 
-    const backgroundingRun = await runScenario(serial, creatorPage, "backgrounding", MIN_BACKGROUND_CYCLES, itemNames);
-    const networkDropRun = await runScenario(serial, creatorPage, "network drop", MIN_NETWORK_DROP_CYCLES, itemNames);
+    // One cursor shared by BOTH scenarios — see makeItemCursor for why per-scenario indexing
+    // silently re-settled items.
+    const itemCursor = makeItemCursor(itemNames);
+    const backgroundingRun = await runScenario(serial, creatorPage, "backgrounding", MIN_BACKGROUND_CYCLES, itemCursor);
+    const networkDropRun = await runScenario(serial, creatorPage, "network drop", MIN_NETWORK_DROP_CYCLES, itemCursor);
 
     const backgroundingPassed = scenarioPassed(backgroundingRun.scenarioResult, MIN_BACKGROUND_CYCLES);
     const networkDropPassed = scenarioPassed(networkDropRun.scenarioResult, MIN_NETWORK_DROP_CYCLES);
@@ -442,9 +536,16 @@ export async function runNativeResumeScenario(): Promise<void> {
     const creatorPage = await attachCapacitorWebView(forward.port);
     await ensureDebugLoggingOn(creatorPage);
 
+    // Only UNSETTLED items are usable: a fully-paid item (n/n) cannot be settled again, so
+    // including one would fail its cycle for a harness reason and be misread as a D-01 failure.
+    // Filtering here also makes the gate safe to re-run against a partially-settled receipt.
     const itemNames = await creatorPage.evaluate(() => {
       const rows = Array.from(document.querySelectorAll(".receipt-item"));
       return rows
+        .filter((row) => {
+          const m = (row.textContent ?? "").match(/\((\d+)\/(\d+)\)/);
+          return m ? Number(m[1]) < Number(m[2]) : true;
+        })
         .map((row) => row.querySelector(".font-medium")?.textContent?.trim())
         .filter((name): name is string => !!name);
     });
@@ -462,7 +563,7 @@ export async function runNativeResumeScenario(): Promise<void> {
     // Native resume mirrors the D-01 backgrounding scenario only — network drop is already
     // covered by the Android Chrome run and D-01's native-specific concern (D-04's
     // Capacitor-only appStateChange path) is about resume, not radio state.
-    const run = await runScenario(serial, creatorPage, "backgrounding", MIN_BACKGROUND_CYCLES, itemNames);
+    const run = await runScenario(serial, creatorPage, "backgrounding", MIN_BACKGROUND_CYCLES, makeItemCursor(itemNames));
     const passed = scenarioPassed(run.scenarioResult, MIN_BACKGROUND_CYCLES);
 
     const excerpt = run.cycles
