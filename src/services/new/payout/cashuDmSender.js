@@ -2,7 +2,6 @@ import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
 import { PrivateKeySigner } from 'applesauce-signers';
 import { DEFAULT_RELAYS, KIND_GIFTWRAPPED_MSG, KIND_NIP17_DM } from '../../nostr/constants.js';
 import { SendWrappedMessage } from 'applesauce-actions/actions';
-import { EventFactory } from 'applesauce-core';
 import { ActionRunner } from 'applesauce-actions';
 import { createPaymentMessage, decodeRequest, extractNostrTransport } from '../../../utils/cashuUtils.js';
 
@@ -119,11 +118,9 @@ class CashuDmSender {
     try {
       console.log('📤 Sending NIP-17 DM...');
 
-      // Create ephemeral signer
-      const factory = new EventFactory({
-        signer: new PrivateKeySigner(),
-      });
-      const actions = new ActionRunner(globalEventStore, factory);
+      // ActionRunner takes a bare signer directly in v6.2.x (no factory wrapper needed).
+      // No publishMethod is passed, so .exec() (not .run()) is used below.
+      const actions = new ActionRunner(globalEventStore, new PrivateKeySigner());
 
       if(!relays || relays.length == 0){
         relays = DEFAULT_RELAYS

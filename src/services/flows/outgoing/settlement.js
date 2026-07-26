@@ -1,6 +1,7 @@
 import { globalPool, globalEventStore } from '../../nostr/applesauce.js';
 import { DEFAULT_RELAYS, KIND_SETTLEMENT } from '../../nostr/constants.js';
 import { EventFactory } from 'applesauce-core';
+import { addNameValueTag } from 'applesauce-core/operations/tag/common';
 import { PrivateKeySigner } from 'applesauce-signers';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -30,50 +31,46 @@ const publishSettlementEvent = async (receiptEventId, settledItems, receiptEncry
     // Generate a temporary private key for this settlement event
     const senderPrivateKey = generateSecretKey();
     const signer = new PrivateKeySigner(senderPrivateKey);
-    const factory = new EventFactory({ signer });
-    
+
     // Create event content
     const content = JSON.stringify({ settledItems });
-    
+
     // Convert keys to Uint8Array for encryption
     const encryptionKey = Uint8Array.from(Buffer.from(receiptEncryptionKey, 'hex'));
-    
+
     // Encrypt the content using the same key as the receipt
     const encryptedContent = await nip44.encrypt(content, encryptionKey);
-    
-    // Create basic tags
-    const tags = [
-      ['e', receiptEventId],
-      ['p', receiptAuthorPubkey],
-      ['payment', paymentType]
-    ];
-    
-    // Add encrypted mint_quote and mint_url tags only for lightning payments
+
+    // Encrypt mint_quote and mint_url values only for lightning payments;
+    // the tag operations below run conditionally so absent values contribute no tag
+    let encryptedMintQuote;
+    let encryptedMintUrl;
     if (paymentType === 'lightning' && mintQuoteId) {
       // Create conversation key for NIP-44 encryption
       const conversationKey = nip44.getConversationKey(senderPrivateKey, receiptAuthorPubkey);
-      
+
       // Encrypt mint quote ID using the conversation key
-      const encryptedMintQuote = await nip44.encrypt(mintQuoteId, conversationKey);
-      tags.push(['mint_quote', encryptedMintQuote]);
-      
-      // Also encrypt and add the mint URL if provided
+      encryptedMintQuote = await nip44.encrypt(mintQuoteId, conversationKey);
+
+      // Also encrypt the mint URL if provided
       if (mintUrl) {
-        const encryptedMintUrl = await nip44.encrypt(mintUrl, conversationKey);
-        tags.push(['mint_url', encryptedMintUrl]);
+        encryptedMintUrl = await nip44.encrypt(mintUrl, conversationKey);
       }
     }
 
-    // Create the draft event using EventFactory
-    const draft = await factory.build({
-      kind: KIND_SETTLEMENT, 
-      content: encryptedContent,
-      tags: tags
-    });
-    
-    
-    // Sign the event
-    const signed = await factory.sign(draft);
+    // Create and sign the event using the v6 EventFactory chain.
+    // modifyPublicTags accepts `undefined` entries and skips them, so the
+    // conditional mint_quote/mint_url tags don't need a separate branch.
+    const signed = await EventFactory.fromKind(KIND_SETTLEMENT)
+      .content(encryptedContent)
+      .modifyPublicTags(
+        addNameValueTag(['e', receiptEventId]),
+        addNameValueTag(['p', receiptAuthorPubkey]),
+        addNameValueTag(['payment', paymentType]),
+        encryptedMintQuote ? addNameValueTag(['mint_quote', encryptedMintQuote]) : undefined,
+        encryptedMintUrl ? addNameValueTag(['mint_url', encryptedMintUrl]) : undefined,
+      )
+      .sign(signer);
     
     // Publish to relays, resolve early once enough relays accept
     const MIN_SUCCESSFUL_RELAYS = 3;

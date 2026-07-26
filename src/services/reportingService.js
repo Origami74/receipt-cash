@@ -1,5 +1,6 @@
 import { globalPool, globalEventStore } from './nostr/applesauce.js';
 import { EventFactory } from 'applesauce-core';
+import { addNameValueTag, setSingletonTag } from 'applesauce-core/operations/tag/common';
 import { PrivateKeySigner } from 'applesauce-signers';
 import { nip44, generateSecretKey } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -134,27 +135,23 @@ export const submitReport = async ({ description, errorMessage = '', includeLogs
     // Generate a random secret key for this report
     const reportPrivateKey = generateSecretKey();
     const reportSigner = new PrivateKeySigner(reportPrivateKey);
-    const factory = new EventFactory({ signer: reportSigner });
-    
+
     // Get developer's public key (hex to Uint8Array)
     const recipientPubkey = Uint8Array.from(Buffer.from(DEVELOPER_PUBKEY, 'hex'));
-    
+
     // Encrypt the content using NIP-44
     const encryptedContent = await nip44.encrypt(plainContent, recipientPubkey);
-    
-    // Create the draft event using EventFactory
-    const draft = await factory.build({
-      kind: KIND_REPORT, // kind for bug reports (infernal-insights)
-      content: encryptedContent,
-      tags: [
-        ['n', 'receipt-cash'],
-        ['p', DEVELOPER_PUBKEY],
-        ['encrypted']
-      ]
-    });
-    
-    // Sign the event
-    const signed = await factory.sign(draft);
+
+    // Create and sign the event using the v6 EventFactory chain.
+    // 'encrypted' is a valueless tag, so it must use setSingletonTag, not addNameValueTag.
+    const signed = await EventFactory.fromKind(KIND_REPORT) // kind for bug reports (infernal-insights)
+      .content(encryptedContent)
+      .modifyPublicTags(
+        addNameValueTag(['n', 'receipt-cash']),
+        addNameValueTag(['p', DEVELOPER_PUBKEY]),
+        setSingletonTag(['encrypted']),
+      )
+      .sign(reportSigner);
     
     // Publish using the global relay pool
     const responses = await globalPool.publish(DEFAULT_RELAYS, signed);

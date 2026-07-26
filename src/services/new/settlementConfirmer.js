@@ -1,27 +1,24 @@
 import { EventFactory } from "applesauce-core";
+import { addNameValueTag } from "applesauce-core/operations/tag/common";
 import { globalEventLoader, globalEventStore, globalPool } from "../nostr/applesauce";
 import { DEFAULT_RELAYS, KIND_SETTLEMENT_CONFIRMATION } from "../nostr/constants";
 
 export async function confirmSettlement(signer, receiptEventId, settlementEventId){
-     
+
     // Get settlementEvent from eventstore, it can be assumed to be in there.
     // Without it we wouldn't have ended up in this execution path
     const settlementEvent = globalEventStore.getEvent(settlementEventId)
 
     try {
-        const factory = new EventFactory({ signer });
-        const draft = await factory.build(
-            { 
-            kind: KIND_SETTLEMENT_CONFIRMATION,
-            tags: [
-                ['e', receiptEventId],
-                ['e', settlementEvent.id],
-                ['p', settlementEvent.pubkey]
-            ]
-            },
-        );
-        // Sign the draft event with the signer
-        const signed = await factory.sign(draft);
+        // The tag operation below matches on name AND value, so the two distinct 'e' tags
+        // (receiptEventId, settlementEvent.id) both survive rather than one replacing the other.
+        const signed = await EventFactory.fromKind(KIND_SETTLEMENT_CONFIRMATION)
+            .modifyPublicTags(
+                addNameValueTag(['e', receiptEventId]),
+                addNameValueTag(['e', settlementEvent.id]),
+                addNameValueTag(['p', settlementEvent.pubkey]),
+            )
+            .sign(signer);
 
         const responses = await globalPool.publish(DEFAULT_RELAYS, signed)
 
