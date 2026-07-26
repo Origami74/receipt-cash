@@ -98,11 +98,15 @@ export default {
     // applesauce.js); these handlers must never call any relay or pool method.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[resume] tab visible again — relying on RelayPool liveness watchdog');
+        // These listeners stay observational on purpose — they must never touch a relay or the
+        // pool (see applesauce.js). The events themselves do the work: applesauce.js races any
+        // armed reconnect backoff against them, so foregrounding collapses a pending backoff
+        // instead of waiting it out.
+        console.log('[resume] tab visible again — collapsing any armed relay reconnect backoff');
       }
     };
     const handleOnline = () => {
-      console.log('[resume] network back online — relying on RelayPool liveness watchdog');
+      console.log('[resume] network back online — collapsing any armed relay reconnect backoff');
     };
     
     // Check if current route is home page
