@@ -72,7 +72,31 @@ const LN_INVOICE_RE = /lnbc[a-z0-9]{20,}/gi;
  * 64-char lowercase hex string) requires the surrounding label; an *unlabeled* bare hex string
  * is treated as an identifier (event id, mint id, etc.), not a secret. */
 const PREIMAGE_LABELED_RE = /(preimage|payment_preimage)(["'\s:=]+)([0-9a-fA-F]{16,64})/gi;
-const PRIVKEY_LABELED_RE = /(privkey|private[_ ]?key|secret[_ ]?key|nsec_hex)(["'\s:=]+)([0-9a-fA-F]{16,64})/gi;
+/**
+ * Label list widened after a real miss. The Phase 1 evidence document carried two live receipt
+ * shared-encryption keys in cleartext for exactly one reason: `sharedEncryptionKey` was not in
+ * this alternation, so its 64-hex value fell through to the bare-hex path below, which treats
+ * unlabeled hex as an identifier by design. `privateKey` WAS caught (via `private[_ ]?key`) —
+ * the control worked, its vocabulary was just incomplete.
+ *
+ * Adding a label here is cheap and the failure mode of omitting one is silent cleartext, so
+ * prefer over-inclusion: any field name that could plausibly hold key material belongs here,
+ * even if this app does not currently log it.
+ */
+const PRIVKEY_LABELED_RE =
+  /(privkey|private[_ ]?key|secret[_ ]?key|nsec_hex|shared[_ ]?encryption[_ ]?key|encryption[_ ]?key|decryption[_ ]?key|shared[_ ]?key|receipt[_ ]?key|seed[_ ]?hex)(["'\s:=]+)([0-9a-fA-F]{16,64})/gi;
+
+/**
+ * Serialised `Uint8Array`. `JSON.stringify` renders a 32-byte key as a byte-index object —
+ * `{"0":83,"1":64,…,"31":12}` — which matches no hex, bech32 or base64 pattern above and so
+ * slipped past every rule. This is how four live Nostr private keys reached the Phase 1
+ * evidence document, under a field named only `"key"`.
+ *
+ * Fail closed: 16+ byte entries counts as key material regardless of the surrounding label.
+ * Nothing benign in these logs serialises this way, and the cost of a false positive (an
+ * unreadable byte array in an evidence excerpt) is trivial next to the cost of a miss.
+ */
+const BYTE_INDEX_OBJECT_RE = /\{\s*"0"\s*:\s*\d{1,3}\s*(?:,\s*"\d{1,3}"\s*:\s*\d{1,3}\s*){15,}\}/g;
 
 /** Authorization / bearer header values. */
 const BEARER_RE = /(bearer)(\s+)([A-Za-z0-9\-_.]{10,})/gi;
@@ -166,6 +190,12 @@ export function redact(text: string): string {
     });
     out = out.replace(PROOF_SECRET_FIELD_RE, (_m, pre, _val, post) => `${pre}[REDACTED:proof-secret]${post}`);
     out = out.replace(PROOF_C_FIELD_RE, (_m, pre, _val, post) => `${pre}[REDACTED:proof-C]${post}`);
+    // After the proofs-array summary (so that rule still sees its original shape) and before the
+    // generic pass, which cannot see this form at all.
+    out = out.replace(BYTE_INDEX_OBJECT_RE, (match) => {
+      const byteCount = (match.match(/"\d{1,3}"\s*:/g) ?? []).length;
+      return `"[REDACTED:byte-array len=${byteCount}]"`;
+    });
     out = out.replace(QUOTE_ID_RE, (_m, label, sep) => `${label}${sep}[REDACTED:quote-id]`);
     out = out.replace(LN_INVOICE_RE, "[REDACTED:ln-invoice]");
     out = out.replace(PREIMAGE_LABELED_RE, (_m, label, sep) => `${label}${sep}[REDACTED:preimage]`);
@@ -199,6 +229,15 @@ function buildFixture() {
   const fakePreimageLine = "preimage: aabbccddeeff00112233445566778899aabbccddeeff001122334455667788";
   const fakePrivkeyLine = "privkey: 1111111111111111111111111111111111111111111111111111111111111111".slice(0, 73);
   const fakeBearerLine = "Authorization: Bearer sk_test_FAKEFAKEFAKEFAKEFAKE1234567890";
+  // Both shapes below reached the Phase 1 evidence document in cleartext. Fake values only.
+  // A serialised Uint8Array, exactly as `debugService`'s receipt-model dump rendered it.
+  const fakeByteArrayKey =
+    "{" + Array.from({ length: 32 }, (_, i) => `"${i}":${(i * 7 + 3) % 256}`).join(",") + "}";
+  const fakeByteArrayLine = `Full Receipt Model: {"receiptModel":{"key":${fakeByteArrayKey}}}`;
+  // A key-material field whose label was absent from the privkey alternation.
+  const fakeSharedEncKeyHex = "4444444444444444444444444444444444444444444444444444444444444444";
+  const fakeSharedEncKeyLine = `{"sharedEncryptionKey":"${fakeSharedEncKeyHex}"}`;
+
   const benignRelayUrl = "wss://relay.damus.io";
   const benignEventId = "event id: 3f2504e04f8964d0c9c1c9dbcdaaf9c8e1e1a4b2c3d4e5f60718293a4b5c6d7e";
   const benignHexColor = "#3b82f6";
@@ -214,6 +253,8 @@ function buildFixture() {
     fakePreimageLine,
     fakePrivkeyLine,
     fakeBearerLine,
+    fakeByteArrayLine,
+    fakeSharedEncKeyLine,
     `connected to relay ${benignRelayUrl}`,
     benignEventId,
     `theme color ${benignHexColor}`,
@@ -231,6 +272,8 @@ function buildFixture() {
       fakeBearerToken: "sk_test_FAKEFAKEFAKEFAKEFAKE1234567890",
       quoteIdValue: "abc123-fake-quote-id-000111",
       unclassifiedHighEntropyToken,
+      fakeByteArrayKey,
+      fakeSharedEncKeyHex,
     },
     benign: {
       benignRelayUrl,
@@ -277,6 +320,16 @@ function runSelfCheck(): void {
   assert(!redacted.includes(fixture.secrets.fakePreimageHex), "preimage was not redacted");
   assert(!redacted.includes(fixture.secrets.fakePrivkeyHex), "privkey was not redacted");
   assert(!redacted.includes(fixture.secrets.fakeBearerToken), "bearer token was not redacted");
+  // Regression cases for the two shapes that reached the Phase 1 evidence document in cleartext.
+  // Both were proven fail-first: they fail against the pre-patch redactor.
+  assert(
+    !redacted.includes(fixture.secrets.fakeByteArrayKey),
+    "serialised Uint8Array (byte-index object) was not redacted — this is how 4 live nsec reached 01-FUND-SAFETY-EVIDENCE.md",
+  );
+  assert(
+    !redacted.includes(fixture.secrets.fakeSharedEncKeyHex),
+    "sharedEncryptionKey hex was not redacted — this is how 2 live receipt keys reached 01-FUND-SAFETY-EVIDENCE.md",
+  );
   assert(!redacted.includes(fixture.secrets.unclassifiedHighEntropyToken), "unclassified high-entropy token was not redacted (fail-closed violated)");
 
   // Benign lookalikes must survive unchanged.
