@@ -120,6 +120,49 @@ function findSectionRange(content: string, headingLine: string): [number, number
   return [startOffset, endOffset];
 }
 
+/**
+ * A verdict value that means "this block is still a pending template", as opposed to a completed
+ * run's record. Anything else in a Verdict bullet is a measured result and must not be overwritten.
+ */
+const PENDING_VERDICT_RE = /(not run|n\/a|not covered|pending|tbd|^\s*$)/i;
+
+/**
+ * Splits a platform section into its `#### ` run blocks (with any preamble as element 0).
+ *
+ * `findSectionRange` deliberately does NOT stop at `####`, so a platform section spans every run
+ * block beneath it. Combined with `fillBullet`'s non-global regex — first match in the whole
+ * section wins — a second run silently rewrote the FIRST run's Date/Commit/Verdict while leaving
+ * that run's prose and heading intact. That is not hypothetical: on 2026-07-27 Run 3 did exactly
+ * this to Run 1, leaving the document asserting Run 1 passed at a commit that did not exist when
+ * it ran, under a heading reading FAIL. Splitting first is what makes filling addressable.
+ */
+function splitRunBlocks(sectionText: string): string[] {
+  const parts: string[] = [];
+  let current: string[] = [];
+  for (const line of sectionText.split("\n")) {
+    if (line.startsWith("#### ") && current.length > 0) {
+      parts.push(current.join("\n"));
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  parts.push(current.join("\n"));
+  return parts;
+}
+
+/** True when a block has a Verdict bullet still holding a placeholder (safe to fill). */
+function isPendingBlock(block: string): boolean {
+  const m = /^- \*\*Verdict:\*\*(.*)$/m.exec(block);
+  if (!m) return false;
+  return PENDING_VERDICT_RE.test((m[1] ?? "").trim());
+}
+
+/** True when a block has a Verdict bullet at all (i.e. it is a result block, pending or not). */
+function isResultBlock(block: string): boolean {
+  return /^- \*\*Verdict:\*\*/m.test(block);
+}
+
 /** Replaces the value portion of a `- **Label:** ...` bullet line within `sectionText`, in
  * place, preserving the label and every other line untouched. Throws if the label line is not
  * found — this module fills existing fields, it does not invent new ones. */
@@ -191,11 +234,29 @@ export function writeD01Result(params: D01WriteParams): void {
 
   const headingLine = `### ${params.platform}`;
   const [start, end] = findSectionRange(original, headingLine);
-  let section = original.slice(start, end);
+  const wholeSection = original.slice(start, end);
+
+  // Route the fill to a PENDING block rather than the first bullet in the section. Without this,
+  // a second run overwrites the first run's record in place — see splitRunBlocks.
+  const blocks = splitRunBlocks(wholeSection);
+  const resultBlockIdx = blocks.map((b, i) => ({ b, i })).filter(({ b }) => isResultBlock(b));
+  const targetIdx = resultBlockIdx.find(({ b }) => isPendingBlock(b))?.i;
+
+  if (targetIdx === undefined) {
+    const recorded = resultBlockIdx.length;
+    throw new Error(
+      `writeD01Result: every result block under "${headingLine}" (${recorded} found) already records a ` +
+        "completed run — refusing to overwrite one. Filling here would rewrite an earlier run's " +
+        "Date/Commit/Verdict while leaving its heading and prose intact, which silently falsifies the " +
+        "historical record (this happened on 2026-07-27: Run 3 clobbered Run 1). Add a new " +
+        '"#### Run N" block whose bullets carry placeholder values (Verdict: pending) and re-run.',
+    );
+  }
 
   const { scenarioSummary, cyclesSummary, paymentSummary, settlementSummary } = formatScenarios(params.scenarios);
   const redactedExcerpt = redactExcerptOrAbort(params.logExcerptRaw);
 
+  let section = blocks[targetIdx];
   section = fillBullet(section, "Date", params.date);
   section = fillBullet(section, "Commit", params.commit);
   section = fillBullet(section, "Scenario", scenarioSummary);
@@ -205,12 +266,16 @@ export function writeD01Result(params: D01WriteParams): void {
   section = fillBullet(section, "Duplicate events observed (expected and acceptable per D-03)", params.duplicateEventsObserved);
   section = fillBullet(section, "Verdict", params.verdict);
 
+  // Append notes/excerpt INSIDE the target run block, not at the section tail. Appending to the
+  // section put Run 3's fund accounting under Run 2's captured-log subsection, so H-7's only
+  // measured balances read as belonging to a run that produced none.
   if (params.notes) {
     section += `\n- **Notes:** ${params.notes}`;
   }
   section += `\n- **Log excerpt (redacted):**\n\n\`\`\`\n${redactedExcerpt}\n\`\`\`\n`;
 
-  const updated = original.slice(0, start) + section + original.slice(end);
+  blocks[targetIdx] = section;
+  const updated = original.slice(0, start) + blocks.join("\n") + original.slice(end);
 
   const h2After = countHeadings(updated, "## ");
   const h3After = countHeadings(updated, "### ");
