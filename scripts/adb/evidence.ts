@@ -289,6 +289,28 @@ export function writeD01Result(params: D01WriteParams): void {
   writeDocument(path, updated);
 }
 
+/**
+ * Refuses to overwrite a section that already holds a completed record.
+ *
+ * `writeD01Result` needs block-level routing because its section holds several run blocks; these
+ * two sections hold exactly one record each, so the same fail-closed intent needs only a guard.
+ * Added after verification found that fixing `writeD01Result` alone left both siblings silently
+ * overwriting. The repro path is the live one: Phase 4 SC#3 re-runs the FIX-03 repro, and an
+ * unguarded write there would replace Phase 1's INCONCLUSIVE record and its baseline commit —
+ * destroying the very handoff Phase 4 reads.
+ */
+function assertSectionUnrecorded(section: string, headingLine: string, label: "Verdict" | "Result"): void {
+  const m = new RegExp(`^- \\*\\*${label}:\\*\\*(.*)$`, "m").exec(section);
+  if (!m) return;
+  const current = (m[1] ?? "").trim();
+  if (PENDING_VERDICT_RE.test(current)) return;
+  throw new Error(
+    `evidence write: "${headingLine}" already records a completed result (${label}: ${current.slice(0, 40)}) — ` +
+      "refusing to overwrite it. Filling here would replace an earlier run's measured record in place. " +
+      `Reset that section's bullets to placeholders, or add a new section, before re-running.`,
+  );
+}
+
 /** Fills the `## Native Resume Non-Regression` result block. */
 export function writeNativeResumeResult(params: NativeResumeWriteParams): void {
   if (!params.verdict || params.verdict.trim().length === 0) {
@@ -309,6 +331,7 @@ export function writeNativeResumeResult(params: NativeResumeWriteParams): void {
   const headingLine = "## Native Resume Non-Regression";
   const [start, end] = findSectionRange(original, headingLine);
   let section = original.slice(start, end);
+  assertSectionUnrecorded(section, headingLine, "Verdict");
 
   const { scenarioSummary, cyclesSummary, paymentSummary, settlementSummary } = formatScenarios(params.scenarios);
   const redactedExcerpt = redactExcerptOrAbort(params.logExcerptRaw);
@@ -357,6 +380,7 @@ export function writeReproResult(params: ReproWriteParams): void {
   const headingLine = "## After Upgrade";
   const [start, end] = findSectionRange(original, headingLine);
   let section = original.slice(start, end);
+  assertSectionUnrecorded(section, headingLine, "Result");
 
   const redactedExcerpt = redactExcerptOrAbort(params.logExcerptRaw);
 
