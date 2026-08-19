@@ -141,7 +141,7 @@ class LightningPaymentCollector {
       
       try {
         console.log(`⚡ Attempting websocket monitoring for mint quote: ${mintQuoteId}`);
-        subscriptionCanceller = await wallet.onMintQuotePaid(
+        subscriptionCanceller = await wallet.on.mintQuotePaid(
           mintQuoteId,
           (payload) => {
             console.log(`⚡ Websocket notification: mint quote ${mintQuoteId} paid!`, payload);

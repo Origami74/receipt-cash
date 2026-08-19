@@ -1,4 +1,4 @@
-import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
+import { Mint, Wallet } from '@cashu/cashu-ts';
 
 /**
  * Wallet Manager for efficient wallet connection management
@@ -12,7 +12,7 @@ class CashuWalletManager {
   /**
    * Get or create a wallet for a specific mint URL
    * @param {string} mintUrl - The mint URL
-   * @returns {Promise<CashuWallet>} The wallet instance
+   * @returns {Promise<Wallet>} The wallet instance
    */
   async getWallet(mintUrl) {
     const normalizedUrl = mintUrl.toLowerCase();
@@ -24,9 +24,9 @@ class CashuWalletManager {
 
     try {
       console.log(`Creating new wallet for mint: ${mintUrl}`);
-      const mint = new CashuMint(mintUrl);
+      const mint = new Mint(mintUrl);
       mint.connectWebSocket();
-      const wallet = new CashuWallet(mint);
+      const wallet = new Wallet(mint);
 
       this.wallets.set(normalizedUrl, wallet);
 
@@ -60,8 +60,8 @@ class CashuWalletManager {
     console.log('Cleaning up wallet WebSocket connections...');
     for (const [mintUrl, wallet] of this.wallets) {
       try {
-        if (wallet && wallet.mint && typeof wallet.mint.disconnect === 'function') {
-          wallet.mint.disconnect();
+        if (wallet && wallet.mint && typeof wallet.mint.disconnectWebSocket === 'function') {
+          wallet.mint.disconnectWebSocket();
           console.log(`Disconnected WebSocket for mint: ${mintUrl}`);
         }
       } catch (error) {
@@ -96,8 +96,8 @@ class CashuWalletManager {
     if (this.wallets.has(normalizedUrl)) {
       const wallet = this.wallets.get(normalizedUrl);
       try {
-        if (wallet && wallet.mint && typeof wallet.mint.disconnect === 'function') {
-          wallet.mint.disconnect();
+        if (wallet && wallet.mint && typeof wallet.mint.disconnectWebSocket === 'function') {
+          wallet.mint.disconnectWebSocket();
         }
       } catch (error) {
         console.error(`Error disconnecting wallet for ${mintUrl}:`, error);

@@ -1,6 +1,6 @@
 {
   "name": "receipt-cash",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "private": true,
   "description": "A mobile-first receipt settlement PWA using Nostr and Cashu",
   "type": "module",
@@ -26,7 +26,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@capgo/camera-preview": "^8.2.0",
-    "@cashu/cashu-ts": "^2.5.2",
+    "@cashu/cashu-ts": "^3.7.1",
     "@getalby/sdk": "^5.1.1",
     "@scure/base": "^1.1.5",
     "@scure/bip39": "^1.2.1",
